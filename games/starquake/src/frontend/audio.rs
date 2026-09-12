@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use starquake::assets::Assets;
 
-const CPU_HZ: f64 = 3_500_000.0;
+const CPU_HZ: f64 = zx_core::timing::CPU_HZ as f64;
 const VOLUME: f32 = 0.25;
 
 /// Converts speaker levels over time (in T-states) into samples.

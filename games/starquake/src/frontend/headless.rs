@@ -64,7 +64,7 @@ impl Host for Headless {
             let mut total = 0;
             for id in 0..64 {
                 if self.tally[id] > 0 {
-                    println!("  id {:#04x}: {:5} times, {:6} frames lost ({:.1}s)", id, self.tally[id], self.lost[id], self.lost[id] as f64 / 50.0);
+                    println!("  id {:#04x}: {:5} times, {:6} frames lost ({:.1}s)", id, self.tally[id], self.lost[id], self.lost[id] as f64 / f64::from(starquake::host::FRAMES_PER_SECOND));
                     total += self.lost[id];
                 }
             }

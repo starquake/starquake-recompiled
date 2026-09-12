@@ -33,8 +33,7 @@ impl Host for NullHost {
     }
 }
 
-/// How many 50 Hz frames there are in a second.
-pub const FRAMES_PER_SECOND: u32 = 50;
+pub use zx_core::timing::FRAMES_PER_SECOND;
 
 /// Spreads a loop that the original paces by its own speed over the frames
 /// the host gives us.

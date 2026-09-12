@@ -265,7 +265,7 @@ impl Game {
         self.print_bytes(&digits);
         self.print_text(at::AFTER_SCORE);
 
-        let seconds = self.frames / 50;
+        let seconds = self.frames / crate::host::FRAMES_PER_SECOND;
         let (minutes, rest) = (seconds / 60, seconds % 60);
         self.print_number(minutes as u16);
         self.print_text(at::DOT);

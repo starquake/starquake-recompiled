@@ -15,11 +15,11 @@ use std::time::{Duration, Instant};
 use starquake::Game;
 use starquake::assets::Assets;
 use starquake::controls::Input;
-use starquake::host::Host;
+use starquake::host::{FRAMES_PER_SECOND, Host};
 
-/// How long a Spectrum frame lasts: 69888 T-states at 3.5 MHz. Not quite
-/// 20ms, and the difference is the game running 0.16% slow or fast.
-const FRAME_PERIOD: Duration = Duration::from_nanos(19_968_000);
+/// How long a Spectrum frame lasts, from the clock it is derived from
+/// rather than written out.
+const FRAME_PERIOD: Duration = Duration::from_nanos(zx_core::timing::FRAME_NANOS);
 
 /// Key presses that carry an unattended run past the loading screen and the
 /// menu: any key to leave the picture, `1` to pick the joystick, then `0` to
@@ -99,7 +99,7 @@ impl FrontHost {
             med(&w), w[w.len() - 1], med(&q), q[q.len() - 1]
         );
         if let Some(out) = &self.audio {
-            eprintln!("audio rate {} threshold {} samples", out.rate(), out.rate() as usize / 50 * 3);
+            eprintln!("audio rate {} threshold {} samples", out.rate(), out.rate() as usize / FRAMES_PER_SECOND as usize * 3);
         }
     }
 }
@@ -147,7 +147,7 @@ impl Host for FrontHost {
             // lean on the period when the buffer strays outside two to three
             // frames' worth, and run at the exact rate while it is happy:
             // enough buffered to ride out a late wake-up, too little to hear.
-            let frame = out.rate() as usize / 50;
+            let frame = out.rate() as usize / FRAMES_PER_SECOND as usize;
             let queued = out.queued();
             if queued < frame * 2 {
                 period = period.saturating_sub(Duration::from_micros(500));

@@ -17,7 +17,7 @@ const EFFECTS: usize = 0xA607;
 const BEEPS: usize = 0xD839;
 
 /// T-states per 50 Hz frame.
-pub const FRAME_T: u32 = 69888;
+pub use zx_core::timing::FRAME_T;
 
 /// Speaker changes of a blocking sound effect, as (T-state offset, level)
 /// pairs, and its total duration in T-states. Simulates the original
