@@ -49,9 +49,11 @@ pub struct RoomSet(pub [u8; 64]);
 
 impl RoomSet {
     pub fn contains(&self, room: u16) -> bool {
+        let room = room & crate::room::ROOM_MASK;
         self.0[(room >> 3) as usize] & (0x80 >> (room & 7)) != 0
     }
     pub fn set(&mut self, room: u16, on: bool) {
+        let room = room & crate::room::ROOM_MASK;
         let bit = 0x80 >> (room & 7);
         let byte = &mut self.0[(room >> 3) as usize];
         *byte = if on { *byte | bit } else { *byte & !bit };

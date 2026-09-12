@@ -20,8 +20,22 @@ pub fn attr_addr(x: u8, y: u8) -> u16 {
 impl Game {
     /// Byte of display memory at a Spectrum address (bitmap, attributes or
     /// the guard row after them).
+    ///
+    /// Several routines look further ahead than the guard row when BLOB is
+    /// near the bottom of a room: `build_platform` probes 64 + 32 bytes past
+    /// the cell it starts from, which lands in the restore list. The original
+    /// simply read whatever was there, so this does too rather than clamping
+    /// to a guess. Beyond the restore list are system variables the rewrite
+    /// does not model; nothing reaches that far, and a non-solid byte is the
+    /// safe answer if anything ever does.
     pub fn screen_byte(&self, addr: u16) -> u8 {
-        self.display.mem[(addr - 0x4000) as usize]
+        if let Some(at) = addr.checked_sub(0x4000) {
+            if let Some(&b) = self.display.mem.get(at as usize) {
+                return b;
+            }
+        }
+        let slot = addr.wrapping_sub(crate::room::RESTORE_START) as usize;
+        self.restore_mem.get(slot).copied().unwrap_or(0xFF)
     }
 
     fn solid(&self, addr: u16) -> bool {

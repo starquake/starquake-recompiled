@@ -13,6 +13,12 @@ use crate::rng::Rng;
 /// First screen row of the room area.
 pub const TOP_ROW: u8 = 6;
 
+/// There are 512 rooms. The original stores the room in 16 bits and lets it
+/// run past that when BLOB walks off an edge of the map, so the number itself
+/// is left alone; only the lookups below mask it, where the original would
+/// read past its own tables. The shipped map has no such opening.
+pub const ROOM_MASK: u16 = 0x1FF;
+
 /// Address the original's room table starts at. Room seeding is derived
 /// from a room's address in that table, so the rewrite needs the number.
 const ROOM_TABLE_ADDR: u16 = 0x7530;
@@ -282,7 +288,7 @@ impl Game {
         self.objects = RoomObjects::default();
 
         let table_addr = ROOM_TABLE_ADDR.wrapping_add(self.room.wrapping_mul(12));
-        let layout = self.assets.rooms[self.room as usize];
+        let layout = self.assets.rooms[(self.room & ROOM_MASK) as usize];
         self.rng = Rng {
             a: table_addr,
             b: u16::from_le_bytes([layout[0], layout[0] ^ 0x5F]),
