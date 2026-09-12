@@ -1,6 +1,6 @@
 //! `.z80` snapshot loader (versions 1, 2 and 3; 48K machines only).
 //!
-//! Format reference: https://worldofspectrum.org/faq/reference/z80format.htm
+//! Format reference: <https://worldofspectrum.org/faq/reference/z80format.htm>
 
 #[derive(Clone, Debug)]
 pub struct Snapshot {
