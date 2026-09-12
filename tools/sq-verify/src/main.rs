@@ -659,14 +659,24 @@ fn check_death(env: &Env, states: &[Zx]) -> bool {
                 z.pc = 0xC350;
                 z.a = reason;
                 z.halted = false;
-                let ok = z.run_until_any(&[0xA410, 0x0000], 20_000);
+                let mut sounds = Vec::new();
+                let ok = z.run_until_any_with(&[0xA410, 0x0000], 20_000, |z| {
+                    if z.pc == SOUND_ROUTINE {
+                        sounds.push(z.a);
+                    }
+                });
                 let orig_continues = z.pc == 0xA410;
-                let continues = g.death_sequence(reason, &mut starquake::host::NullHost::default());
+                let mut host = SoundLog::default();
+                let continues = g.death_sequence(reason, &mut host);
                 let parts = [
                     "display", "entities", "status", "printer", "rng", "objects", "restore",
                     "entry", "scratch", "pickups",
                 ];
                 let mut d = diff(&env.game(&z), &g, &parts);
+                let asked = host.all(&g);
+                if sounds != asked {
+                    d.push(format!("sounds: orig {sounds:02x?} new {asked:02x?}"));
+                }
                 // `frames` is deliberately not compared here. The death
                 // sequence is mostly blocking sound, and the host is told
                 // `1 + busy / FRAME_T` frames passed, rounding up once per
@@ -764,7 +774,13 @@ fn check_core_room(env: &Env) -> bool {
         }
 
         let mut g = env.game(&z);
-        if !z.call_until(0xA426, Some(0xA6C1), 20_000_000) {
+        let mut sounds = Vec::new();
+        let watch = |z: &Zx, sounds: &mut Vec<u8>| {
+            if z.pc == SOUND_ROUTINE {
+                sounds.push(z.a);
+            }
+        };
+        if !z.call_until_any_with(0xA426, &[0xA6C1], 20_000_000, |z| watch(z, &mut sounds)) {
             let at = format!("original did not reach the core room (pc {:04x})", z.pc);
             failures.push((case, vec![at]));
             continue;
@@ -774,14 +790,19 @@ fn check_core_room(env: &Env) -> bool {
         z.t = 0;
         z.int_pending = false;
         z.iff1 = true;
-        if !z.run_until(0xA410, 5000) {
+        if !z.run_until_any_with(&[0xA410], 5000, |z| watch(z, &mut sounds)) {
             let at = format!("original did not finish (pc {:04x})", z.pc);
             failures.push((case, vec![at]));
             continue;
         }
         g.enter_room();
-        let finished = g.core_room(&mut starquake::host::NullHost::default());
+        let mut host = SoundLog::default();
+        let finished = g.core_room(&mut host);
         let mut d = diff(&env.game(&z), &g, &parts);
+        let asked = host.all(&g);
+        if sounds != asked {
+            d.push(format!("sounds: orig {sounds:02x?} new {asked:02x?}"));
+        }
         if finished {
             d.push("the rewrite ended the game; the original came back".into());
         }
@@ -881,7 +902,7 @@ fn probe(env: &Env) {
 fn run_noting_sounds(z: &mut Zx, start: u16, stops: &[u16], max: u64) -> (bool, Vec<u8>) {
     const SOUND: u16 = 0xD7C0;
     let mut ids = Vec::new();
-    let done = run_watching(z, start, stops, max, |z| {
+    let done = z.call_until_any_with(start, stops, max, |z| {
         if z.pc == SOUND {
             ids.push(z.a);
         }
@@ -889,32 +910,34 @@ fn run_noting_sounds(z: &mut Zx, start: u16, stops: &[u16], max: u64) -> (bool, 
     (done, ids)
 }
 
-/// Runs the original from `start` exactly as [`Zx::call_until_any`] would,
-/// calling `watch` before each instruction.
-///
-/// This belongs on `Zx` beside `call_until_any`; it lives here for now
-/// because that file is being changed in another branch.
-fn run_watching(
-    z: &mut Zx,
-    start: u16,
-    stops: &[u16],
-    max: u64,
-    mut watch: impl FnMut(&Zx),
-) -> bool {
-    const SENTINEL: u16 = 0x0000;
-    let sp = z.sp;
-    z.sp = z.sp.wrapping_sub(2);
-    let at = z.sp;
-    z.write16(at, SENTINEL);
-    z.pc = start;
-    for _ in 0..max {
-        watch(z);
-        zx_runtime::interp::step(z);
-        if (z.pc == SENTINEL && z.sp == sp) || stops.contains(&z.pc) {
-            return true;
-        }
+/// The blocking sound routine. Its calls leave nothing behind in memory, so
+/// the only way to compare them is to watch the original run.
+const SOUND_ROUTINE: u16 = 0xD7C0;
+
+/// A host that plays nothing and remembers every blocking sound the rewrite
+/// asks for. `sync` clears `effects` each frame, so a sequence that spans
+/// frames -- a death, a core piece going in -- has to be collected as it goes.
+#[derive(Default)]
+struct SoundLog {
+    inner: starquake::host::NullHost,
+    ids: Vec<u8>,
+}
+
+impl starquake::host::Host for SoundLog {
+    fn frame(&mut self, game: &Game) -> (starquake::controls::Input, u32) {
+        self.ids.extend_from_slice(&game.effects);
+        self.inner.frame(game)
     }
-    false
+}
+
+impl SoundLog {
+    /// Everything asked for, including whatever was pushed after the last
+    /// frame boundary and so never reached the host.
+    fn all(&self, game: &Game) -> Vec<u8> {
+        let mut ids = self.ids.clone();
+        ids.extend_from_slice(&game.effects);
+        ids
+    }
 }
 
 /// Which screen the original is about to run, from the address it will
@@ -1102,7 +1125,12 @@ fn check_security_doors(env: &Env) -> bool {
                             input_of(&v);
                         g.frame_display();
                         let event = g.play_logic(&host_input);
-                        let ok = v.run_until_any(&[0xA426, 0xA523], 20_000);
+                        let mut sounds = Vec::new();
+                        let ok = v.run_until_any_with(&[0xA426, 0xA523], 20_000, |v| {
+                            if v.pc == SOUND_ROUTINE {
+                                sounds.push(v.a);
+                            }
+                        });
                         // The door screen is the only thing that re-enters a
                         // room with reason 3.
                         let orig_door = v.pc == 0xA426 && v.mem[at::ENTRY_REASON] == 3;
@@ -1117,12 +1145,17 @@ fn check_security_doors(env: &Env) -> bool {
                         }
                         triggered += 1;
                         let FrameEvent::Modal(m) = event else { unreachable!() };
-                        let reason = g.run_modal(m, &mut starquake::host::NullHost::default());
+                        let mut host = SoundLog::default();
+                        let reason = g.run_modal(m, &mut host);
                         let parts = [
                             "display", "entities", "status", "printer", "rng", "objects",
                             "restore", "scratch", "pickups",
                         ];
                         let mut d = diff(&env.game(&v), &g, &parts);
+                        let asked = host.all(&g);
+                        if sounds != asked {
+                            d.push(format!("sounds: orig {sounds:02x?} new {asked:02x?}"));
+                        }
                         if v.mem[at::ENTRY_REASON] != reason {
                             d.push(format!("reason: orig {} new {reason}", v.mem[at::ENTRY_REASON]));
                         }

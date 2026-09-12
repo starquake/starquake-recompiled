@@ -82,6 +82,16 @@ impl Zx {
 
     /// Like [`Zx::run_until`] with several targets.
     pub fn run_until_any(&mut self, targets: &[u16], max_frames: u32) -> bool {
+        self.run_until_any_with(targets, max_frames, |_| {})
+    }
+
+    /// Like [`Zx::run_until_any`], calling `watch` before each instruction.
+    pub fn run_until_any_with(
+        &mut self,
+        targets: &[u16],
+        max_frames: u32,
+        mut watch: impl FnMut(&Zx),
+    ) -> bool {
         let mut frames = 0;
         let mut first = true;
         loop {
@@ -114,6 +124,7 @@ impl Zx {
                 return true;
             }
             first = false;
+            watch(self);
             interp::step(self);
         }
     }
