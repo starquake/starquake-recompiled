@@ -69,11 +69,25 @@ pub fn listing(analysis: &Analysis, trace: &Trace, from: u16, to: u16) -> String
                 });
                 let _ = writeln!(out, "\n{}:{refs}", label(pc, analysis));
             }
-            let bytes: Vec<String> =
-                (0..d.len as u16).map(|i| format!("{:02x}", mem(pc.wrapping_add(i)))).collect();
-            let traced = if trace.executed[pc as usize].is_some() { '*' } else { ' ' };
-            let smc = if trace.self_modified[pc as usize] { "  ; SELF-MODIFIED" } else { "" };
-            let _ = writeln!(out, "{pc:04x} {traced} {:<12} {}{smc}", bytes.join(" "), d.instr);
+            let bytes: Vec<String> = (0..d.len as u16)
+                .map(|i| format!("{:02x}", mem(pc.wrapping_add(i))))
+                .collect();
+            let traced = if trace.executed[pc as usize].is_some() {
+                '*'
+            } else {
+                ' '
+            };
+            let smc = if trace.self_modified[pc as usize] {
+                "  ; SELF-MODIFIED"
+            } else {
+                ""
+            };
+            let _ = writeln!(
+                out,
+                "{pc:04x} {traced} {:<12} {}{smc}",
+                bytes.join(" "),
+                d.instr
+            );
             a += d.len as u32;
         } else {
             // Data: up to 16 bytes, stopping at the next code or label.
@@ -94,7 +108,13 @@ pub fn listing(analysis: &Analysis, trace: &Trace, from: u16, to: u16) -> String
             let hex: Vec<String> = bytes.iter().map(|b| format!("{b:02x}")).collect();
             let ascii: String = bytes
                 .iter()
-                .map(|&b| if (0x20..0x7f).contains(&b) { b as char } else { '.' })
+                .map(|&b| {
+                    if (0x20..0x7f).contains(&b) {
+                        b as char
+                    } else {
+                        '.'
+                    }
+                })
                 .collect();
             let written = (0..n).any(|i| trace.written_code[(a + i) as usize]);
             let _ = writeln!(

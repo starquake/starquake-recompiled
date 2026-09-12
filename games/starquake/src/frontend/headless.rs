@@ -34,13 +34,21 @@ impl Headless {
 
     fn screenshot(&self, game: &Game) {
         let mut rgba = vec![0u8; FULL_W * FULL_H * 4];
-        draw(&game.display.mem, game.display.border, self.frame, &mut rgba);
+        draw(
+            &game.display.mem,
+            game.display.border,
+            self.frame,
+            &mut rgba,
+        );
         let pixels: Vec<u32> = rgba
-            .as_chunks::<4>().0.iter()
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|p| (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32)
             .collect();
         let path = self.dir.join(format!("frame{:06}.png", self.frame));
-        std::fs::write(&path, zx_core::png::encode(&pixels, FULL_W, FULL_H)).expect("write screenshot");
+        std::fs::write(&path, zx_core::png::encode(&pixels, FULL_W, FULL_H))
+            .expect("write screenshot");
     }
 }
 
@@ -59,16 +67,30 @@ impl Host for Headless {
             self.screenshot(game);
         }
         if self.frame >= self.limit {
-            println!("ran {} frames; room {}, lives {}, score {:?}", self.frame, game.room, game.status.lives, game.status.score);
+            println!(
+                "ran {} frames; room {}, lives {}, score {:?}",
+                self.frame, game.room, game.status.lives, game.status.score
+            );
             println!("blocking effects during play (frames lost = picture frozen):");
             let mut total = 0;
             for id in 0..64 {
                 if self.tally[id] > 0 {
-                    println!("  id {:#04x}: {:5} times, {:6} frames lost ({:.1}s)", id, self.tally[id], self.lost[id], self.lost[id] as f64 / f64::from(starquake::host::FRAMES_PER_SECOND));
+                    println!(
+                        "  id {:#04x}: {:5} times, {:6} frames lost ({:.1}s)",
+                        id,
+                        self.tally[id],
+                        self.lost[id],
+                        self.lost[id] as f64 / f64::from(starquake::host::FRAMES_PER_SECOND)
+                    );
                     total += self.lost[id];
                 }
             }
-            println!("  total {} frames lost of {} ({:.0}%)", total, self.frame, 100.0 * total as f64 / self.frame as f64);
+            println!(
+                "  total {} frames lost of {} ({:.0}%)",
+                total,
+                self.frame,
+                100.0 * total as f64 / self.frame as f64
+            );
             std::process::exit(0);
         }
         self.input.keys = super::scripted_keys(self.frame);

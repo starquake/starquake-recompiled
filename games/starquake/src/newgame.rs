@@ -164,7 +164,9 @@ impl Game {
         }
         self.status.score = [0; 6];
         self.status.pending = [0; 6];
-        let template: [u8; 9] = ram[table::SLOT_TEMPLATE..table::SLOT_TEMPLATE + 9].try_into().unwrap();
+        let template: [u8; 9] = ram[table::SLOT_TEMPLATE..table::SLOT_TEMPLATE + 9]
+            .try_into()
+            .unwrap();
         for slot in 0..SLOTS {
             self.entities[slot].0 = [0; 32];
             self.entities[slot].0[..9].copy_from_slice(&template);
@@ -184,7 +186,9 @@ impl Game {
     /// Rooms visited, as the "adventure score" shown at the end (visits × 50
     /// / 256). Like the original, leaves the room number at 512.
     pub fn adventure_score(&mut self) -> u8 {
-        let visited = (0..512u16).filter(|&r| !self.unvisited_rooms.contains(r)).count() as u16;
+        let visited = (0..512u16)
+            .filter(|&r| !self.unvisited_rooms.contains(r))
+            .count() as u16;
         self.room = 512;
         (visited.wrapping_mul(50) >> 8) as u8
     }

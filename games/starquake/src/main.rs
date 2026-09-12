@@ -16,7 +16,9 @@ fn main() {
     let headless = args.iter().position(|a| a == "--headless").map(|i| {
         let rest: Vec<String> = args.drain(i..).skip(1).collect();
         let frames = rest.first().and_then(|f| f.parse().ok()).unwrap_or(3000);
-        let dir = rest.get(1).map_or_else(|| PathBuf::from("screenshots"), PathBuf::from);
+        let dir = rest
+            .get(1)
+            .map_or_else(|| PathBuf::from("screenshots"), PathBuf::from);
         (frames, dir)
     });
     // Drained before the path is read, or `starquake --bench 20` would take

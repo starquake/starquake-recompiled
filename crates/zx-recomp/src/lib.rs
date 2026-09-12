@@ -67,7 +67,11 @@ impl Inputs {
         let snap_path = assets.join(&cfg.game.snapshot);
         let snap_bytes = read(&snap_path, "snapshot")?;
         let snapshot_sha1 = sha1_hex(&snap_bytes);
-        check_hash("snapshot", &snapshot_sha1, cfg.game.snapshot_sha1.as_deref())?;
+        check_hash(
+            "snapshot",
+            &snapshot_sha1,
+            cfg.game.snapshot_sha1.as_deref(),
+        )?;
         let snapshot = zx_core::snapshot::load_z80(&snap_bytes)
             .map_err(|e| format!("{}: {e}", snap_path.display()))?;
 
@@ -75,7 +79,10 @@ impl Inputs {
             Some(name) => {
                 let bytes = read(&assets.join(name), "ROM")?;
                 if bytes.len() != 0x4000 {
-                    return Err(format!("ROM {name} is {} bytes, expected 16384", bytes.len()));
+                    return Err(format!(
+                        "ROM {name} is {} bytes, expected 16384",
+                        bytes.len()
+                    ));
                 }
                 let hash = sha1_hex(&bytes);
                 check_hash("ROM", &hash, cfg.game.rom_sha1.as_deref())?;

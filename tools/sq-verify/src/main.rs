@@ -50,8 +50,14 @@ fn diff(orig: &Game, new: &Game, parts: &[&str]) -> Vec<String> {
                 continue;
             }
             "rng" => (format!("{:x?}", orig.rng), format!("{:x?}", new.rng)),
-            "colour" => (format!("{:02x}", orig.colour), format!("{:02x}", new.colour)),
-            "room_colours" => (format!("{:?}", orig.room_colours), format!("{:?}", new.room_colours)),
+            "colour" => (
+                format!("{:02x}", orig.colour),
+                format!("{:02x}", new.colour),
+            ),
+            "room_colours" => (
+                format!("{:?}", orig.room_colours),
+                format!("{:?}", new.room_colours),
+            ),
             "restore" => (
                 format!("{:04x} {:02x?}", orig.restore_ptr, orig.restore_mem),
                 format!("{:04x} {:02x?}", new.restore_ptr, new.restore_mem),
@@ -59,7 +65,11 @@ fn diff(orig: &Game, new: &Game, parts: &[&str]) -> Vec<String> {
             "misc" => (
                 format!(
                     "room {} teleporters {:?} footstep {} pickups {} {:?}",
-                    orig.room, orig.teleporters, orig.footstep_sound, orig.pickups_in_room, orig.items
+                    orig.room,
+                    orig.teleporters,
+                    orig.footstep_sound,
+                    orig.pickups_in_room,
+                    orig.items
                 ),
                 format!(
                     "room {} teleporters {:?} footstep {} pickups {} {:?}",
@@ -85,8 +95,14 @@ fn diff(orig: &Game, new: &Game, parts: &[&str]) -> Vec<String> {
                 continue;
             }
             "scratch" => (
-                format!("{:02x?} {:02x?} {:02x?}", orig.collision, orig.sound, orig.enemy_cursor),
-                format!("{:02x?} {:02x?} {:02x?}", new.collision, new.sound, new.enemy_cursor),
+                format!(
+                    "{:02x?} {:02x?} {:02x?}",
+                    orig.collision, orig.sound, orig.enemy_cursor
+                ),
+                format!(
+                    "{:02x?} {:02x?} {:02x?}",
+                    new.collision, new.sound, new.enemy_cursor
+                ),
             ),
             "spawner" => (
                 format!("{:x?} {:x?}", orig.spawner, orig.enemy_cache),
@@ -108,30 +124,55 @@ fn diff(orig: &Game, new: &Game, parts: &[&str]) -> Vec<String> {
                     "{} {:?} {:02x?}",
                     orig.adventure, orig.score_digits, orig.high_scores
                 ),
-                format!("{} {:?} {:02x?}", new.adventure, new.score_digits, new.high_scores),
+                format!(
+                    "{} {:?} {:02x?}",
+                    new.adventure, new.score_digits, new.high_scores
+                ),
             ),
             "newgame" => (
                 format!(
                     "{:?} cores {:02x?} {} {} vars {} {} {} seed {:04x} {:?}",
-                    orig.controls, orig.core_slots, orig.cores_left, orig.cores, orig.var_d2bf,
-                    orig.var_d2e9, orig.var_d2ea, orig.seed, orig.bonus
+                    orig.controls,
+                    orig.core_slots,
+                    orig.cores_left,
+                    orig.cores,
+                    orig.var_d2bf,
+                    orig.var_d2e9,
+                    orig.var_d2ea,
+                    orig.seed,
+                    orig.bonus
                 ),
                 format!(
                     "{:?} cores {:02x?} {} {} vars {} {} {} seed {:04x} {:?}",
-                    new.controls, new.core_slots, new.cores_left, new.cores, new.var_d2bf,
-                    new.var_d2e9, new.var_d2ea, new.seed, new.bonus
+                    new.controls,
+                    new.core_slots,
+                    new.cores_left,
+                    new.cores,
+                    new.var_d2bf,
+                    new.var_d2e9,
+                    new.var_d2ea,
+                    new.seed,
+                    new.bonus
                 ),
             ),
             "pickups" => (
                 format!(
                     "{:?} {:?} {:?} {:?} {} {}",
-                    orig.items, orig.bonus, orig.bonus_rooms, orig.unvisited_rooms,
-                    orig.pickups_in_room, orig.last_spawn_index
+                    orig.items,
+                    orig.bonus,
+                    orig.bonus_rooms,
+                    orig.unvisited_rooms,
+                    orig.pickups_in_room,
+                    orig.last_spawn_index
                 ),
                 format!(
                     "{:?} {:?} {:?} {:?} {} {}",
-                    new.items, new.bonus, new.bonus_rooms, new.unvisited_rooms,
-                    new.pickups_in_room, new.last_spawn_index
+                    new.items,
+                    new.bonus,
+                    new.bonus_rooms,
+                    new.unvisited_rooms,
+                    new.pickups_in_room,
+                    new.last_spawn_index
                 ),
             ),
             _ => unreachable!("unknown part {part}"),
@@ -144,14 +185,21 @@ fn diff(orig: &Game, new: &Game, parts: &[&str]) -> Vec<String> {
 }
 
 fn report(name: &str, failures: &[(String, Vec<String>)], total: usize) -> bool {
-    let show = if std::env::var_os("SQ_ALL").is_some() { failures.len() } else { 4 };
+    let show = if std::env::var_os("SQ_ALL").is_some() {
+        failures.len()
+    } else {
+        4
+    };
     for (case, diffs) in failures.iter().take(show) {
         for d in diffs {
             println!("  {name} {case}: {d}");
         }
     }
     if failures.len() > show {
-        println!("  {name}: {} more failing cases not shown (SQ_ALL=1)", failures.len() - show);
+        println!(
+            "  {name}: {} more failing cases not shown (SQ_ALL=1)",
+            failures.len() - show
+        );
     }
     // A check that ran nothing has proved nothing, so it must not pass: an
     // empty state list used to make a dozen checks report "0/0 cases match"
@@ -160,7 +208,10 @@ fn report(name: &str, failures: &[(String, Vec<String>)], total: usize) -> bool 
         println!("{name}: no cases ran");
         return false;
     }
-    println!("{name}: {}/{total} cases match", total.saturating_sub(failures.len()));
+    println!(
+        "{name}: {}/{total} cases match",
+        total.saturating_sub(failures.len())
+    );
     failures.is_empty()
 }
 
@@ -215,7 +266,14 @@ fn check_rooms(env: &Env) -> bool {
         let mut g = env.game(&z);
         let done = z.call_until(0xA80A, Some(0xAA30), 5_000_000);
         g.build_room_tiles();
-        let parts = ["display", "rng", "colour", "room_colours", "restore", "objects"];
+        let parts = [
+            "display",
+            "rng",
+            "colour",
+            "room_colours",
+            "restore",
+            "objects",
+        ];
         let mut d = diff(&env.game(&z), &g, &parts);
         if !done {
             d.push("original did not finish".into());
@@ -284,7 +342,10 @@ fn new_game_machine(env: &Env) -> Zx {
     let mut z = env.machine();
     // Kempston, so tests can steer BLOB with the joystick byte.
     z.mem[0x5E58] = 1;
-    assert!(z.call_until(0x629D, Some(0x666D), 50_000_000), "new-game setup did not finish");
+    assert!(
+        z.call_until(0x629D, Some(0x666D), 50_000_000),
+        "new-game setup did not finish"
+    );
     z
 }
 
@@ -311,7 +372,13 @@ fn check_room_build(env: &Env) -> bool {
             (false, Err(_)) => hangs += 1,
             (true, Ok(g)) => {
                 let parts = [
-                    "display", "rng", "colour", "room_colours", "restore", "objects", "pickups",
+                    "display",
+                    "rng",
+                    "colour",
+                    "room_colours",
+                    "restore",
+                    "objects",
+                    "pickups",
                     "printer",
                 ];
                 let d = diff(&env.game(&z), &g, &parts);
@@ -321,14 +388,21 @@ fn check_room_build(env: &Env) -> bool {
             }
             (done, _) => failures.push((
                 format!("room {room}"),
-                vec![format!("original finished: {done}, rewrite finished: {}", !done)],
+                vec![format!(
+                    "original finished: {done}, rewrite finished: {}",
+                    !done
+                )],
             )),
         }
     }
     if hangs > 0 {
         println!("  ({hangs} rooms hang in both: an unplaced item and no spawn points)");
     }
-    report("room build with pickups (new game)", &failures, starquake::assets::ROOM_COUNT)
+    report(
+        "room build with pickups (new game)",
+        &failures,
+        starquake::assets::ROOM_COUNT,
+    )
 }
 
 /// Full room entry (`A426` up to the main loop at `A523`), over chains of
@@ -371,8 +445,18 @@ fn check_room_entry(env: &Env) -> bool {
                 (true, Ok(new)) => {
                     let orig = env.game(&z);
                     let parts = [
-                        "display", "rng", "colour", "room_colours", "restore", "objects",
-                        "pickups", "status", "printer", "entities", "spawner", "entry",
+                        "display",
+                        "rng",
+                        "colour",
+                        "room_colours",
+                        "restore",
+                        "objects",
+                        "pickups",
+                        "status",
+                        "printer",
+                        "entities",
+                        "spawner",
+                        "entry",
                     ];
                     let d = diff(&orig, &new, &parts);
                     if !d.is_empty() {
@@ -384,7 +468,12 @@ fn check_room_entry(env: &Env) -> bool {
                     g = orig;
                 }
                 (done, _) => {
-                    failures.push((name, vec![format!("original finished: {done}; rewrite panicked or diverged")]));
+                    failures.push((
+                        name,
+                        vec![format!(
+                            "original finished: {done}; rewrite panicked or diverged"
+                        )],
+                    ));
                     break;
                 }
             }
@@ -421,7 +510,10 @@ fn gameplay_states(env: &Env, count: usize, every: usize) -> Vec<Zx> {
             }
         }
         if !z.run_until(0xA523, 400) {
-            println!("  (gameplay left the main loop after {} states)", states.len());
+            println!(
+                "  (gameplay left the main loop after {} states)",
+                states.len()
+            );
             break;
         }
         if i % every == 0 {
@@ -446,7 +538,9 @@ fn check_frame_routine(
         let mut g = env.game(&z);
         let done = z.call(addr, 5_000_000);
         run(&mut g);
-        let parts = ["display", "entities", "entry", "objects", "rng", "restore", "scratch", "status"];
+        let parts = [
+            "display", "entities", "entry", "objects", "rng", "restore", "scratch", "status",
+        ];
         let mut d = diff(&env.game(&z), &g, &parts);
         let frames = z.read16(at::FRAMES as u16) as u32 | (z.mem[at::FRAMES + 2] as u32) << 16;
         if frames != g.frames {
@@ -499,7 +593,9 @@ fn check_enemies(env: &Env, states: &[Zx]) -> bool {
         let done = z.call_until(0xA01B, Some(0xC350), 5_000_000);
         let died = (z.pc == 0xC350).then_some(z.a);
         let new_died = g.update_enemies();
-        let parts = ["display", "entities", "status", "printer", "rng", "spawner", "scratch"];
+        let parts = [
+            "display", "entities", "status", "printer", "rng", "spawner", "scratch",
+        ];
         let mut d = diff(&env.game(&z), &g, &parts);
         if died != new_died {
             d.push(format!("death: orig {died:?} new {new_died:?}"));
@@ -537,7 +633,18 @@ fn blob_variants(states: &[Zx]) -> Vec<Zx> {
     };
     let mut out = Vec::new();
     for s in states {
-        for input in [0, RIGHT, LEFT, DOWN, UP, FIRE, RIGHT | FIRE, LEFT | UP, UP | RIGHT, DOWN | LEFT] {
+        for input in [
+            0,
+            RIGHT,
+            LEFT,
+            DOWN,
+            UP,
+            FIRE,
+            RIGHT | FIRE,
+            LEFT | UP,
+            UP | RIGHT,
+            DOWN | LEFT,
+        ] {
             out.push(with(s, input, &|_| {}));
         }
         let end = s.read16(at::objects::MARKERS_END as u16) as usize;
@@ -606,7 +713,8 @@ fn check_blob(env: &Env, states: &[Zx]) -> bool {
         let mut z = state.clone();
         let mut g = env.game(&z);
         let input = input_of(&z);
-        let (done, sounds) = run_noting_sounds(&mut z, 0xC552, &[0xC350, 0xA412, 0x5E29], 5_000_000);
+        let (done, sounds) =
+            run_noting_sounds(&mut z, 0xC552, &[0xC350, 0xA412, 0x5E29], 5_000_000);
         let orig = match z.pc {
             0xC350 => Outcome::Died(z.a),
             0xA412 => Outcome::Modal(modal_at(&z)),
@@ -694,7 +802,10 @@ fn check_death(env: &Env, states: &[Zx]) -> bool {
                     d.push("original did not finish".into());
                 }
                 if !d.is_empty() {
-                    failures.push((format!("state {n} reason {reason:#04x} last life {last_life}"), d));
+                    failures.push((
+                        format!("state {n} reason {reason:#04x} last life {last_life}"),
+                        d,
+                    ));
                 }
             }
         }
@@ -743,8 +854,7 @@ fn check_core_room(env: &Env) -> bool {
     // "newgame" carries core_slots, cores and cores_left, and "misc" the room
     // number: the three things delivering a piece exists to change.
     let parts = [
-        "display", "entities", "status", "rng", "objects", "restore", "pickups", "newgame",
-        "misc",
+        "display", "entities", "status", "rng", "objects", "restore", "pickups", "newgame", "misc",
     ];
     let mut failures = Vec::new();
     let mut cases = 0;
@@ -780,7 +890,10 @@ fn check_core_room(env: &Env) -> bool {
                 sounds.push(z.a);
             }
         };
-        if !z.call_until_any_with(0xA426, &[0xA6C1], 20_000_000, |z| watch(z, &mut sounds)).0 {
+        if !z
+            .call_until_any_with(0xA426, &[0xA6C1], 20_000_000, |z| watch(z, &mut sounds))
+            .0
+        {
             let at = format!("original did not reach the core room (pc {:04x})", z.pc);
             failures.push((case, vec![at]));
             continue;
@@ -845,10 +958,17 @@ fn check_music(env: &Env) -> bool {
             continue;
         }
         let (edges, total) = starquake::music::tune(&env.assets.ram, addr as usize);
-        let seconds = total as f64 / (starquake::host::FRAMES_PER_SECOND * starquake::sound::FRAME_T) as f64;
-        println!("  tune {tune}: {seconds:.1}s, {} speaker changes", edges.len());
+        let seconds =
+            total as f64 / (starquake::host::FRAMES_PER_SECOND * starquake::sound::FRAME_T) as f64;
+        println!(
+            "  tune {tune}: {seconds:.1}s, {} speaker changes",
+            edges.len()
+        );
         if original != total {
-            let d = format!("length: orig {original} new {total} (off by {})", total as i64 - original as i64);
+            let d = format!(
+                "length: orig {original} new {total} (off by {})",
+                total as i64 - original as i64
+            );
             failures.push((case, vec![d]));
         }
     }
@@ -876,7 +996,15 @@ fn probe(env: &Env) {
         let mut z = env.machine();
         let stub = 0x5B20u16;
         let code = [
-            0x21, hl as u8, (hl >> 8) as u8, 0x11, de as u8, (de >> 8) as u8, 0xCD, 0xA9, 0x30,
+            0x21,
+            hl as u8,
+            (hl >> 8) as u8,
+            0x11,
+            de as u8,
+            (de >> 8) as u8,
+            0xCD,
+            0xA9,
+            0x30,
             0xC9,
         ];
         for (i, b) in code.iter().enumerate() {
@@ -958,7 +1086,10 @@ fn modal_at(z: &Zx) -> starquake::blob::Modal {
 
 /// The machine's input, as the game reads it.
 fn input_of(machine: &Zx) -> starquake::controls::Input {
-    starquake::controls::Input { keys: machine.keys, kempston: machine.kempston }
+    starquake::controls::Input {
+        keys: machine.keys,
+        kempston: machine.kempston,
+    }
 }
 
 /// The screens drawn in one pass: the intro, and the high-score table. Both
@@ -1004,7 +1135,10 @@ fn check_menu(env: &Env) -> bool {
     cases += 1;
     let (turns, left) = measure_menu_rate(env);
     if left {
-        failures.push(("loop rate".to_string(), vec!["the menu loop ended early".into()]));
+        failures.push((
+            "loop rate".to_string(),
+            vec!["the menu loop ended early".into()],
+        ));
     } else if turns != starquake::menu::TURNS_PER_SECOND as u64 {
         failures.push((
             "loop rate".to_string(),
@@ -1023,7 +1157,10 @@ fn check_menu(env: &Env) -> bool {
         z.mem[0x5E58] = method;
         // Stop where the original would start playing its tune.
         if !z.call_until(0x5E81, Some(0x5ED1), 20_000_000) {
-            failures.push((format!("title, method {method}"), vec!["original did not finish".into()]));
+            failures.push((
+                format!("title, method {method}"),
+                vec!["original did not finish".into()],
+            ));
             continue;
         }
         let mut g = env.game(&base);
@@ -1046,7 +1183,10 @@ fn check_menu(env: &Env) -> bool {
             failures.push(("define keys".to_string(), d));
         }
     } else {
-        failures.push(("define keys".to_string(), vec!["original did not finish".into()]));
+        failures.push((
+            "define keys".to_string(),
+            vec!["original did not finish".into()],
+        ));
     }
 
     // The quit confirmation.
@@ -1124,8 +1264,7 @@ fn check_security_doors(env: &Env) -> bool {
                         v.release_all_keys();
                         v.kempston = input;
                         let mut g = env.game(&v);
-                        let host_input =
-                            input_of(&v);
+                        let host_input = input_of(&v);
                         g.frame_display();
                         let event = g.play_logic(&host_input);
                         let mut sounds = Vec::new();
@@ -1138,16 +1277,22 @@ fn check_security_doors(env: &Env) -> bool {
                         // room with reason 3.
                         let orig_door = v.pc == 0xA426 && v.mem[at::ENTRY_REASON] == 3;
                         let new_door = matches!(event, FrameEvent::Modal(_));
-                        let case = format!("room {room} at {dx},{dy} input {input} key {master_key}");
+                        let case =
+                            format!("room {room} at {dx},{dy} input {input} key {master_key}");
                         if orig_door != new_door {
-                            failures.push((case, vec![format!("door screen: orig {orig_door} new {new_door}")]));
+                            failures.push((
+                                case,
+                                vec![format!("door screen: orig {orig_door} new {new_door}")],
+                            ));
                             continue;
                         }
                         if !new_door {
                             continue;
                         }
                         triggered += 1;
-                        let FrameEvent::Modal(m) = event else { unreachable!() };
+                        let FrameEvent::Modal(m) = event else {
+                            unreachable!()
+                        };
                         let mut host = SoundLog::default();
                         let reason = g.run_modal(m, &mut host);
                         let parts = [
@@ -1160,7 +1305,10 @@ fn check_security_doors(env: &Env) -> bool {
                             d.push(format!("sounds: orig {sounds:02x?} new {asked:02x?}"));
                         }
                         if v.mem[at::ENTRY_REASON] != reason {
-                            d.push(format!("reason: orig {} new {reason}", v.mem[at::ENTRY_REASON]));
+                            d.push(format!(
+                                "reason: orig {} new {reason}",
+                                v.mem[at::ENTRY_REASON]
+                            ));
                         }
                         if !ok {
                             d.push("original did not finish".into());
@@ -1312,7 +1460,9 @@ fn render(env: &Env, out: &str) {
     println!("wrote {out}");
 
     // The screens, as the rewrite draws them.
-    let dir = std::path::Path::new(out).parent().unwrap_or(std::path::Path::new("."));
+    let dir = std::path::Path::new(out)
+        .parent()
+        .unwrap_or(std::path::Path::new("."));
     let save = |g: &Game, name: &str| {
         let mut frame = vec![0u32; W * H];
         g.display.render(false, &mut frame);
@@ -1374,8 +1524,7 @@ fn render(env: &Env, out: &str) {
                     v.release_all_keys();
                     v.kempston = input;
                     let mut g = env.game(&v);
-                    let host_input =
-                        input_of(&v);
+                    let host_input = input_of(&v);
                     g.frame_display();
                     if let starquake::play::FrameEvent::Modal(m) = g.play_logic(&host_input) {
                         g.run_modal(m, &mut starquake::host::NullHost::default());
@@ -1397,7 +1546,10 @@ fn effects(env: &Env) {
     // `beep` counts the CALL into the routine itself, so only the `ld a,n`
     // and the stub's own `ret` are outside what it measures.
     const STUB_T: u32 = 7 + 10;
-    println!("{:>3}  {:>9}  {:>9}  {:>6}  {:>6}  ", "id", "orig", "new", "frames", "edges");
+    println!(
+        "{:>3}  {:>9}  {:>9}  {:>6}  {:>6}  ",
+        "id", "orig", "new", "frames", "edges"
+    );
     // Only the ids the game can ask for: past the table the parameters are
     // whatever happens to follow it, and the effect never ends.
     for id in 0..0x16u8 {
@@ -1418,7 +1570,10 @@ fn effects(env: &Env) {
         } else {
             String::new()
         };
-        println!("{id:>3}  {orig:>9}  {total:>9}  {frames:>6.2}  {:>6}  {mark}", edges.len());
+        println!(
+            "{id:>3}  {orig:>9}  {total:>9}  {frames:>6.2}  {:>6}  {mark}",
+            edges.len()
+        );
     }
 }
 
@@ -1430,12 +1585,18 @@ fn keys(env: &Env) {
     // the game itself starts from) versus after the original's own new-game.
     let raw = env.snap.memory();
     let addrs: [(&str, usize); 12] = [
-        ("pause port  C55C", 0xC55C), ("pause bit   C55F", 0xC55F),
-        ("key0 port   C57A", 0xC57A), ("key0 bit    C57E", 0xC57E),
-        ("key1 port   C585", 0xC585), ("key1 bit    C589", 0xC589),
-        ("key2 port   C590", 0xC590), ("key2 bit    C594", 0xC594),
-        ("key3 port   C59B", 0xC59B), ("key3 bit    C59F", 0xC59F),
-        ("key4 port   C5A6", 0xC5A6), ("key4 bit    C5AA", 0xC5AA),
+        ("pause port  C55C", 0xC55C),
+        ("pause bit   C55F", 0xC55F),
+        ("key0 port   C57A", 0xC57A),
+        ("key0 bit    C57E", 0xC57E),
+        ("key1 port   C585", 0xC585),
+        ("key1 bit    C589", 0xC589),
+        ("key2 port   C590", 0xC590),
+        ("key2 bit    C594", 0xC594),
+        ("key3 port   C59B", 0xC59B),
+        ("key3 bit    C59F", 0xC59F),
+        ("key4 port   C5A6", 0xC5A6),
+        ("key4 bit    C5AA", 0xC5AA),
     ];
     println!("operand bytes:        snapshot   after original new-game");
     for (name, a) in addrs {
@@ -1451,9 +1612,17 @@ fn keys(env: &Env) {
     let mut five = Input::default();
     five.keys[3] &= !0x10;
     // The arrow presses "5" as well, as it does on a Spectrum.
-    let mut left = Input { kempston: 0x02, ..Default::default() };
+    let mut left = Input {
+        kempston: 0x02,
+        ..Default::default()
+    };
     left.keys[3] &= !0x10;
-    let cases = [("space", space), ("P", pkey), ("5", five), ("left arrow", left)];
+    let cases = [
+        ("space", space),
+        ("P", pkey),
+        ("5", five),
+        ("left arrow", left),
+    ];
 
     // The operands persist between games, as they do in the original, so a
     // keyboard method played first leaves its keys in place for Kempston.
@@ -1520,7 +1689,11 @@ fn tape(env: &Env, dir: &std::path::Path) {
     let snap = env.snap.memory();
     println!(
         "tape: loading screen {}, ram {} bytes",
-        if t.loading_screen.is_some() { "yes" } else { "no" },
+        if t.loading_screen.is_some() {
+            "yes"
+        } else {
+            "no"
+        },
         t.ram.len()
     );
     // Report the runs that differ, so state can be told from code.
@@ -1539,11 +1712,22 @@ fn tape(env: &Env, dir: &std::path::Path) {
     }
     let differing: usize = runs.iter().map(|(a, b)| b - a).sum();
     println!("differing bytes: {differing} in {} runs", runs.len());
-    let below: usize = runs.iter().filter(|(a, _)| *a < PROGRAM).map(|(a, b)| b - a).sum();
-    let above: Vec<(usize, usize)> = runs.iter().copied().filter(|(a, _)| *a >= PROGRAM).collect();
+    let below: usize = runs
+        .iter()
+        .filter(|(a, _)| *a < PROGRAM)
+        .map(|(a, b)| b - a)
+        .sum();
+    let above: Vec<(usize, usize)> = runs
+        .iter()
+        .copied()
+        .filter(|(a, _)| *a >= PROGRAM)
+        .collect();
     let above_bytes: usize = above.iter().map(|(a, b)| b - a).sum();
     println!("  below {PROGRAM:#06x} (screen and system variables): {below} bytes");
-    println!("  at or above {PROGRAM:#06x} (the program): {above_bytes} bytes in {} runs", above.len());
+    println!(
+        "  at or above {PROGRAM:#06x} (the program): {above_bytes} bytes in {} runs",
+        above.len()
+    );
     for (a, b) in above.iter().take(30) {
         println!("    {:#06x}..{:#06x}  {} bytes", a, b, b - a);
     }
@@ -1583,7 +1767,10 @@ fn menu_rate(env: &Env) {
         println!("the menu loop left early; the count below is short");
     }
     println!("original menu loop: {turns} turns per second");
-    println!("  highlight flips every 2 turns: {:.1} Hz", turns as f64 / 2.0);
+    println!(
+        "  highlight flips every 2 turns: {:.1} Hz",
+        turns as f64 / 2.0
+    );
     println!(
         "  the rewrite is paced at {} turns/s: {:.1} Hz",
         starquake::menu::TURNS_PER_SECOND,
@@ -1650,8 +1837,12 @@ fn main() {
     let mut ok = true;
     ok &= guarded("room tiles", || check_rooms(&env));
     ok &= guarded("room prelude (panel)", || check_room_prelude(&env));
-    ok &= guarded("room build with pickups (new game)", || check_room_build(&env));
-    ok &= guarded("room entry with enemies (room chains)", || check_room_entry(&env));
+    ok &= guarded("room build with pickups (new game)", || {
+        check_room_build(&env)
+    });
+    ok &= guarded("room entry with enemies (room chains)", || {
+        check_room_entry(&env)
+    });
     ok &= guarded("new game (629D)", || check_new_game(&env));
     ok &= guarded("menu (5E81)", || check_menu(&env));
     ok &= guarded("screens", || check_screens(&env));
@@ -1680,10 +1871,22 @@ fn main() {
     let tour = guarded_states("room tour states", || room_tour_states(&env, 120));
     println!("room tour states: {}", tour.len());
     ok &= guarded("tour: sprite colours", || {
-        check_frame_routine(&env, &tour, "tour: sprite colours", 0xD8B1, Game::colour_sprites)
+        check_frame_routine(
+            &env,
+            &tour,
+            "tour: sprite colours",
+            0xD8B1,
+            Game::colour_sprites,
+        )
     });
     ok &= guarded("tour: force fields", || {
-        check_frame_routine(&env, &tour, "tour: force fields", 0xA66C, Game::tick_force_fields)
+        check_frame_routine(
+            &env,
+            &tour,
+            "tour: force fields",
+            0xA66C,
+            Game::tick_force_fields,
+        )
     });
     ok &= guarded("enemies (A01B)", || check_enemies(&env, &tour));
     ok &= guarded("BLOB (C5BD)", || check_blob(&env, &tour));

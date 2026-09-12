@@ -109,7 +109,11 @@ impl Game {
         }
         self.set_blob(b::STEP, 0);
         let facing = self.blob(b::FACING);
-        let (end, next) = if right { (0, facing.wrapping_sub(1)) } else { (4, facing + 1) };
+        let (end, next) = if right {
+            (0, facing.wrapping_sub(1))
+        } else {
+            (4, facing + 1)
+        };
         if facing != end {
             self.set_blob(b::FACING, next);
             self.set_blob(b::WALK_FRAME, 0);
@@ -260,13 +264,21 @@ impl Game {
         }
         let dir = self.blob(b::SHOT_DIR);
         for _ in 0..3 {
-            let hit = if self.entities[5].x() & 7 == 0 { self.collide(5, false) } else { 0 };
+            let hit = if self.entities[5].x() & 7 == 0 {
+                self.collide(5, false)
+            } else {
+                0
+            };
             if hit & dir != 0 {
                 self.reset_shot();
                 return;
             }
             let x = self.entities[5].x();
-            let x = if self.blob(b::SHOT_DIR) == 1 { x.wrapping_add(2) } else { x.wrapping_sub(2) };
+            let x = if self.blob(b::SHOT_DIR) == 1 {
+                x.wrapping_add(2)
+            } else {
+                x.wrapping_sub(2)
+            };
             self.entities[5].0[X] = x;
             if x >= 0xF2 {
                 self.reset_shot();
@@ -461,7 +473,11 @@ impl Game {
     /// Bonus pickups: 0x11–0x16 refill a bar, 0x17 whatever is lowest,
     /// 0x18 a life.
     fn apply_bonus(&mut self, kind: u8) {
-        let kind = if kind == 0x17 { self.lowest_refill() } else { kind };
+        let kind = if kind == 0x17 {
+            self.lowest_refill()
+        } else {
+            kind
+        };
         let i = BONUS_EFFECTS + (kind.wrapping_sub(0x11) as usize) * 2;
         let (field, amount) = (self.ram_byte(i), self.ram_byte(i + 1));
         self.effects.push(field);
@@ -545,7 +561,9 @@ impl Game {
                 c -= 2;
             }
         }
-        let k = self.find_item_at_row(0x32).expect("the dropped item is in the table");
+        let k = self
+            .find_item_at_row(0x32)
+            .expect("the dropped item is in the table");
         let item = &mut self.items[k].0;
         item[0] = (item[0] & 0xE0) | c;
         item[1] = ((self.room >> 8) as u8).rotate_right(1) | row;
@@ -578,7 +596,9 @@ impl Game {
 
         let mut i = 0;
         for _ in 0..22 {
-            let Some(&m) = self.objects.markers.get(i) else { break };
+            let Some(&m) = self.objects.markers.get(i) else {
+                break;
+            };
             let (bx, by) = (self.blob(X), self.blob(Y));
             let exact = m.kind == 0 || ((0x0C..0x14).contains(&m.kind) && m.kind != 0x0E);
             let hit = if exact {
@@ -618,7 +638,11 @@ impl Game {
             1 => {
                 let bonus = self.bonus;
                 if bonus.graphic == CHEOPS {
-                    return if input & 8 != 0 { Err(Outcome::Modal(Modal::Cheops)) } else { Ok(false) };
+                    return if input & 8 != 0 {
+                        Err(Outcome::Modal(Modal::Cheops))
+                    } else {
+                        Ok(false)
+                    };
                 }
                 let g = self.assets.graphic32(bonus.graphic);
                 self.draw_block2x2(&g, bonus.row, bonus.col, 0x47);
@@ -632,19 +656,24 @@ impl Game {
             6 => Err(Outcome::Died(0x10)),
             0x0B => {
                 if self.status.inventory.iter().any(|&(g, _)| g == 0x10)
-                    && let Some((_, index)) = self.objects.teleport {
-                        let entry = &mut self.teleporters[index].1;
-                        if *entry & 0x7F != 0 {
-                            *entry &= 0x80;
-                            self.blank_teleport_pad();
-                            self.effects.push(8);
-                        }
+                    && let Some((_, index)) = self.objects.teleport
+                {
+                    let entry = &mut self.teleporters[index].1;
+                    if *entry & 0x7F != 0 {
+                        *entry &= 0x80;
+                        self.blank_teleport_pad();
+                        self.effects.push(8);
                     }
+                }
                 Ok(false)
             }
             0x0C => {
                 self.reset_shot();
-                let state = if self.blob(b::LAST_INPUT) & 8 != 0 { HOVERING } else { WALKING };
+                let state = if self.blob(b::LAST_INPUT) & 8 != 0 {
+                    HOVERING
+                } else {
+                    WALKING
+                };
                 self.set_blob(b::STATE, state);
                 Ok(false)
             }
@@ -678,7 +707,11 @@ impl Game {
                 Ok(false)
             }
             0x0F if input & 3 != 0 => {
-                self.room = if input & 1 != 0 { self.room.wrapping_add(1) } else { self.room.wrapping_sub(1) };
+                self.room = if input & 1 != 0 {
+                    self.room.wrapping_add(1)
+                } else {
+                    self.room.wrapping_sub(1)
+                };
                 self.effects.push(4);
                 Err(Outcome::NewRoom(5))
             }

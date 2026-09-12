@@ -75,17 +75,19 @@ pub fn run(
             }
         }
         if let Some((r, choices)) = &random
-            && frame >= r.start && !choices.is_empty() {
-                if (frame - r.start) % r.every.max(1) == 0 {
-                    held_random.clear();
-                    for _ in 0..(rng.next() % 3) {
-                        held_random.push(choices[(rng.next() % choices.len() as u64) as usize]);
-                    }
-                }
-                for &k in &held_random {
-                    z.set_key(k, true);
+            && frame >= r.start
+            && !choices.is_empty()
+        {
+            if (frame - r.start) % r.every.max(1) == 0 {
+                held_random.clear();
+                for _ in 0..(rng.next() % 3) {
+                    held_random.push(choices[(rng.next() % choices.len() as u64) as usize]);
                 }
             }
+            for &k in &held_random {
+                z.set_key(k, true);
+            }
+        }
         z.run_frame(no_code, &mut misses);
         on_frame(frame, &z);
     }

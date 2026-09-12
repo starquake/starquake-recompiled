@@ -13,7 +13,6 @@ pub mod machine;
 pub mod screen;
 pub mod trace;
 
-
 pub use machine::*;
 
 use std::collections::BTreeMap;
@@ -50,7 +49,11 @@ impl Zx {
 
             if self.halted {
                 // HALT executes NOPs until the next interrupt.
-                let until = if self.int_pending { self.t + 4 } else { FRAME_T };
+                let until = if self.int_pending {
+                    self.t + 4
+                } else {
+                    FRAME_T
+                };
                 let nops = (until - self.t).div_ceil(4);
                 self.r = (self.r & 0x80) | (self.r.wrapping_add(nops as u8) & 0x7F);
                 self.t += nops * 4;
@@ -115,7 +118,11 @@ impl Zx {
             }
             self.ei_delay = false;
             if self.halted {
-                let until = if self.int_pending { self.t + 4 } else { FRAME_T };
+                let until = if self.int_pending {
+                    self.t + 4
+                } else {
+                    FRAME_T
+                };
                 let nops = (until - self.t).div_ceil(4);
                 self.r = (self.r & 0x80) | (self.r.wrapping_add(nops as u8) & 0x7F);
                 self.t += nops * 4;

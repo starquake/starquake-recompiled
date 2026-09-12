@@ -162,7 +162,12 @@ impl Game {
             room: word(at::ROOM),
             objects: objects_from_memory(mem),
             teleporters: (0..8)
-                .map(|i| (mem[at::TELEPORTERS + i * 2], mem[at::TELEPORTERS + i * 2 + 1]))
+                .map(|i| {
+                    (
+                        mem[at::TELEPORTERS + i * 2],
+                        mem[at::TELEPORTERS + i * 2 + 1],
+                    )
+                })
                 .collect(),
             status: Status {
                 score: bytes(at::SCORE, 6).try_into().unwrap(),
@@ -254,7 +259,9 @@ fn objects_from_memory(mem: &[u8]) -> RoomObjects {
     };
     let word = |a: usize| mem[a] as usize | (mem[a + 1] as usize) << 8;
     let pairs = |start: usize, count: usize| -> Vec<(u8, u8)> {
-        (0..count).map(|i| (mem[start + i * 2], mem[start + i * 2 + 1])).collect()
+        (0..count)
+            .map(|i| (mem[start + i * 2], mem[start + i * 2 + 1]))
+            .collect()
     };
     let teleport_entry = word(TELEPORT_ENTRY);
     let kind12 = word(KIND12);
@@ -267,7 +274,11 @@ fn objects_from_memory(mem: &[u8]) -> RoomObjects {
         spawn_points: pairs(SPAWN, mem[SPAWN_COUNT] as usize),
         markers: (MARKERS..word(MARKERS_END).max(MARKERS))
             .step_by(3)
-            .map(|a| Marker { x: mem[a], y: mem[a + 1], kind: mem[a + 2] })
+            .map(|a| Marker {
+                x: mem[a],
+                y: mem[a + 1],
+                kind: mem[a + 2],
+            })
             .collect(),
         teleport: (teleport_entry != 0).then(|| {
             let pos = (mem[TELEPORT_POS], mem[TELEPORT_POS + 1]);

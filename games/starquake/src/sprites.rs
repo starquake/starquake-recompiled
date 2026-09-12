@@ -45,7 +45,11 @@ impl Game {
     pub fn draw_sprites(&mut self) {
         for k in 0..SLOTS {
             let e = self.entities[k].0;
-            self.xor_sprite(u16::from_le_bytes([e[0], e[1]]), u16::from_le_bytes([e[2], e[3]]), e[4]);
+            self.xor_sprite(
+                u16::from_le_bytes([e[0], e[1]]),
+                u16::from_le_bytes([e[2], e[3]]),
+                e[4],
+            );
 
             let (x, y) = (e[5], e[6]);
             // Graphics are stored pre-shifted by 0, 2, 4 and 6 pixels.
@@ -133,7 +137,11 @@ impl Game {
     /// Advances one of BLOB's platforms: they crumble through four stages
     /// once their timer runs low.
     pub fn tick_platforms(&mut self) {
-        self.platform_cursor = if self.platform_cursor + 1 >= 12 { 0 } else { self.platform_cursor + 1 };
+        self.platform_cursor = if self.platform_cursor + 1 >= 12 {
+            0
+        } else {
+            self.platform_cursor + 1
+        };
         let at = self.platform_cursor as usize * 4;
         let p = &mut self.platforms[at..at + 4];
         if p[1] == 0 {
@@ -166,7 +174,10 @@ impl Game {
         }
         self.objects.sparkle_cursor = u16::from_le_bytes([e, d]);
         let at = e.rotate_left(1) as usize;
-        let (col, row) = (self.objects.sparkle_table[at], self.objects.sparkle_table[at + 1]);
+        let (col, row) = (
+            self.objects.sparkle_table[at],
+            self.objects.sparkle_table[at + 1],
+        );
         let b = row.rotate_right(3);
         let low = (b & 0xE0) | col;
         if low == 0 {

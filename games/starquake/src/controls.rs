@@ -110,9 +110,16 @@ impl Controls {
             kempston: mem[KEMPSTON_FLAG] == 1,
             initial: mem[INITIAL],
             keys: std::array::from_fn(|i| {
-                (mem[PORTS[i]], (mem[BIT_OPCODES[i]].wrapping_sub(0x42) >> 3) & 7, mem[VALUES[i]])
+                (
+                    mem[PORTS[i]],
+                    (mem[BIT_OPCODES[i]].wrapping_sub(0x42) >> 3) & 7,
+                    mem[VALUES[i]],
+                )
             }),
-            pause: (mem[PAUSE_PORT], (mem[PAUSE_BIT_OPCODE].wrapping_sub(0x47) >> 3) & 7),
+            pause: (
+                mem[PAUSE_PORT],
+                (mem[PAUSE_BIT_OPCODE].wrapping_sub(0x47) >> 3) & 7,
+            ),
         }
     }
 
@@ -168,7 +175,11 @@ impl crate::game::Game {
 
     /// Waits for a key `accept` likes and returns its code, running a frame
     /// between polls so the screen keeps moving.
-    pub fn wait_key(&mut self, host: &mut dyn crate::host::Host, accept: impl Fn(u8) -> bool) -> u8 {
+    pub fn wait_key(
+        &mut self,
+        host: &mut dyn crate::host::Host,
+        accept: impl Fn(u8) -> bool,
+    ) -> u8 {
         loop {
             let k = key_code(&self.assets.ram, &self.input);
             if accept(k) {

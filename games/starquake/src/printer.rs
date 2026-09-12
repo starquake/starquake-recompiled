@@ -24,7 +24,8 @@ pub type Font = [[u8; 8]; 96];
 /// the low four bits rather than from a table: bit 0 is the top right
 /// quarter of the cell, then top left, bottom right, bottom left.
 fn block_graphic(n: u8) -> [u8; 8] {
-    let half = |bits: u8| (if bits & 1 != 0 { 0x0F } else { 0 }) | (if bits & 2 != 0 { 0xF0 } else { 0 });
+    let half =
+        |bits: u8| (if bits & 1 != 0 { 0x0F } else { 0 }) | (if bits & 2 != 0 { 0xF0 } else { 0 });
     let (top, bottom) = (half(n), half(n >> 2));
     [top, top, top, top, bottom, bottom, bottom, bottom]
 }
@@ -179,7 +180,11 @@ impl Printer {
             return;
         }
         let base = display::cell_offset(self.row, self.col);
-        let invert = if self.p_flag & P_INVERSE != 0 { 0xFF } else { 0 };
+        let invert = if self.p_flag & P_INVERSE != 0 {
+            0xFF
+        } else {
+            0
+        };
         let over = self.p_flag & P_OVER != 0;
         for (line, &g) in glyph.iter().enumerate() {
             let at = base + (line << 8);

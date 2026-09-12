@@ -69,7 +69,11 @@ impl Game {
     /// Sets the ink for the next menu option: the option matching the
     /// control method in use is drawn in the flashing colour.
     fn option_ink(&mut self, option: u8, ink: u8) {
-        let colour = if self.control_method == option { ink } else { 3 };
+        let colour = if self.control_method == option {
+            ink
+        } else {
+            3
+        };
         self.print_bytes(&[0x10, colour]);
     }
 
@@ -203,8 +207,30 @@ impl Game {
             let (paper, bright) = if name >= 0x90 { (2, 1) } else { (1, 0) };
             let r = row as u8 * 3;
             self.print_bytes(&[
-                0x10, 7, 0x11, paper, 0x16, r, col, 0x13, bright, name, 0x10, 0, b'+', 0x16,
-                r + 1, col, 0x8C, b',', 0x10, 5, 0x13, 1, 0x11, 0,
+                0x10,
+                7,
+                0x11,
+                paper,
+                0x16,
+                r,
+                col,
+                0x13,
+                bright,
+                name,
+                0x10,
+                0,
+                b'+',
+                0x16,
+                r + 1,
+                col,
+                0x8C,
+                b',',
+                0x10,
+                5,
+                0x13,
+                1,
+                0x11,
+                0,
             ]);
         }
     }

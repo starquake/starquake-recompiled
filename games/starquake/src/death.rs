@@ -55,9 +55,24 @@ impl Game {
                 }
                 self.death_ink ^= 5;
                 self.frame_with(host);
-                let text = [0x13, 1, 0x16, 1, 0x0E, 0x15, 1, 0x10, self.death_ink, b' ', b' ', 0x15, 0];
+                let text = [
+                    0x13,
+                    1,
+                    0x16,
+                    1,
+                    0x0E,
+                    0x15,
+                    1,
+                    0x10,
+                    self.death_ink,
+                    b' ',
+                    b' ',
+                    0x15,
+                    0,
+                ];
                 let assets = self.assets.clone();
-                self.printer.print(&mut self.display, &assets.font, &assets.udg, &text);
+                self.printer
+                    .print(&mut self.display, &assets.font, &assets.udg, &text);
                 self.effects.push(0x0F);
             }
         }
@@ -90,8 +105,15 @@ impl Game {
             e[field::GRAPHIC..field::GRAPHIC + 2].copy_from_slice(&EXPLOSION_GRAPHIC.to_le_bytes());
             e[field::COLOUR] = 7;
             e[0x0E] = ram[FRAGMENTS + k * 2];
-            for (i, &v) in ram[FRAGMENT_TEMPLATE..FRAGMENT_TEMPLATE + 9].iter().enumerate() {
-                let v = if v == 0xFE { ram[FRAGMENTS + k * 2 + 1] } else { v };
+            for (i, &v) in ram[FRAGMENT_TEMPLATE..FRAGMENT_TEMPLATE + 9]
+                .iter()
+                .enumerate()
+            {
+                let v = if v == 0xFE {
+                    ram[FRAGMENTS + k * 2 + 1]
+                } else {
+                    v
+                };
                 if v != 0xFF {
                     e[0x11 + i] = v;
                 }

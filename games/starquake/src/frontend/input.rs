@@ -12,7 +12,10 @@ use winit::keyboard::KeyCode;
 /// hardware reads them in. Arms that repeat a position do so because two
 /// host keys reach the same Spectrum key; merging them would break the
 /// layout and separate the arrow keys from the note explaining them.
-#[allow(clippy::match_same_arms, reason = "the arms are the keyboard's own layout")]
+#[allow(
+    clippy::match_same_arms,
+    reason = "the arms are the keyboard's own layout"
+)]
 fn matrix(key: KeyCode) -> &'static [(usize, u8)] {
     use KeyCode::*;
     match key {

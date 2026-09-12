@@ -37,14 +37,28 @@ impl Game {
     pub(crate) fn print_text(&mut self, addr: usize) {
         let assets = self.assets.clone();
         let end = assets.ram[addr..].iter().position(|&b| b == 0xFF).unwrap();
-        let udg = if self.title_udg { &assets.title_udg } else { &assets.udg };
-        self.printer.print(&mut self.display, &assets.font, udg, &assets.ram[addr..addr + end]);
+        let udg = if self.title_udg {
+            &assets.title_udg
+        } else {
+            &assets.udg
+        };
+        self.printer.print(
+            &mut self.display,
+            &assets.font,
+            udg,
+            &assets.ram[addr..addr + end],
+        );
     }
 
     pub(crate) fn print_bytes(&mut self, bytes: &[u8]) {
         let assets = self.assets.clone();
-        let udg = if self.title_udg { &assets.title_udg } else { &assets.udg };
-        self.printer.print(&mut self.display, &assets.font, udg, bytes);
+        let udg = if self.title_udg {
+            &assets.title_udg
+        } else {
+            &assets.udg
+        };
+        self.printer
+            .print(&mut self.display, &assets.font, udg, bytes);
     }
 
     /// Switches the print ink to a new random colour.
@@ -61,7 +75,11 @@ impl Game {
     /// Alternates the print ink, for flashing messages.
     fn flash_ink(&mut self) {
         self.flash_phase ^= 1;
-        let ink = if self.flash_phase != 0 { (self.screen_ink ^ 7) | 2 } else { self.screen_ink };
+        let ink = if self.flash_phase != 0 {
+            (self.screen_ink ^ 7) | 2
+        } else {
+            self.screen_ink
+        };
         self.print_bytes(&[0x10, ink]);
     }
 
@@ -127,7 +145,9 @@ impl Game {
                 }
             });
             let matched = matched.or_else(|| {
-                (0..4).find(|&s| used & (8 >> s) == 0 && slots[s].0 == WILDCARD).map(|s| (s, true))
+                (0..4)
+                    .find(|&s| used & (8 >> s) == 0 && slots[s].0 == WILDCARD)
+                    .map(|s| (s, true))
             });
             if let Some((slot, consume)) = matched {
                 if consume {
@@ -151,7 +171,11 @@ impl Game {
 
         self.pause_frames(host, 20);
         let granted = (0..count as usize).all(|i| self.code[i * 2 + 1] == 7);
-        let (times, text) = if granted { (35, at::AUTHORISED) } else { (40, at::INVALID) };
+        let (times, text) = if granted {
+            (35, at::AUTHORISED)
+        } else {
+            (40, at::INVALID)
+        };
         for _ in 0..times {
             self.flash_ink();
             self.print_text(text);
@@ -264,7 +288,10 @@ impl Game {
                 ram[r] as u16 | (ram[r + 1] as u16) << 8 == room
             })
             .unwrap_or(15);
-        let start = (at::TELEPORTERS + entry * 7 + 5).wrapping_add(1).wrapping_sub(6) - if entry == 15 { 1 } else { 0 };
+        let start = (at::TELEPORTERS + entry * 7 + 5)
+            .wrapping_add(1)
+            .wrapping_sub(6)
+            - if entry == 15 { 1 } else { 0 };
         ram[start..start + 5].try_into().unwrap()
     }
 

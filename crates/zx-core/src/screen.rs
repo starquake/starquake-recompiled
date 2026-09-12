@@ -66,7 +66,11 @@ pub fn render<P: Copy>(
             }
             let at = origin + y * stride + col * 8;
             for bit in 0..8 {
-                out[at + bit] = if bits & (0x80 >> bit) != 0 { ink } else { paper };
+                out[at + bit] = if bits & (0x80 >> bit) != 0 {
+                    ink
+                } else {
+                    paper
+                };
             }
         }
     }

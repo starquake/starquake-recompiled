@@ -114,7 +114,11 @@ pub fn beep(ram: &[u8], id: u8) -> (Vec<(u32, bool)>, u32) {
 /// T-states between speaker changes for the frame tone returned by
 /// [`Game::sound_tick`].
 pub fn tone_half_period(half_period: u8) -> u32 {
-    let e = if half_period == 0 { 256 } else { half_period as u32 };
+    let e = if half_period == 0 {
+        256
+    } else {
+        half_period as u32
+    };
     35 * e + 37
 }
 

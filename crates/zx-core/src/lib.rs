@@ -2,14 +2,14 @@
 //! decoder (so both agree exactly on what every byte sequence means), the
 //! `.z80` snapshot loader and a small SHA-1 used to identify user files.
 
+pub mod bus;
 pub mod decode;
 pub mod png;
+pub mod screen;
 pub mod sha1;
 pub mod snapshot;
-pub mod bus;
-pub mod screen;
-pub mod timing;
 pub mod tape;
+pub mod timing;
 
 pub use decode::*;
 pub use snapshot::Snapshot;

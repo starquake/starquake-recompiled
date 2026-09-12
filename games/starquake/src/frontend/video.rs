@@ -61,7 +61,10 @@ impl ApplicationHandler for App {
         }
         let attrs = Window::default_attributes()
             .with_title("Starquake")
-            .with_inner_size(LogicalSize::new(FULL_W as f64 * SCALE, FULL_H as f64 * SCALE))
+            .with_inner_size(LogicalSize::new(
+                FULL_W as f64 * SCALE,
+                FULL_H as f64 * SCALE,
+            ))
             .with_min_inner_size(LogicalSize::new(FULL_W as f64, FULL_H as f64));
         let window = match event_loop.create_window(attrs) {
             Ok(w) => Arc::new(w),
