@@ -21,49 +21,24 @@ pub const FULL_W: usize = WIDTH + 2 * BORDER;
 pub const FULL_H: usize = HEIGHT + 2 * BORDER;
 const SCALE: f64 = 3.0;
 
-const PALETTE: [[u8; 3]; 16] = [
-    [0x00, 0x00, 0x00],
-    [0x00, 0x00, 0xD8],
-    [0xD8, 0x00, 0x00],
-    [0xD8, 0x00, 0xD8],
-    [0x00, 0xD8, 0x00],
-    [0x00, 0xD8, 0xD8],
-    [0xD8, 0xD8, 0x00],
-    [0xD8, 0xD8, 0xD8],
-    [0x00, 0x00, 0x00],
-    [0x00, 0x00, 0xFF],
-    [0xFF, 0x00, 0x00],
-    [0xFF, 0x00, 0xFF],
-    [0x00, 0xFF, 0x00],
-    [0x00, 0xFF, 0xFF],
-    [0xFF, 0xFF, 0x00],
-    [0xFF, 0xFF, 0xFF],
-];
+/// A palette colour as the opaque RGBA pixel `pixels` wants.
+fn rgba(c: u32) -> [u8; 4] {
+    [(c >> 16) as u8, (c >> 8) as u8, c as u8, 0xFF]
+}
 
 /// Draws Spectrum display memory with a border into an RGBA frame.
 pub fn draw(mem: &[u8], border: u8, frame: u64, out: &mut [u8]) {
-    let b = PALETTE[(border & 7) as usize];
-    for px in out.as_chunks_mut::<4>().0 {
-        px.copy_from_slice(&[b[0], b[1], b[2], 0xFF]);
-    }
-    let flash = (frame / 16) % 2 == 1;
-    for y in 0..HEIGHT {
-        let line = ((y & 0xC0) << 5) | ((y & 7) << 8) | ((y & 0x38) << 2);
-        for col in 0..32 {
-            let bits = mem[line + col];
-            let attr = mem[BITMAP_LEN + (y / 8) * 32 + col];
-            let bright = ((attr >> 6) & 1) as usize * 8;
-            let (mut ink, mut paper) = ((attr & 7) as usize + bright, ((attr >> 3) & 7) as usize + bright);
-            if attr & 0x80 != 0 && flash {
-                std::mem::swap(&mut ink, &mut paper);
-            }
-            for bit in 0..8 {
-                let c = PALETTE[if bits & (0x80 >> bit) != 0 { ink } else { paper }];
-                let i = ((y + BORDER) * FULL_W + BORDER + col * 8 + bit) * 4;
-                out[i..i + 3].copy_from_slice(&c);
-            }
-        }
-    }
+    let out = out.as_chunks_mut::<4>().0;
+    out.fill(rgba(zx_core::screen::PALETTE[(border & 7) as usize]));
+    zx_core::screen::render(
+        mem,
+        &mem[BITMAP_LEN..],
+        (frame / 16) % 2 == 1,
+        out,
+        FULL_W,
+        BORDER * FULL_W + BORDER,
+        rgba,
+    );
 }
 
 struct App {
