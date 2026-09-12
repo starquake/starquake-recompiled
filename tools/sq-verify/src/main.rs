@@ -818,9 +818,15 @@ fn check_core_room(env: &Env) -> bool {
 /// means every branch of every half-cycle went the same way, which is what
 /// sets the pitch, the buzz and the tempo.
 fn check_music(env: &Env) -> bool {
-    /// The stub that calls the player: `ld hl,tune` / `call d9de` / `ret`.
-    const STUB: u16 = 0x5B20;
-    const STUB_T: u32 = 10 + 17 + 10;
+    /// The player itself. It is called with the tune's address in HL, and
+    /// `call_until_any_timed` supplies the return address, so there is no
+    /// stub to subtract afterwards.
+    ///
+    /// There used to be one, three instructions at 0x5B20. That is inside
+    /// the contended sixteen kilobytes, so once the ULA was modelled the
+    /// stub cost more than the constant being subtracted for it, and the
+    /// measurement carried the harness's own delays into the answer.
+    const PLAYER: u16 = 0xD9DE;
     const TUNES: usize = 0x65F4;
 
     let mut failures = Vec::new();
@@ -830,18 +836,14 @@ fn check_music(env: &Env) -> bool {
         let mut z = env.machine();
         let entry = TUNES + tune as usize * 2;
         let addr = z.mem[entry] as u16 | (z.mem[entry + 1] as u16) << 8;
-        let code = [0x21, addr as u8, (addr >> 8) as u8, 0xCD, 0xDE, 0xD9, 0xC9];
-        for (i, b) in code.iter().enumerate() {
-            z.mem[STUB as usize + i] = *b;
-        }
+        z.set_hl(addr);
         z.t = 0;
         let case = format!("tune {tune} at {addr:04x}");
-        let (done, elapsed) = z.call_until_any_timed(STUB, &[], 2_000_000_000);
+        let (done, original) = z.call_until_any_timed(PLAYER, &[], 2_000_000_000);
         if !done {
             failures.push((case, vec!["original did not finish".into()]));
             continue;
         }
-        let original = elapsed.saturating_sub(STUB_T);
         let (edges, total) = starquake::music::tune(&env.assets.ram, addr as usize);
         let seconds = total as f64 / (starquake::host::FRAMES_PER_SECOND * starquake::sound::FRAME_T) as f64;
         println!("  tune {tune}: {seconds:.1}s, {} speaker changes", edges.len());

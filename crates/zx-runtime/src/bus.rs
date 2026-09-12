@@ -7,91 +7,35 @@
 //!
 //! So the timing is kept apart from the execution: [`cycles`] says which
 //! addresses an instruction puts on the bus, in what order, and for how long
-//! each. Charging the ULA's delays is then a matter of walking that list.
+//! each. What each of those costs is `zx_core::bus`, which the game's sound
+//! models charge through as well, so the two cannot disagree.
 //!
 //! The Fuse test corpus states the bus activity of all 1335 of its cases, so
 //! this is checked rather than believed: `tests/fuse.rs` compares every
 //! contention point against it, and checks that the cycles add up to what the
 //! decoder charges for the instruction.
 
+pub use zx_core::bus::{Cycle, Cycles, Kind};
 use zx_core::{Addr, BlockOp, Decoded, Instr, Op8};
 
 use crate::machine::Zx;
 
-/// What the processor is doing with the bus for one machine cycle.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Kind {
-    /// An opcode fetch or a memory read.
-    Read,
-    Write,
-    /// The address is on the bus but nothing is transferred, which the ULA
-    /// charges for just the same.
-    Idle,
-    PortRead,
-    PortWrite,
-}
-
-/// One machine cycle: an address on the bus for `len` T-states.
-#[derive(Clone, Copy, Debug)]
-pub struct Cycle {
-    pub at: u16,
-    pub len: u32,
-    pub kind: Kind,
-}
-
-/// The machine cycles of one instruction.
-///
-/// Fixed capacity and no allocation, because this is on the interpreter's
-/// hottest path: `sq-verify` runs hundreds of millions of instructions, and a
-/// heap allocation each would dominate it. The longest instruction is `CPIR`
-/// repeating, at 13.
-pub struct Cycles {
-    buf: [Cycle; Cycles::MAX],
-    len: usize,
-}
-
-impl Cycles {
-    const MAX: usize = 20;
-
-    fn new() -> Cycles {
-        Cycles { buf: [Cycle { at: 0, len: 0, kind: Kind::Idle }; Cycles::MAX], len: 0 }
-    }
-
-    fn push(&mut self, c: Cycle) {
-        debug_assert!(self.len < Cycles::MAX, "an instruction with more than {} cycles", Cycles::MAX);
-        if self.len < Cycles::MAX {
-            self.buf[self.len] = c;
-            self.len += 1;
-        }
-    }
-}
-
-impl std::ops::Deref for Cycles {
-    type Target = [Cycle];
-    fn deref(&self) -> &[Cycle] {
-        &self.buf[..self.len]
-    }
-}
-
 const fn read(at: u16) -> Cycle {
-    Cycle { at, len: 3, kind: Kind::Read }
+    Cycle::read(at)
 }
 
 const fn write(at: u16) -> Cycle {
-    Cycle { at, len: 3, kind: Kind::Write }
+    Cycle::write(at)
 }
 
 const fn fetch(at: u16, len: u32) -> Cycle {
-    Cycle { at, len, kind: Kind::Read }
+    Cycle::fetch(at, len)
 }
 
 /// `n` one-T-state cycles with `at` on the address bus.
 fn idle(out: &mut Cycles, at: u16, n: u32) {
-    for _ in 0..n {
-        out.push(Cycle { at, len: 1, kind: Kind::Idle });
-    }
+    out.idle(at, n);
 }
-
 impl Zx {
     /// The address the refresh cycle leaves on the bus, which idle cycles sit
     /// on. R has already counted the opcode fetches by then.
