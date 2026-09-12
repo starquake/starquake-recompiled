@@ -1,10 +1,11 @@
 //! The title screen and the menu around a game: choosing how to play,
 //! defining your own keys, and quitting.
 //!
-//! The original's menu loop spins as fast as it can redraw itself, reading
-//! the keyboard each time round. Here one turn of the loop is one frame,
-//! which is what the [`Host`] contract offers; the flashing is a little
-//! slower than on a real Spectrum but everything else follows the original.
+//! The original's menu loop has no wait in it: it goes round as fast as it
+//! can redraw the options, reading the keyboard each time. On a real
+//! Spectrum that is 13 times a second (measured with `sq-verify menu`), so
+//! the turns are spread across the 50 Hz frames the [`Host`] gives us rather
+//! than run one per frame, which would flash four times too fast.
 
 use crate::controls::key_code;
 use crate::game::Game;
@@ -39,6 +40,11 @@ const TITLE_LEFT: u8 = 0x88;
 const TITLE_RIGHT: u8 = 0x89;
 const STAR: u8 = 0x90;
 const GOODBYE_TILE: u8 = 0x56;
+
+/// Turns of the menu loop a real Spectrum manages in a second, and the
+/// frames we have to spread them over.
+const TURNS_PER_SECOND: u32 = 13;
+const FRAMES_PER_SECOND: u32 = 50;
 
 /// How many keys the define-keys screen shows, and how many are defined.
 const KEYS: usize = 40;
@@ -117,8 +123,16 @@ impl Game {
             // The highlight flashes between these two colours.
             let mut ink = 7u8;
             let mut countdown = 2u8;
-            let trace = std::env::var_os("SQ_TRACE").is_some();
+            let (mut frames, mut turns) = (0u32, 0u32);
             loop {
+                self.sync(host);
+                frames += 1;
+                let due = frames * TURNS_PER_SECOND / FRAMES_PER_SECOND;
+                if due == turns {
+                    continue;
+                }
+                turns = due;
+
                 self.draw_options(ink);
                 countdown -= 1;
                 if countdown == 0 {
@@ -135,22 +149,7 @@ impl Game {
                         }
                     }
                 }
-                let key = key_code(&self.assets.ram, &self.input);
-                if trace {
-                    let down: Vec<String> = self
-                        .input
-                        .keys
-                        .iter()
-                        .enumerate()
-                        .filter(|&(_, &b)| b != 0xFF)
-                        .map(|(r, &b)| format!("row{r}:{:05b}", !b & 0x1F))
-                        .collect();
-                    if !down.is_empty() || key != 0 {
-                        eprintln!("menu: down {down:?} -> code {key:#04x}, method {}", self.control_method);
-                    }
-                }
-                self.sync(host);
-                match key {
+                match key_code(&self.assets.ram, &self.input) {
                     b'Q' => {
                         if self.quit_confirmed(host) {
                             return Start::Quit;
@@ -163,10 +162,10 @@ impl Game {
                         break;
                     }
                     b'0' => return Start::Play(self.control_method),
-                    b'1'..=b'5' => {
+                    k @ b'1'..=b'5' => {
                         // The original refuses Kempston when it cannot find
                         // the interface; here the arrow keys always are one.
-                        let method = key - b'0';
+                        let method = k - b'0';
                         if self.control_method != method {
                             self.control_method = method;
                             self.effects.push(0x0C);
