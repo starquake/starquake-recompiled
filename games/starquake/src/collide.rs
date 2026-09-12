@@ -14,7 +14,7 @@ pub mod blocked {
 /// Address (Spectrum memory) of the attribute cell under pixel (x, y),
 /// y counted from the bottom.
 pub fn attr_addr(x: u8, y: u8) -> u16 {
-    0x5800 + ((0xBFu8.wrapping_sub(y) & 0xF8) as u16) * 4 + (x >> 3) as u16
+    0x5800 + crate::display::attr_index(x, y) as u16
 }
 
 impl Game {
