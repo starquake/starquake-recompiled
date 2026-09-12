@@ -26,7 +26,7 @@ pub struct NullHost {
 
 impl Host for NullHost {
     fn frame(&mut self, game: &Game) -> (Input, u32) {
-        let busy: u32 = game.effects.iter().map(|&id| crate::sound::beep(&game.assets.ram, id).1).sum();
+        let busy: u32 = game.effects.iter().map(|&id| game.assets.beep(id).1).sum();
         let frames = 1 + busy / crate::sound::FRAME_T;
         self.frames += frames as u64;
         (self.input, frames)

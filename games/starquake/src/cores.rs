@@ -42,8 +42,9 @@ impl Game {
 
     /// Draws a blank over one slot of the core grid, in `colour`.
     pub(crate) fn flash_core_slot(&mut self, slot: u8, colour: u8) {
-        let row = self.core_grid_row + 2 * (slot / 3);
-        let col = self.death_kind + 2 * (slot % 3);
+        let (base_col, base_row) = self.core_grid;
+        let row = base_row + 2 * (slot / 3);
+        let col = base_col + 2 * (slot % 3);
         let blank = self.assets.graphic_at(BLANK);
         self.draw_block2x2(&blank, row, col, colour);
     }

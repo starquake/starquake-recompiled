@@ -96,7 +96,8 @@ impl Game {
             while next < edges.len() && edges[next].0 < end {
                 next += 1;
             }
-            self.music = edges[first..next].iter().map(|&(at, level)| (at - t, level)).collect();
+            // `sync` cleared this and kept its capacity; extending reuses it.
+            self.music.extend(edges[first..next].iter().map(|&(at, level)| (at - t, level)));
             self.sync(host);
             // The original's player scans a half-row of the keyboard between
             // speaker toggles and stops on any pressed bit, so two keys held
@@ -158,8 +159,7 @@ impl Game {
     /// Draws the nine core slots as a 3 × 3 grid: white for the pieces
     /// found, red for those still missing, which then flash.
     pub(crate) fn draw_core_grid(&mut self, row: u8, col: u8) {
-        self.death_kind = col;
-        self.core_grid_row = row;
+        self.core_grid = (col, row);
         for r in 0..3 {
             for c in 0..3 {
                 let piece = self.core_slots[r * 3 + c];

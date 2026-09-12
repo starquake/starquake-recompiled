@@ -21,6 +21,21 @@ use starquake::host::Host;
 /// 20ms, and the difference is the game running 0.16% slow or fast.
 const FRAME_PERIOD: Duration = Duration::from_nanos(19_968_000);
 
+/// Key presses that carry an unattended run past the loading screen and the
+/// menu: any key to leave the picture, `1` to pick the joystick, then `0` to
+/// start, which afterwards doubles as the any-key the waiting screens want.
+pub fn scripted_keys(frame: u64) -> [u8; 8] {
+    let mut keys = [0xFFu8; 8];
+    if (20..40).contains(&frame) {
+        keys[4] = !0x01; // 0
+    } else if (60..80).contains(&frame) {
+        keys[3] = !0x01; // 1
+    } else if frame >= 110 && frame % 8 < 4 {
+        keys[4] = !0x01;
+    }
+    keys
+}
+
 /// State shared between the game thread and the window.
 pub struct Shared {
     /// The most recent frame: display memory, border colour, frame number.
@@ -101,7 +116,7 @@ impl Host for FrontHost {
         }
 
         self.frame_start = Some(Instant::now());
-        let busy = self.beeper.effects(&game.assets.ram, &game.effects);
+        let busy = self.beeper.effects(&game.assets, &game.effects);
         let frames = 1 + busy / starquake::sound::FRAME_T;
         let rest = starquake::sound::FRAME_T - busy % starquake::sound::FRAME_T;
         if game.music.is_empty() {
@@ -124,10 +139,9 @@ impl Host for FrontHost {
         // sound card's queue to drain instead would tie the frame to when the
         // card happens to ask for samples, which is coarse and bursty enough
         // to cost several milliseconds a frame.
-        let samples = self.beeper.take_samples();
         let mut period = FRAME_PERIOD * frames;
         if let Some(out) = &self.audio {
-            out.push(&samples);
+            out.push(self.beeper.samples());
             // The card's clock and this one drift apart slowly, and a frame
             // of sound is a touch short of what the card eats in a frame. So
             // lean on the period when the buffer strays outside two to three
@@ -141,6 +155,8 @@ impl Host for FrontHost {
                 period += Duration::from_micros(500);
             }
         }
+        // Whether or not there is a card to play them on.
+        self.beeper.clear_samples();
         self.next_frame += period;
         let now = Instant::now();
         if self.next_frame > now {
@@ -220,30 +236,20 @@ fn play_game(
         frame_start: None,
         bench: std::env::var_os("SQ_BENCH").is_some(),
     };
-    // What the tape showed while it loaded, once, before the game proper.
-    game.loading_screen(&mut host);
-    // The title screen, a game, and the scores, over and over: the frame
-    // counter runs throughout, which is what seeds each new game.
-    loop {
-        match game.menu(&mut host) {
-            starquake::menu::Start::Quit => {
-                host.shared.quit.store(true, Ordering::Relaxed);
-                return;
-            }
-            starquake::menu::Start::Play(method) => {
-                game.new_game(method);
-                game.intro(&mut host);
-                game.play(&mut host);
-                game.game_over(&mut host);
-            }
-        }
-    }
+    // The frame counter runs throughout, which is what seeds each new game.
+    game.run(&mut host);
+    host.shared.quit.store(true, Ordering::Relaxed);
 }
 
 /// Runs the game with its real sound and pacing but no window, driving it
 /// with scripted input, and reports how long each frame actually took.
-pub fn bench(path: &Path, seconds: u64) -> Result<(), String> {
-    unsafe { std::env::set_var("SQ_BENCH", "1") };
+/// What both ways of running the game need: the game's own copy of the tape,
+/// the state shared with whatever is showing it, and a sound card if there is
+/// one. The stream has to be held for as long as the sound should play.
+type Started = (Vec<u8>, Option<Vec<u8>>, Arc<Shared>, Option<audio::Output>, Option<cpal::Stream>);
+
+fn start(path: &Path) -> Result<Started, String> {
+    // Reading checks the file is a supported version.
     let (memory, loading_screen) = starquake::assets::read_game(path)?;
     let shared = Arc::new(Shared {
         screen: Mutex::new((vec![0; starquake::display::BITMAP_LEN + 768], 0, 0)),
@@ -252,12 +258,18 @@ pub fn bench(path: &Path, seconds: u64) -> Result<(), String> {
         dead: AtomicBool::new(false),
     });
     let (audio, stream) = match audio::Output::start() {
-        Ok((out, s)) => (Some(out), Some(s)),
+        Ok((out, stream)) => (Some(out), Some(stream)),
         Err(e) => {
             eprintln!("no sound: {e}");
             (None, None)
         }
     };
+    Ok((memory, loading_screen, shared, audio, stream))
+}
+
+pub fn bench(path: &Path, seconds: u64) -> Result<(), String> {
+    unsafe { std::env::set_var("SQ_BENCH", "1") };
+    let (memory, loading_screen, shared, audio, stream) = start(path)?;
     let keys = shared.clone();
     std::thread::spawn(move || {
         let mut n = 0u64;
@@ -265,15 +277,7 @@ pub fn bench(path: &Path, seconds: u64) -> Result<(), String> {
             std::thread::sleep(Duration::from_millis(20));
             n += 1;
             let mut i = keys.input.lock().unwrap();
-            i.keys = [0xFF; 8];
-            // Past the loading screen, then pick the joystick, then start.
-            if (20..40).contains(&n) {
-                i.keys[4] = !0x01;
-            } else if (60..80).contains(&n) {
-                i.keys[3] = !0x01;
-            } else if n >= 110 && n % 8 < 4 {
-                i.keys[4] = !0x01;
-            }
+            i.keys = scripted_keys(n);
             if n.is_multiple_of(12) {
                 i.kempston = [0x01, 0x02, 0x09, 0x0A, 0x11][(n as usize / 12) % 5];
             }
@@ -290,22 +294,7 @@ pub fn bench(path: &Path, seconds: u64) -> Result<(), String> {
 }
 
 pub fn run(path: &Path) -> Result<(), String> {
-    // Reading checks the file is a supported version.
-    let (memory, loading_screen) = starquake::assets::read_game(path)?;
-
-    let shared = Arc::new(Shared {
-        screen: Mutex::new((vec![0; starquake::display::BITMAP_LEN + 768], 0, 0)),
-        input: Mutex::new(Input::default()),
-        quit: AtomicBool::new(false),
-        dead: AtomicBool::new(false),
-    });
-    let (audio, stream) = match audio::Output::start() {
-        Ok((out, stream)) => (Some(out), Some(stream)),
-        Err(e) => {
-            eprintln!("no sound: {e}");
-            (None, None)
-        }
-    };
+    let (memory, loading_screen, shared, audio, stream) = start(path)?;
     let game_shared = shared.clone();
     std::thread::Builder::new()
         .name("game".into())

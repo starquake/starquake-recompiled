@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use starquake::assets::Assets;
 
 const CPU_HZ: f64 = 3_500_000.0;
 const VOLUME: f32 = 0.25;
@@ -57,12 +58,12 @@ impl Beeper {
     }
 
     /// Plays blocking sound effects; returns how many T-states they took.
-    pub fn effects(&mut self, ram: &[u8], ids: &[u8]) -> u32 {
+    pub fn effects(&mut self, assets: &Assets, ids: &[u8]) -> u32 {
         let mut total = 0;
         for &id in ids {
-            let (edges, duration) = starquake::sound::beep(ram, id);
+            let (edges, duration) = assets.beep(id);
             let mut now = 0;
-            for (t, level) in edges {
+            for &(t, level) in edges {
                 self.advance((t - now) as f64);
                 now = t;
                 self.level = level;
@@ -103,8 +104,15 @@ impl Beeper {
         }
     }
 
-    pub fn take_samples(&mut self) -> Vec<f32> {
-        std::mem::take(&mut self.samples)
+    /// The samples generated since the last [`Beeper::clear_samples`]. Kept
+    /// rather than handed over, so the buffer is reused instead of a fresh
+    /// one being allocated every frame.
+    pub fn samples(&self) -> &[f32] {
+        &self.samples
+    }
+
+    pub fn clear_samples(&mut self) {
+        self.samples.clear();
     }
 }
 

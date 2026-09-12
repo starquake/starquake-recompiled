@@ -91,7 +91,10 @@ pub struct Game {
     pub title_udg: bool,
     /// Death kind; the core grid's column shares this byte in the original.
     pub death_kind: u8,
-    pub core_grid_row: u8,
+    /// Where the 3 x 3 core grid is drawn, as (column, row). The original
+    /// keeps the column in the same byte as the death reason above; nothing
+    /// here depends on that, and the two are never in use at once.
+    pub core_grid: (u8, u8),
     pub death_ink: u8,
     /// Ink last chosen for screen texts, and the flashing phase.
     pub screen_ink: u8,
@@ -211,7 +214,7 @@ impl Game {
             control_method: mem[at::CONTROL_METHOD],
             title_udg: false,
             death_kind: mem[at::DEATH_KIND],
-            core_grid_row: mem[at::DEATH_KIND + 1],
+            core_grid: (mem[at::DEATH_KIND], mem[at::DEATH_KIND + 1]),
             death_ink: mem[at::DEATH_INK],
             screen_ink: mem[at::SCREEN_INK],
             flash_phase: mem[at::FLASH_PHASE],
