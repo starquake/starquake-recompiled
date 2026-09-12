@@ -82,6 +82,13 @@ answer given in chat is written back into the issue body before acting on it.
   a question is answered it moves into _Decisions_ and is deleted from _Open
   questions_. Every state change gets a NEW `> 🤖 **Next steps**` comment;
   never edit an old one.
+- **Do not hard-wrap prose in anything posted to GitHub.** Issue bodies, PR
+  descriptions and comments go up as unwrapped paragraphs, one line each,
+  however long; GitHub reflows them to the reader's window, and inserted
+  newlines only fight that and make the source painful to edit. Code blocks,
+  tables and answer blocks keep their own line structure, because there the
+  newlines are content. Commit messages are the exception and stay wrapped at
+  about 72 columns: `git log` has no renderer to reflow them.
 - **Questions go in a copy-paste answer block**: a fenced block headed
   `# keep your pick, delete the rest`, one line per question, every line
   carrying a `(rec)`, ending with `notes =`. Posting one moves the ticket to
