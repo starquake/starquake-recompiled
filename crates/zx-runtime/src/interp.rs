@@ -47,11 +47,20 @@ pub fn step(z: &mut Zx) {
     if let Some(trace) = &mut z.trace {
         trace.on_exec(pc, &z.mem, d.len);
     }
+    // The cycles are worked out before anything moves, because each address
+    // they name is the one the processor has at the moment it puts it out.
+    let cycles = crate::bus::cycles(z, &d, pc);
     z.pc = next;
-    z.step(d.t, d.m1);
+    z.step(0, d.m1);
+    for &c in cycles.iter() {
+        z.charge(c);
+    }
     execute(z, &d, pc, next);
 }
 
+/// Carries out the instruction. The timing has already been charged, cycle by
+/// cycle, including the extra ones a taken branch or a repeat costs — `cycles`
+/// tests the same conditions this does, so `t_extra` is not added again here.
 fn execute(z: &mut Zx, d: &Decoded, pc: u16, next: u16) {
     use Instr::*;
     let cond = |z: &Zx, c: Option<zx_core::Cond>| c.is_none_or(|c| z.cond(c));
@@ -148,35 +157,29 @@ fn execute(z: &mut Zx, d: &Decoded, pc: u16, next: u16) {
                 z.set_r8(r, v);
             }
         }
-        Jp(c, a) => {
+        // A relative jump differs from an absolute one only in how the
+        // target was decoded and what it costs, and the cost is already
+        // charged, so what is left is the same.
+        Jp(c, a) | Jr(c, a) => {
             if cond(z, c) {
                 z.pc = a;
             }
         }
         JpInd(r) => z.pc = z.r16(r),
-        Jr(c, a) => {
-            if cond(z, c) {
-                z.t += d.t_extra as u32;
-                z.pc = a;
-            }
-        }
         Djnz(a) => {
             z.b = z.b.wrapping_sub(1);
             if z.b != 0 {
-                z.t += d.t_extra as u32;
                 z.pc = a;
             }
         }
         Call(c, a) => {
             if cond(z, c) {
-                z.t += d.t_extra as u32;
                 z.push(next);
                 z.pc = a;
             }
         }
         Ret(c) => {
             if cond(z, c) {
-                z.t += d.t_extra as u32;
                 z.pc = z.pop();
             }
         }
@@ -203,7 +206,6 @@ fn execute(z: &mut Zx, d: &Decoded, pc: u16, next: u16) {
         }
         Block(op) => {
             if z.block(op) && op.repeats() {
-                z.t += d.t_extra as u32;
                 z.pc = pc;
             }
         }

@@ -238,7 +238,7 @@ fn model_events(z: &Zx, pc: u16, start: u32) -> Vec<(u32, String, u16)> {
     let d = interp::decode_at(z, pc);
     let mut t = start;
     let mut out = Vec::new();
-    for c in bus::cycles(z, &d, pc) {
+    for &c in bus::cycles(z, &d, pc).iter() {
         // A port cycle contends on the I/O pattern, not the memory one, and
         // the corpus's PC/PR/PW events are filtered out to match.
         if !matches!(c.kind, bus::Kind::PortRead | bus::Kind::PortWrite) {

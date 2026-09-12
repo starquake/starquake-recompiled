@@ -39,6 +39,40 @@ pub struct Cycle {
     pub kind: Kind,
 }
 
+/// The machine cycles of one instruction.
+///
+/// Fixed capacity and no allocation, because this is on the interpreter's
+/// hottest path: `sq-verify` runs hundreds of millions of instructions, and a
+/// heap allocation each would dominate it. The longest instruction is `CPIR`
+/// repeating, at 13.
+pub struct Cycles {
+    buf: [Cycle; Cycles::MAX],
+    len: usize,
+}
+
+impl Cycles {
+    const MAX: usize = 20;
+
+    fn new() -> Cycles {
+        Cycles { buf: [Cycle { at: 0, len: 0, kind: Kind::Idle }; Cycles::MAX], len: 0 }
+    }
+
+    fn push(&mut self, c: Cycle) {
+        debug_assert!(self.len < Cycles::MAX, "an instruction with more than {} cycles", Cycles::MAX);
+        if self.len < Cycles::MAX {
+            self.buf[self.len] = c;
+            self.len += 1;
+        }
+    }
+}
+
+impl std::ops::Deref for Cycles {
+    type Target = [Cycle];
+    fn deref(&self) -> &[Cycle] {
+        &self.buf[..self.len]
+    }
+}
+
 const fn read(at: u16) -> Cycle {
     Cycle { at, len: 3, kind: Kind::Read }
 }
@@ -52,7 +86,7 @@ const fn fetch(at: u16, len: u32) -> Cycle {
 }
 
 /// `n` one-T-state cycles with `at` on the address bus.
-fn idle(out: &mut Vec<Cycle>, at: u16, n: u32) {
+fn idle(out: &mut Cycles, at: u16, n: u32) {
     for _ in 0..n {
         out.push(Cycle { at, len: 1, kind: Kind::Idle });
     }
@@ -90,9 +124,9 @@ fn mem_of(z: &Zx, o: Op8) -> Option<u16> {
 /// Worked out from the state before the instruction runs, which is what the
 /// processor has when it puts each address on the bus.
 #[must_use]
-pub fn cycles(z: &Zx, d: &Decoded, pc: u16) -> Vec<Cycle> {
+pub fn cycles(z: &Zx, d: &Decoded, pc: u16) -> Cycles {
     use Instr::*;
-    let mut out: Vec<Cycle> = Vec::with_capacity(8);
+    let mut out = Cycles::new();
 
     // The opcode fetches. All are 4 T-states except DJNZ's, which is 5, and
     // the ED-prefixed ones where the second fetch is 4 as well.
@@ -111,7 +145,7 @@ pub fn cycles(z: &Zx, d: &Decoded, pc: u16) -> Vec<Cycle> {
     // displacement *and the opcode* come next as ordinary reads, and the add
     // takes two — the other three are hidden in the opcode's own read.
     let cb_indexed = d.m1 == 2 && d.len == 4;
-    let displacement = |out: &mut Vec<Cycle>| {
+    let displacement = |out: &mut Cycles| {
         out.push(read(operands));
         if cb_indexed {
             out.push(read(operands.wrapping_add(1)));

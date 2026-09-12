@@ -4,6 +4,8 @@
 //! Recompiled code manipulates this struct directly (`z.a = z.read(z.hl());`),
 //! so everything the generated code touches is public and kept flat.
 
+use zx_core::timing::contention;
+
 use zx_core::{BlockOp, Cond, Reg8, Reg16, Snapshot};
 
 pub const CF: u8 = 0x01;
@@ -318,6 +320,62 @@ impl Zx {
             Cond::PE => self.f & PF != 0,
             Cond::P => self.f & SF == 0,
             Cond::M => self.f & SF != 0,
+        }
+    }
+
+    // --- ULA contention -----------------------------------------------------
+
+    /// Whether an address is in the quarter of memory the ULA shares.
+    #[must_use]
+    pub fn contended(addr: u16) -> bool {
+        (0x4000..0x8000).contains(&addr)
+    }
+
+    /// Charges one machine cycle, ULA delay included.
+    pub fn charge(&mut self, c: crate::bus::Cycle) {
+        use crate::bus::Kind;
+        match c.kind {
+            Kind::PortRead | Kind::PortWrite => self.charge_io(c.at),
+            _ => {
+                if Zx::contended(c.at) {
+                    self.t += contention(self.t);
+                }
+                self.t += c.len;
+            }
+        }
+    }
+
+    /// Charges an I/O cycle, whose delays follow a different pattern from
+    /// memory's.
+    ///
+    /// The address lines are on the bus for the whole four T-states, so a port
+    /// in the ULA's own range is contended when the cycle starts as well. A
+    /// port with bit 0 clear is the ULA's own, and it holds the processor for
+    /// the three T-states it takes to answer.
+    fn charge_io(&mut self, port: u16) {
+        let ula_range = (0x40..0x80).contains(&(port >> 8));
+        let ula_port = port & 1 == 0;
+        let tick = |z: &mut Zx, contend: bool, len: u32| {
+            if contend {
+                z.t += contention(z.t);
+            }
+            z.t += len;
+        };
+        match (ula_range, ula_port) {
+            (true, true) => {
+                tick(self, true, 1);
+                tick(self, true, 3);
+            }
+            (true, false) => {
+                for _ in 0..4 {
+                    tick(self, true, 1);
+                }
+            }
+            (false, true) => {
+                tick(self, false, 1);
+                tick(self, true, 3);
+            }
+            (false, false) => tick(self, false, 4),
         }
     }
 

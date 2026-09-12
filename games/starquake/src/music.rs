@@ -21,6 +21,21 @@ fn multiply_t(hl: u16) -> u32 {
     931 + 13 * hl.count_ones()
 }
 
+/// What the ULA adds to a read or write of port 0xFEFE at T-state `t`.
+///
+/// The player's code and its note table are above 0x8000, where the ULA
+/// never interferes, so the only thing it can charge for is the two port
+/// accesses in each half-cycle: the speaker, and the keyboard row the
+/// player checks for a keypress. Port 0xFEFE has bit 0 clear and a high
+/// byte outside 0x40..0x80, so the processor runs one free T-state and is
+/// then held for the three it takes the ULA to answer.
+///
+/// A tune starts at a frame boundary, so `t` counted from the tune's start
+/// is also `t` counted from the ULA's.
+fn io_delay(t: u32) -> u32 {
+    zx_core::timing::contention(t + 1)
+}
+
 /// Speaker changes of a tune, as (T-state offset, level) pairs, and the
 /// tune's whole length in T-states. The tune is generated as though no key
 /// is ever pressed; the caller stops it when one is.
@@ -80,12 +95,15 @@ pub fn tune(ram: &[u8], addr: usize) -> (Vec<(u32, bool)>, u32) {
         let (mut hl, mut de) = (period, period);
         while half_cycles != 0 {
             t += 13;
+            t += io_delay(t);
             out.push((t, speaker & 0x10 != 0));
             t += 11 + 7 + 7 + 13;
             speaker = speaker.wrapping_add(0x10) & 0x30;
             // The keyboard is read one half-row per half-cycle; with no key
             // down the player carries on.
-            t += 4 + 4 + 12 + 8 + 4 + 4 + 7 + 12;
+            t += 4 + 4;
+            t += io_delay(t);
+            t += 12 + 8 + 4 + 4 + 7 + 12;
 
             // The two copies of the period swap, and the delay on this one
             // is what sets the pitch.

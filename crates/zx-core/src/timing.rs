@@ -21,6 +21,45 @@ pub const FRAMES_PER_SECOND: u32 = 50;
 /// difference is a game running 0.16% slow or fast.
 pub const FRAME_NANOS: u64 = FRAME_T as u64 * 1_000_000_000 / CPU_HZ as u64;
 
+/// T-states the ULA adds to an access at T-state `t` in the frame.
+///
+/// While it is drawing a line the ULA is reading the screen itself, and it
+/// holds the processor off the bus rather than share. It needs two bytes (a
+/// bitmap byte and its attribute) out of every eight T-states, so the delay
+/// counts down 6,5,4,3,2,1,0,0 and starts again. Only the 128 T-states of
+/// each line where it is fetching are contended; the rest of the line, the
+/// border and the retrace are free.
+///
+/// What this applies to is the caller's business: memory in 0x4000..0x8000,
+/// and I/O on its own pattern.
+#[must_use]
+pub const fn contention(t: u32) -> u32 {
+    /// The T-state of the first contended access of the first drawn line.
+    const FIRST: u32 = 14335;
+    /// T-states in a line, and how many of them the ULA is fetching for.
+    const LINE: u32 = 224;
+    const FETCHING: u32 = 128;
+    const LINES: u32 = 192;
+    const PATTERN: [u32; 8] = [6, 5, 4, 3, 2, 1, 0, 0];
+
+    // The pattern repeats every frame, and `t` is not always kept inside one:
+    // a routine can accumulate millions of T-states without a frame boundary.
+    // Taking it modulo the frame is what the ULA does anyway.
+    let into_frame = t % FRAME_T;
+    if into_frame < FIRST {
+        return 0;
+    }
+    let since = into_frame - FIRST;
+    if since >= LINES * LINE {
+        return 0;
+    }
+    let into_line = since % LINE;
+    if into_line >= FETCHING {
+        return 0;
+    }
+    PATTERN[(into_line % 8) as usize]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
