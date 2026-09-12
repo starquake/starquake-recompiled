@@ -49,7 +49,10 @@ impl Zx {
 
     pub fn set_key(&mut self, key: Key, pressed: bool) {
         match key {
-            Key::Matrix(row, bit) => {
+            // The matrix is 8 half-rows of 5 keys; anything else is not a
+            // key on this machine. `by_name` never yields one, but the type
+            // is public and a configurable keymap could.
+            Key::Matrix(row, bit) if row < 8 && bit < 5 => {
                 let mask = 1 << bit;
                 if pressed {
                     self.keys[row as usize] &= !mask;
@@ -57,6 +60,7 @@ impl Zx {
                     self.keys[row as usize] |= mask;
                 }
             }
+            Key::Matrix(..) => {}
             Key::Kempston(bit) => {
                 let mask = 1 << bit;
                 if pressed {
