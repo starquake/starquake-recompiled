@@ -30,7 +30,7 @@ cargo run --release -p starquake -- assets/starquake.tap
 | Up | Pick up / swap items; with the hover platform, rise |
 | Down | Build a platform |
 | Alt, `.` or `,` | Fire (Kempston) |
-| USB gamepad | Drives the Kempston joystick: d-pad or left stick to move, any face or shoulder button to fire, Start to pause |
+| Gamepad | Drives the Kempston joystick: d-pad or left stick to move, any face or shoulder button to fire, Start to pause. USB or Bluetooth alike — a paired controller is an ordinary gamepad to the operating system, and nothing here looks at how it is connected |
 | P | Pause |
 | A S D F G together | Abandon the game |
 
