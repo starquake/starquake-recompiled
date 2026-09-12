@@ -16,7 +16,7 @@
 use std::path::PathBuf;
 
 use zx_core::Snapshot;
-use zx_runtime::{Zx, interp};
+use zx_runtime::{Zx, bus, interp};
 
 /// Everything the corpus states about the processor at one moment.
 #[derive(Clone, PartialEq, Eq)]
@@ -42,6 +42,16 @@ struct Case {
     state: State,
     /// Memory to place before the test, and after it in the expected file.
     mem: Vec<(u16, Vec<u8>)>,
+    /// When the instruction put an address on the memory bus, and which:
+    /// the corpus's `MC` events. Only in the expected file.
+    ///
+    /// The reads and writes are deliberately left out. What they carry is
+    /// already settled by comparing memory and registers, and the corpus
+    /// records them as the Fuse interpreter happens to do them — a JR that
+    /// is not taken contends for its displacement without ever reading it,
+    /// for instance. The contention events are the processor's, and they are
+    /// the ones that decide what the ULA charges.
+    events: Vec<(u32, String, u16)>,
 }
 
 /// What the Fuse test harness returns for a port read: the port's high byte.
@@ -109,6 +119,7 @@ fn parse_in(text: &str) -> Vec<Case> {
             name: name.trim().to_string(),
             state,
             mem: read_mem(&mut lines, false),
+            events: Vec::new(),
         });
     }
     out
@@ -129,14 +140,18 @@ fn parse_expected(text: &str) -> Vec<Case> {
         // field is letters", because a hex word can be all letters too:
         // `0000 ffff ...` is a register line whose second word is not hex to
         // look at.
+        let mut events = Vec::new();
         let regs_line = loop {
             let line = lines.next().expect("register line");
-            let is_event = line
-                .split_whitespace()
-                .nth(1)
-                .is_some_and(|s| matches!(s, "MR" | "MW" | "MC" | "PR" | "PW" | "PC" | "PB"));
+            let f: Vec<&str> = line.split_whitespace().collect();
+            let is_event = f
+                .get(1)
+                .is_some_and(|s| matches!(*s, "MR" | "MW" | "MC" | "PR" | "PW" | "PC" | "PB"));
             if !is_event {
                 break line.to_string();
+            }
+            if f[1] == "MC" {
+                events.push((f[0].parse().expect("event time"), f[1].to_string(), hex16(f[2])));
             }
         };
         let state = read_state(&mut lines, &regs_line);
@@ -144,6 +159,7 @@ fn parse_expected(text: &str) -> Vec<Case> {
             name: name.trim().to_string(),
             state,
             mem: read_mem(&mut lines, true),
+            events,
         });
     }
     out
@@ -215,6 +231,24 @@ fn actual(z: &Zx) -> State {
     }
 }
 
+/// The memory bus events the model says an instruction produces, in the
+/// corpus's own form: a contention event when the address goes on the bus,
+/// and a read or write event when the transfer finishes.
+fn model_events(z: &Zx, pc: u16, start: u32) -> Vec<(u32, String, u16)> {
+    let d = interp::decode_at(z, pc);
+    let mut t = start;
+    let mut out = Vec::new();
+    for c in bus::cycles(z, &d, pc) {
+        // A port cycle contends on the I/O pattern, not the memory one, and
+        // the corpus's PC/PR/PW events are filtered out to match.
+        if !matches!(c.kind, bus::Kind::PortRead | bus::Kind::PortWrite) {
+            out.push((t, "MC".to_string(), c.at));
+        }
+        t += c.len;
+    }
+    out
+}
+
 /// What differs between the corpus and us, in words.
 fn differences(want: &State, got: &State) -> Vec<String> {
     let mut out = Vec::new();
@@ -246,8 +280,8 @@ fn differences(want: &State, got: &State) -> Vec<String> {
     out
 }
 
-#[test]
-fn matches_the_z80_test_corpus() {
+/// Loads the corpus, or says why it cannot and leaves the test to pass.
+fn corpus() -> Option<(Vec<Case>, Vec<Case>)> {
     let dir = std::env::var_os("FUSE_TESTS").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets"),
         PathBuf::from,
@@ -260,18 +294,24 @@ fn matches_the_z80_test_corpus() {
              tests.in and tests.expected",
             dir.display()
         );
-        return;
+        return None;
     };
-
     let cases = parse_in(&input);
     let expect = parse_expected(&expected);
     assert!(!cases.is_empty(), "the corpus parsed to no tests");
     assert_eq!(cases.len(), expect.len(), "the two corpus files disagree on how many tests there are");
+    for (a, b) in cases.iter().zip(&expect) {
+        assert_eq!(a.name, b.name, "the corpus files are out of step");
+    }
+    Some((cases, expect))
+}
+
+#[test]
+fn matches_the_z80_test_corpus() {
+    let Some((cases, expect)) = corpus() else { return };
 
     let mut failures: Vec<String> = Vec::new();
     for (case, want) in cases.iter().zip(&expect) {
-        assert_eq!(case.name, want.name, "the corpus files are out of step");
-
         let mut z = blank_machine();
         load(&mut z, case);
         // The corpus says how long to run for, and lets the last instruction
@@ -319,5 +359,54 @@ fn matches_the_z80_test_corpus() {
             println!("  ... and {} more", failures.len() - 40);
         }
         panic!("{} of {} Z80 conformance cases differ", failures.len(), cases.len());
+    }
+}
+
+/// The same corpus, checked against the bus model rather than the results.
+///
+/// [`matches_the_z80_test_corpus`] proves the interpreter computes the right
+/// answer. This proves it reaches for the right bytes at the right moment,
+/// which is what decides how much the ULA charges it — see `bus.rs`.
+#[test]
+fn bus_activity_matches_the_z80_test_corpus() {
+    let Some((cases, expect)) = corpus() else { return };
+
+    let mut failures: Vec<String> = Vec::new();
+    let mut checked = 0usize;
+    for (case, want) in cases.iter().zip(&expect) {
+        let mut z = blank_machine();
+        load(&mut z, case);
+        // One instruction: the corpus's events are of the whole run, and the
+        // cases that run more than one are compared as far as the first goes.
+        let d = interp::decode_at(&z, z.pc);
+        let got = model_events(&z, z.pc, 0);
+        let want_events: Vec<_> = want.events.iter().take(got.len()).cloned().collect();
+        checked += 1;
+
+        // The cycles have to add up to what the decoder charges, or the model
+        // cannot be used as the timing: one is the other, split into pieces.
+        let total: u32 = bus::cycles(&z, &d, z.pc).iter().map(|c| c.len).sum();
+        let (short, long) = (u32::from(d.t), u32::from(d.t) + u32::from(d.t_extra));
+        if total != short && total != long {
+            failures.push(format!("{}: cycles add to {total}, decoder says {short} or {long}", case.name));
+            continue;
+        }
+        if got != want_events {
+            let show = |v: &[(u32, String, u16)]| {
+                v.iter().map(|(t, k, a)| format!("{t} {k} {a:04x}")).collect::<Vec<_>>().join(" | ")
+            };
+            failures.push(format!("{}:\n    want {}\n    got  {}", case.name, show(&want_events), show(&got)));
+        }
+    }
+
+    println!("Z80 bus model: {}/{checked} cases match", checked - failures.len());
+    if !failures.is_empty() {
+        for f in failures.iter().take(25) {
+            println!("  {f}");
+        }
+        if failures.len() > 25 {
+            println!("  ... and {} more", failures.len() - 25);
+        }
+        panic!("{} of {checked} bus-activity cases differ", failures.len());
     }
 }
