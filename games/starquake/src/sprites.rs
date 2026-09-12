@@ -68,8 +68,7 @@ impl Game {
             if (x | y) < 0x10 {
                 continue;
             }
-            let v = 0xBFu8.wrapping_sub(y).rotate_left(2);
-            let base = ((v & 3) as usize) << 8 | (v & 0xE0) as usize | (x >> 3) as usize;
+            let base = crate::display::attr_index(x, y);
             let narrow = x & 7 == 0;
             let short = y.wrapping_add(1) & 7 == 0;
             let mut mask = 0xF8u8;

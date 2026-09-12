@@ -16,7 +16,7 @@ pub const ZF: u8 = 0x40;
 pub const SF: u8 = 0x80;
 
 /// T-states per frame on a 48K Spectrum (224 per line * 312 lines).
-pub const FRAME_T: u32 = 69888;
+pub use zx_core::timing::FRAME_T;
 /// How long the ULA holds /INT low at the start of each frame.
 pub const INT_LEN: u32 = 32;
 

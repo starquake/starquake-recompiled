@@ -94,7 +94,7 @@ impl Game {
     /// Whether the 2 × 2 cells at pixel (x, y) are free: the first cell
     /// bright with paper 0–3, the others bright.
     fn cell_free(&self, x: u8, y: u8) -> bool {
-        let i = (((0xBF - y) & 0xF8) as usize) << 2 | (x >> 3) as usize;
+        let i = crate::display::attr_index(x, y);
         let attr = |i: usize| self.display.mem[crate::display::BITMAP_LEN + i];
         attr(i) & 0x60 == 0x40
             && attr(i + 1) & 0x40 != 0
