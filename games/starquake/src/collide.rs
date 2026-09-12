@@ -29,10 +29,10 @@ impl Game {
     /// does not model; nothing reaches that far, and a non-solid byte is the
     /// safe answer if anything ever does.
     pub fn screen_byte(&self, addr: u16) -> u8 {
-        if let Some(at) = addr.checked_sub(0x4000) {
-            if let Some(&b) = self.display.mem.get(at as usize) {
-                return b;
-            }
+        if let Some(at) = addr.checked_sub(0x4000)
+            && let Some(&b) = self.display.mem.get(at as usize)
+        {
+            return b;
         }
         let slot = addr.wrapping_sub(crate::room::RESTORE_START) as usize;
         self.restore_mem.get(slot).copied().unwrap_or(0xFF)
