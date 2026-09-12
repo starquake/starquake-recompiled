@@ -1,9 +1,16 @@
-//! A USB gamepad, read as the Kempston joystick.
+//! A gamepad, read as the Kempston joystick.
 //!
 //! A Kempston interface is a joystick port: the game reads five bits and
 //! cannot tell what moved them, so a gamepad drives them exactly as the
 //! hardware would. Pause is the odd one out — on a Spectrum it is a key, not
 //! a joystick button — so Start presses `P` for convenience.
+//!
+//! How the pad is attached is not this code's business, or `gilrs`'s. A
+//! Bluetooth controller the operating system has paired is an ordinary
+//! gamepad by the time it reaches here, exactly as a USB one is; both arrive
+//! through the same platform API. Hot-plugging is handled either way, since
+//! `poll` drains the event queue before reading, which is where a pad that
+//! has just connected turns up.
 
 /// How far a stick must move before it counts as a direction.
 const DEADZONE: f32 = 0.5;
