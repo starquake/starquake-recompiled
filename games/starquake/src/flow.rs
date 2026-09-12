@@ -98,7 +98,11 @@ impl Game {
             }
             self.music = edges[first..next].iter().map(|&(at, level)| (at - t, level)).collect();
             self.sync(host);
-            if key_code(&self.assets.ram, &self.input) != 0 {
+            // The original's player scans a half-row of the keyboard between
+            // speaker toggles and stops on any pressed bit, so two keys held
+            // together end the tune just as one does. The release-wait above
+            // keeps `key_code`, which is what the caller at 6600 uses.
+            if crate::controls::any_key(&self.input) {
                 break;
             }
             t = end;
@@ -271,7 +275,7 @@ impl Game {
         self.print_number(rest as u16);
         self.print_text(at::AFTER_TIME);
 
-        let replaced = 9 - self.cores_left;
+        let replaced = 9u8.saturating_sub(self.cores_left);
         if replaced < 10 {
             self.print_text(at::ZERO);
         }

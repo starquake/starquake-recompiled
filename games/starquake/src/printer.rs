@@ -163,6 +163,14 @@ impl Printer {
             self.col = 0;
             self.row += 1;
         }
+        if self.row >= 24 {
+            // Wrapping off the bottom row: the ROM scrolls the screen here.
+            // Nothing the game prints reaches row 24, so rather than model
+            // scrolling, drop the character but keep the column moving so a
+            // caller cannot loop for ever waiting for the position to change.
+            self.col += 1;
+            return;
+        }
         let base = display::cell_offset(self.row, self.col);
         let invert = if self.p_flag & P_INVERSE != 0 { 0xFF } else { 0 };
         let over = self.p_flag & P_OVER != 0;

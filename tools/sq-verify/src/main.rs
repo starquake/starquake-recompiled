@@ -200,7 +200,9 @@ fn check_room_prelude(env: &Env) -> bool {
                 z.mem[at::SCORE + i] = r.byte() % 10;
                 z.mem[at::SCORE_PENDING + i] = if r.byte() < 64 { r.byte() % 30 } else { 0 };
             }
-            z.mem[at::LIVES] = r.byte() % 100;
+            // The whole byte, not just 0..99: the panel prints lives as two
+            // digits, and 100 or more falls off the end of the digit glyphs.
+            z.mem[at::LIVES] = r.byte();
             for i in 0..3 {
                 z.mem[at::BARS + i] = r.byte();
             }
@@ -522,6 +524,18 @@ fn blob_variants(states: &[Zx]) -> Vec<Zx> {
         }
         for y in [0x0D, 0x90, 0x15, 0x17] {
             out.push(with(s, 0, &|v| v.mem[blob + 6] = y));
+        }
+        // Low in the room with Down held, which is what makes `build_platform`
+        // probe 64 + 32 bytes past the cell it starts from: below row 22 that
+        // lands in the restore list, past the display's guard row. The
+        // platform must not already be held and the bar must have charge, or
+        // the branch returns early.
+        for y in [0x0E, 0x0F, 0x10, 0x0C, 0x08] {
+            out.push(with(s, DOWN, &|v| {
+                v.mem[blob + 6] = y;
+                v.mem[blob + 0x14] = 0;
+                v.mem[at::BARS + 1] = 0x40;
+            }));
         }
         for input in [UP, DOWN, RIGHT | FIRE, LEFT | DOWN, FIRE] {
             out.push(with(s, input, &|v| v.mem[blob + 0x0A] = 2));
