@@ -44,8 +44,9 @@ security doors, teleporter booths and the Cheops pyramid, losing a life,
 delivering pieces to the planet's core, the ending, the game-over screen and
 the high-score table, with the original's sound and music.
 
-Verified identical to the original, byte for byte, by running the same
-situations through both (see *Verification*):
+Verified against the original, byte for byte, by running the same situations
+through both — and the interpreter that runs the original is itself checked
+against an independent description of the processor (see *Verification*):
 
 - Room building (all 512 rooms), the status panel and its text printing,
   pickups, entering rooms, enemy spawning.
@@ -90,6 +91,32 @@ Each check runs a routine of the original in the reference interpreter and
 the rewritten code from the same starting state (thousands of states, from
 real play and from a tour of the map), then compares the resulting screen
 and game state byte for byte.
+
+### What the reference interpreter rests on
+
+Those checks only prove the rewrite matches our interpreter, and the rewrite
+was written by checking against that interpreter — so an interpreter that
+got an opcode wrong would have the mistake copied into the rewrite, and
+every check above would still pass.
+
+So the interpreter is checked too, against something nobody here wrote: the
+[Fuse](https://fuse-emulator.sourceforge.net/) project's Z80 test corpus,
+which states for 1335 cases what the registers, memory and T-state count
+should be afterwards, undocumented behaviour included.
+
+```sh
+cargo test -p zx-runtime --test fuse -- --nocapture
+```
+
+It found three real faults, none of which Starquake happened to depend on:
+`BIT n,(IX+d)` took flag bits 3 and 5 from the byte tested instead of from
+the high byte of the address, `HALT` left PC past the instruction instead of
+on it, and writes below 0x4000 were dropped even with no ROM loaded. All
+1335 cases pass now.
+
+The corpus does not check bus timing cycle by cycle (the contention pattern
+the ULA imposes), which this interpreter accounts for one instruction at a
+time rather than one cycle at a time. That is the gap that remains.
 
 The checks read the `.z80` snapshot and `48.rom`, which are needed only for
 development: the reference interpreter needs a running machine to compare

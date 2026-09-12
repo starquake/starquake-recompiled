@@ -88,6 +88,13 @@ pub struct Zx {
 
     /// Execution/write tracing used by the recompiler's analysis pass.
     pub trace: Option<Box<crate::trace::Trace>>,
+
+    /// Replaces the ULA for port reads.
+    ///
+    /// What a port read returns is the machine's business, not the
+    /// processor's, and the Z80 conformance tests exercise the processor on
+    /// its own. `None`, the normal case, is the real ULA.
+    pub port_in_hook: Option<fn(u16) -> u8>,
 }
 
 impl Zx {
@@ -140,6 +147,7 @@ impl Zx {
             int_pending: false,
             frame: 0,
             trace: None,
+            port_in_hook: None,
         }
     }
 
@@ -320,9 +328,11 @@ impl Zx {
         self.mem[addr as usize]
     }
 
+    /// Writes a byte. The bottom 16K is the ROM and ignores writes — but
+    /// only when a ROM was actually loaded; with none, it is just memory.
     #[inline(always)]
     pub fn write(&mut self, addr: u16, v: u8) {
-        if addr >= 0x4000 {
+        if addr >= 0x4000 || !self.rom_loaded {
             self.mem[addr as usize] = v;
             if let Some(trace) = &mut self.trace {
                 trace.on_write(addr);
@@ -364,6 +374,9 @@ impl Zx {
     // --- I/O ----------------------------------------------------------------
 
     pub fn port_in(&mut self, port: u16) -> u8 {
+        if let Some(read) = self.port_in_hook {
+            return read(port);
+        }
         if port & 1 == 0 {
             let high = (port >> 8) as u8;
             let mut keys = 0x1F;
@@ -619,11 +632,17 @@ impl Zx {
     }
 
     #[inline]
-    pub fn bit(&mut self, n: u8, v: u8) {
+    /// Tests bit `n` of `v`.
+    ///
+    /// Flag bits 3 and 5 are undocumented and do not come from `v` for every
+    /// form of the instruction, so the caller says where they come from:
+    /// `BIT n,(IX+d)` takes them from the high byte of the address it just
+    /// worked out, and every other form from the byte tested.
+    pub fn bit(&mut self, n: u8, v: u8, undocumented: u8) {
         let set = v & (1 << n);
         let zp = if set == 0 { ZF | PF } else { 0 };
         let s = if n == 7 && set != 0 { SF } else { 0 };
-        self.f = (self.f & CF) | HF | (v & (XF | YF)) | zp | s;
+        self.f = (self.f & CF) | HF | (undocumented & (XF | YF)) | zp | s;
     }
 
     // --- 16-bit ALU ---------------------------------------------------------
@@ -875,6 +894,12 @@ impl Zx {
     // --- interrupts ---------------------------------------------------------
 
     pub fn accept_interrupt(&mut self) {
+        // A halted processor sits on the HALT instruction; leaving the halt
+        // state is what steps past it, so the return address is the one
+        // after it.
+        if self.halted {
+            self.pc = self.pc.wrapping_add(1);
+        }
         self.halted = false;
         self.di();
         self.push(self.pc);

@@ -57,7 +57,12 @@ fn execute(z: &mut Zx, d: &Decoded, pc: u16, next: u16) {
     let cond = |z: &Zx, c: Option<zx_core::Cond>| c.is_none_or(|c| z.cond(c));
     match d.instr {
         Nop => {}
-        Halt => z.halted = true,
+        // The processor holds PC on the HALT and keeps re-fetching it;
+        // accepting an interrupt is what steps past it.
+        Halt => {
+            z.halted = true;
+            z.pc = pc;
+        }
         Di => z.di(),
         Ei => {
             z.ei();
@@ -127,7 +132,13 @@ fn execute(z: &mut Zx, d: &Decoded, pc: u16, next: u16) {
         }
         Bit(n, o) => {
             let v = get8(z, o);
-            z.bit(n, v);
+            // Undocumented: for the indexed form, flag bits 3 and 5 come
+            // from the high byte of the address rather than the byte read.
+            let undocumented = match o {
+                Op8::Mem(a @ Addr::Idx(..)) => (addr(z, a) >> 8) as u8,
+                _ => v,
+            };
+            z.bit(n, v, undocumented);
         }
         Res(n, o, copy) | Set(n, o, copy) => {
             let v = get8(z, o);

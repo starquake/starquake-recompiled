@@ -69,8 +69,30 @@ jobs:
       - name: Build
         run: cargo build --workspace --all-targets --locked
 
+      # The Z80 conformance corpus is the Fuse project's, under the GPL, so it
+      # is fetched rather than committed — the same reason the game and the
+      # ROM are not here. Pinned by hash, so a changed file is caught rather
+      # than quietly changing what we test against.
+      - name: Z80 test corpus
+        run: |
+          base='https://sourceforge.net/p/fuse-emulator/code/HEAD/tree/trunk/fuse/z80/tests'
+          curl -fsSL --retry 3 -o assets/tests.in "$base/tests.in?format=raw"
+          curl -fsSL --retry 3 -o assets/tests.expected "$base/tests.expected?format=raw"
+          printf '%s  %s\n' \
+            fec4e44dfa4fa889f976aa546a774d48c2a7366ab12312d449f79e85e68d77d7 assets/tests.in \
+            207dc604db5d2a0a49ebd40e1bcb985a919e7a6e3dea1a52884ee05f9a1bf005 assets/tests.expected \
+            | shasum -a 256 -c -
+
       - name: Test
         run: cargo test --workspace --locked
+
+      # The conformance test passes when the corpus is absent, so prove it
+      # actually ran rather than trusting that the step above worked.
+      - name: Z80 conformance ran
+        run: |
+          cargo test -p zx-runtime --test fuse --locked -- --nocapture \
+            | tee /tmp/fuse.log
+          grep -q '1335/1335 cases match' /tmp/fuse.log
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -89,7 +111,8 @@ jobs:
 
   # sq-verify is deliberately absent: it needs the player's own copy of the
   # game and the Spectrum ROM, which are never committed and should not be
-  # uploaded to GitHub. Run it locally before opening a pull request:
+  # uploaded to GitHub. (The Z80 conformance test does run here: its corpus
+  # is nobody's copyrighted game, only a description of a processor.) Run it locally before opening a pull request:
   #
   #     cargo run --release -p sq-verify
   #
