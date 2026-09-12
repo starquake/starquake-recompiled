@@ -5,6 +5,7 @@
 //! it draws the most recent frame and feeds keyboard state to the game.
 //!
 //! Usage: `starquake [TAPE] [--headless FRAMES [SCREENSHOT_DIR]]`
+//!         `starquake [TAPE] --bench SECONDS`
 
 mod frontend;
 
@@ -18,13 +19,17 @@ fn main() {
         let dir = rest.get(1).map_or_else(|| PathBuf::from("screenshots"), PathBuf::from);
         (frames, dir)
     });
+    // Drained before the path is read, or `starquake --bench 20` would take
+    // "--bench" for the tape to load.
+    let bench = args.iter().position(|a| a == "--bench").map(|i| {
+        let rest: Vec<String> = args.drain(i..).skip(1).collect();
+        rest.first().and_then(|s| s.parse().ok()).unwrap_or(20)
+    });
     let path = args
         .first()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("assets/starquake.tap"));
-    if let Some(i) = args.iter().position(|a| a == "--bench") {
-        let secs = args.get(i + 1).and_then(|s| s.parse().ok()).unwrap_or(20);
-        let path = args.first().map(PathBuf::from).unwrap_or_else(|| PathBuf::from("assets/starquake.tap"));
+    if let Some(secs) = bench {
         if let Err(e) = frontend::bench(&path, secs) {
             eprintln!("error: {e}");
             std::process::exit(1);

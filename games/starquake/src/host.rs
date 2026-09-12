@@ -33,6 +33,40 @@ impl Host for NullHost {
     }
 }
 
+/// How many 50 Hz frames there are in a second.
+pub const FRAMES_PER_SECOND: u32 = 50;
+
+/// Spreads a loop that the original paces by its own speed over the frames
+/// the host gives us.
+///
+/// The original's menu loops are not driven by the interrupt: they go round
+/// as fast as they can redraw themselves, about 13 times a second for the
+/// title menu and about 344 for the define-keys loop, both measured from the
+/// original (`sq-verify menu`). One is slower than the frame rate and one
+/// much faster, so the same helper has to serve both.
+///
+/// The accumulator keeps the long-run rate exact and never grows; counting
+/// frames and multiplying overflows after about eleven weeks on the menu.
+pub struct Pacer {
+    per_second: u32,
+    acc: u32,
+}
+
+impl Pacer {
+    pub fn new(per_second: u32) -> Pacer {
+        Pacer { per_second, acc: 0 }
+    }
+
+    /// How many turns of the loop belong to one frame. Less than one most
+    /// frames for a slow loop, several for a fast one.
+    pub fn turns(&mut self) -> u32 {
+        self.acc += self.per_second;
+        let turns = self.acc / FRAMES_PER_SECOND;
+        self.acc %= FRAMES_PER_SECOND;
+        turns
+    }
+}
+
 impl Game {
     /// Waits for the next frame.
     pub fn sync(&mut self, host: &mut dyn Host) {

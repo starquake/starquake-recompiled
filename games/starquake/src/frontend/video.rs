@@ -1,5 +1,6 @@
 //! The window: draws the latest frame, with its border, scaled by the GPU.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
@@ -8,10 +9,11 @@ use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::PhysicalKey;
+use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
 use super::Shared;
+use starquake::controls::Input;
 use starquake::display::{BITMAP_LEN, HEIGHT, WIDTH};
 
 const BORDER: usize = 32;
@@ -69,6 +71,10 @@ struct App {
     window: Option<Arc<Window>>,
     pixels: Option<Pixels<'static>>,
     error: Option<String>,
+    /// The host keys physically down, which the machine's input is built
+    /// from. winit only synthesises key-ups on focus loss on some platforms,
+    /// so this is cleared when the window stops listening.
+    held: HashSet<KeyCode>,
     /// The game frame last painted, so the same one is not painted twice.
     shown: u64,
 }
@@ -91,7 +97,10 @@ impl ApplicationHandler for App {
             }
         };
         let size = window.inner_size();
-        let surface = SurfaceTexture::new(size.width, size.height, window.clone());
+        // Some compositors report 0x0 before the first configure, and wgpu
+        // panics when a surface is configured that size.
+        let (w, h) = (size.width.max(1), size.height.max(1));
+        let surface = SurfaceTexture::new(w, h, window.clone());
         match Pixels::new(FULL_W as u32, FULL_H as u32, surface) {
             Ok(p) => self.pixels = Some(p),
             Err(e) => {
@@ -111,14 +120,22 @@ impl ApplicationHandler for App {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(code) = event.physical_key
-                    && !event.repeat {
-                        let mut input = self.shared.input.lock().unwrap();
-                        super::input::apply(
-                            &mut input,
-                            code,
-                            event.state == ElementState::Pressed,
-                        );
+                    && !event.repeat
+                {
+                    if event.state == ElementState::Pressed {
+                        self.held.insert(code);
+                    } else {
+                        self.held.remove(&code);
                     }
+                    *self.shared.input.lock().unwrap() = super::input::build(&self.held);
+                }
+            }
+            // Nothing is held once the window is not listening. Without this,
+            // a key held while switching away stays down for ever on the
+            // platforms where winit sends no key-ups.
+            WindowEvent::Focused(false) => {
+                self.held.clear();
+                *self.shared.input.lock().unwrap() = Input::default();
             }
             WindowEvent::Resized(size) => {
                 if let Some(p) = &mut self.pixels {
@@ -142,6 +159,12 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // The game side sets this when it finishes, and when it stops
+        // unexpectedly; either way the window should not outlive it.
+        if self.shared.quit.load(Ordering::Relaxed) {
+            event_loop.exit();
+            return;
+        }
         // Paint only when the game has produced a new frame, and let the loop
         // sleep in between. Asking for a redraw every time round instead ties
         // the rate to how long `render` blocks, and the moment the window is
@@ -169,10 +192,14 @@ pub fn run(shared: Arc<Shared>) -> Result<(), String> {
         pixels: None,
         error: None,
         shown: u64::MAX,
+        held: HashSet::new(),
     };
     event_loop.run_app(&mut app).map_err(|e| e.to_string())?;
-    match app.error {
-        Some(e) => Err(e),
-        None => Ok(()),
+    if let Some(e) = app.error {
+        return Err(e);
     }
+    if app.shared.dead.load(Ordering::Relaxed) {
+        return Err("the game stopped unexpectedly; see the panic above".into());
+    }
+    Ok(())
 }
