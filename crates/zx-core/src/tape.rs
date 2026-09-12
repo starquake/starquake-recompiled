@@ -37,6 +37,9 @@ pub fn load_tap(bytes: &[u8]) -> Result<Tape, String> {
     // Where the block after the current header will load.
     let mut pending: Option<(u16, usize)> = None;
     let mut loaded = 0usize;
+    // Code blocks seen, as against bytes placed: a zero-length one would
+    // otherwise be reported as no code blocks at all.
+    let mut blocks = 0usize;
     let mut i = 0usize;
 
     while i + 2 <= bytes.len() {
@@ -59,10 +62,23 @@ pub fn load_tap(bytes: &[u8]) -> Result<Tape, String> {
             DATA => {
                 let Some((start, length)) = pending.take() else { continue };
                 let data = &block[1..len - 1];
+                // The last byte is a checksum: the flag and every data byte
+                // XORed together. A bit-flipped tape used to load in silence.
+                let sum = block[..len - 1].iter().fold(0u8, |a, b| a ^ b);
+                if sum != block[len - 1] {
+                    return Err(format!(
+                        "tape block at {start:#06x} is corrupt (checksum {:#04x}, expected {sum:#04x})",
+                        block[len - 1]
+                    ));
+                }
+                blocks += 1;
                 let n = length.min(data.len());
                 let at = start as usize;
+                // A block that loads into the ROM is not something a Spectrum
+                // would honour either. Skip it rather than throw away a tape
+                // whose game blocks have already loaded.
                 if at < 0x4000 || at + n > 0x10000 {
-                    return Err(format!("tape block loads outside RAM at {at:#06x}"));
+                    continue;
                 }
                 // The loading picture goes to the screen first, and the game
                 // lands on top of it later.
@@ -77,7 +93,11 @@ pub fn load_tap(bytes: &[u8]) -> Result<Tape, String> {
     }
 
     if loaded == 0 {
-        return Err("no code blocks on the tape".into());
+        return Err(if blocks == 0 {
+            "no code blocks on the tape".into()
+        } else {
+            format!("the tape's {blocks} code block(s) placed nothing in RAM")
+        });
     }
     Ok(Tape { ram, loading_screen })
 }
