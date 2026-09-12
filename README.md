@@ -114,9 +114,18 @@ the high byte of the address, `HALT` left PC past the instruction instead of
 on it, and writes below 0x4000 were dropped even with no ROM loaded. All
 1335 cases pass now.
 
-The corpus does not check bus timing cycle by cycle (the contention pattern
-the ULA imposes), which this interpreter accounts for one instruction at a
-time rather than one cycle at a time. That is the gap that remains.
+The corpus does not check bus timing cycle by cycle — the contention pattern
+the ULA imposes while it draws the picture, which holds the processor off the
+bottom 16K of RAM. That is modelled too, from the machine cycles each
+instruction makes, and the corpus's own record of when each instruction
+touches the bus is what checks it.
+
+It mattered. The menu paces itself by how fast it can redraw, and that loop
+lives in the contended sixteen kilobytes: measured on a machine that never
+stalls it managed 13 turns a second, and on a real one 12, so the highlight
+had been flashing about 8% fast. The tape's loader puts the stack there too
+(`CLEAR 24103`), so the music player waits on the picture six times in every
+half-cycle.
 
 The checks read the `.z80` snapshot and `48.rom`, which are needed only for
 development: the reference interpreter needs a running machine to compare
