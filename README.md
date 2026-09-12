@@ -13,6 +13,11 @@ copy of Starquake â€” a `.tap` tape, see [assets/README.md](assets/README.md) â€
 and will not run without it. A tape also carries the loading screen, which
 is shown before the title screen.
 
+[World of Spectrum](https://worldofspectrum.net/) archives Spectrum software
+with the permission of its copyright holders; a dump of your own tape works
+equally well. See [assets/README.md](assets/README.md) for that and for where
+the development tools' ZX Spectrum ROM can legitimately be had.
+
 ## Playing
 
 ```sh
