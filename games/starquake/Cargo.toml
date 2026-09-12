@@ -4,7 +4,7 @@ description = "A Rust reimplementation of Starquake (Bubble Bus, 1985). Requires
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-publish = false
+publish.workspace = true
 
 [features]
 default = ["frontend"]

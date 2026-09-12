@@ -10,6 +10,17 @@ CI cannot do this: it needs your own copy of the game and the Spectrum ROM,
 neither of which is ever committed. Every check must pass, and a check that
 reports `no cases ran` counts as a failure, not a pass.
 
+## Formatting
+
+The tree is `rustfmt`-formatted, and CI checks it. Run `cargo fmt --all`
+before pushing. The one reformatting commit is listed in
+`.git-blame-ignore-revs`, so `git blame` reaches past it; point your clone at
+that file once with `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
+Where a table is laid out to be read as a table — the palette, the sound
+tables — a trailing `//` on a line pins the layout and rustfmt leaves it
+alone. Use that rather than fighting the formatter.
+
 ## When a lint argues with the code
 
 Much of this source mirrors the original game instruction for instruction.

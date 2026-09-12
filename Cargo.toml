@@ -12,6 +12,9 @@ members = [
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+# Nothing here belongs on crates.io. The game needs the player's own tape to
+# do anything, and the rest are tools for working on it.
+publish = false
 
 [workspace.dependencies]
 zx-core = { path = "crates/zx-core" }

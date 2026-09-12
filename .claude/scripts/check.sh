@@ -17,12 +17,21 @@ run() {
   failed+=("$name")
 }
 
+run "fmt"          cargo fmt --all --check
 run "build"        cargo build --workspace --all-targets --all-features --locked
 run "test"         cargo test --workspace --locked
 run "clippy"       cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 RUSTDOCFLAGS="-D warnings" run "doc" cargo doc --workspace --no-deps --locked
 # The game library is meant to have no platform dependencies at all.
 run "no-frontend"  cargo build -p starquake --no-default-features --locked
+# What the dependency tree is allowed to contain. Skipped rather than failed
+# when the tool is absent, since it is the one check here that needs an
+# install: `cargo install cargo-deny --locked`.
+if command -v cargo-deny > /dev/null; then
+  run "cargo-deny"  cargo deny check
+else
+  echo "!!! cargo-deny not installed; the dependency policy was NOT checked."
+fi
 
 # The differential suites: the rewrite against the original, byte for byte.
 # Without the game and the ROM they cannot run, and that is worth saying
