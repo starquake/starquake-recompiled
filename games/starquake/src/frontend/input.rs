@@ -7,6 +7,12 @@ use starquake::controls::Input;
 use winit::keyboard::KeyCode;
 
 /// Spectrum matrix position (half-row, bit) for a host key.
+///
+/// Laid out in matrix order, one arm per key, because that is the order the
+/// hardware reads them in. Arms that repeat a position do so because two
+/// host keys reach the same Spectrum key; merging them would break the
+/// layout and separate the arrow keys from the note explaining them.
+#[allow(clippy::match_same_arms, reason = "the arms are the keyboard's own layout")]
 fn matrix(key: KeyCode) -> &'static [(usize, u8)] {
     use KeyCode::*;
     match key {

@@ -15,6 +15,13 @@ pub const SNAPSHOT_SHA1: &str = "8cf0722b752f7fe1651734b32a240e714525e480";
 /// Reads the player's own copy of the game — a `.tap` tape or a `.z80`
 /// snapshot — into a memory image, along with the picture a tape painted
 /// while it loaded.
+/// Reads the player's own copy of the game, from a `.tap` tape or a `.z80`
+/// snapshot, and returns its memory and the tape's loading picture.
+///
+/// # Errors
+///
+/// If the file cannot be read, has an extension that is neither, or does
+/// not parse as the format its extension claims.
 pub fn read_game(path: &Path) -> Result<(Vec<u8>, Option<Vec<u8>>), String> {
     let bytes = std::fs::read(path).map_err(|e| {
         format!(
@@ -113,6 +120,11 @@ pub struct Assets {
 
 impl Assets {
     /// Parses the tables out of a 64K memory image of the original program.
+    ///
+    /// # Panics
+    ///
+    /// If the loaded game data is too short to hold what the original keeps
+    /// there, which means the file was not Starquake.
     pub fn from_memory(mem: &[u8]) -> Assets {
         let word = |a: usize| mem[a] as usize | (mem[a + 1] as usize) << 8;
 
@@ -170,6 +182,11 @@ impl Assets {
     }
 
     /// The 2 × 2 character graphic at an address in the original.
+    ///
+    /// # Panics
+    ///
+    /// If the loaded game data is too short to hold what the original keeps
+    /// there, which means the file was not Starquake.
     pub fn graphic_at(&self, addr: u16) -> [u8; 32] {
         let start = addr as usize;
         self.ram[start..start + 32].try_into().unwrap()

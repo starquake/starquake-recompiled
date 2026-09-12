@@ -1272,6 +1272,9 @@ fn check_loop(env: &Env, states: &[Zx]) -> bool {
 /// Renders a 4 × 4 montage of rooms, as drawn by the rewrite, starting at
 /// the room a new game begins in.
 fn render(env: &Env, out: &str) {
+    const W: usize = starquake::display::WIDTH;
+    const H: usize = starquake::display::HEIGHT;
+
     let mut z = env.machine();
     let mut misses = zx_runtime::Misses::default();
     let key = |name| zx_runtime::keys::Key::by_name(name).unwrap();
@@ -1288,8 +1291,6 @@ fn render(env: &Env, out: &str) {
     let start = z.read16(at::ROOM as u16) & 0x1FF;
     println!("game starts in room {start}");
 
-    const W: usize = starquake::display::WIDTH;
-    const H: usize = starquake::display::HEIGHT;
     let mut montage = vec![0u32; W * 4 * H * 4];
     let mut frame = vec![0u32; W * H];
     for i in 0..16 {
@@ -1495,6 +1496,10 @@ fn keys(env: &Env) {
 /// Compares the tape's memory with the snapshot's, so the addresses every
 /// other check relies on can be trusted to mean the same thing in both.
 fn tape(env: &Env, dir: &std::path::Path) {
+    // Everything below the program is screen and system variables; what
+    // matters is whether the game's own code and data are the same bytes.
+    const PROGRAM: usize = 0x5E00;
+
     let bytes = match std::fs::read(dir.join("starquake.tap")) {
         Ok(b) => b,
         Err(e) => {
@@ -1520,21 +1525,18 @@ fn tape(env: &Env, dir: &std::path::Path) {
     let mut runs: Vec<(usize, usize)> = Vec::new();
     let mut at = 0x4000;
     while at < 0x10000 {
-        if tape[at] != snap[at] {
+        if tape[at] == snap[at] {
+            at += 1;
+        } else {
             let start = at;
             while at < 0x10000 && tape[at] != snap[at] {
                 at += 1;
             }
             runs.push((start, at));
-        } else {
-            at += 1;
         }
     }
     let differing: usize = runs.iter().map(|(a, b)| b - a).sum();
     println!("differing bytes: {differing} in {} runs", runs.len());
-    // Everything below the program is screen and system variables; what
-    // matters is whether the game's own code and data are the same bytes.
-    const PROGRAM: usize = 0x5E00;
     let below: usize = runs.iter().filter(|(a, _)| *a < PROGRAM).map(|(a, b)| b - a).sum();
     let above: Vec<(usize, usize)> = runs.iter().copied().filter(|(a, _)| *a >= PROGRAM).collect();
     let above_bytes: usize = above.iter().map(|(a, b)| b - a).sum();

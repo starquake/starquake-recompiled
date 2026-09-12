@@ -31,6 +31,12 @@ impl Tape {
 }
 
 /// Loads every code block on a `.tap`, in the order the Spectrum would.
+///
+/// # Errors
+///
+/// If a block runs off the end of the file or fails its checksum, or if the
+/// tape places nothing in RAM. A block that would load outside RAM is
+/// skipped rather than rejected, so one stray block does not lose the tape.
 pub fn load_tap(bytes: &[u8]) -> Result<Tape, String> {
     let mut ram = vec![0u8; 0xC000];
     let mut loading_screen = None;

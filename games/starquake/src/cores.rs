@@ -115,6 +115,11 @@ impl Game {
 
     /// The core room: puts in every piece carried that fits. Returns whether
     /// that finished the game.
+    ///
+    /// # Panics
+    ///
+    /// If the loaded game data is too short to hold what the original keeps
+    /// there, which means the file was not Starquake.
     pub fn core_room(&mut self, host: &mut dyn Host) -> bool {
         let template: [u8; 9] = self.assets.ram[at::SLOT_TEMPLATE..at::SLOT_TEMPLATE + 9]
             .try_into()

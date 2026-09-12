@@ -3,7 +3,7 @@
 
 use crate::entities::SLOTS;
 use crate::game::Game;
-use crate::pickups::RoomSet;
+use crate::pickups::{Bonus, RoomSet};
 
 /// Tables in the original.
 mod table {
@@ -48,6 +48,11 @@ impl Game {
 
     /// Resets everything for a new game with control method `method`
     /// (1 Kempston, 2 cursor, 3 Sinclair, 4 keyboard, 5 player-defined).
+    ///
+    /// # Panics
+    ///
+    /// If the loaded game data is too short to hold what the original keeps
+    /// there, which means the file was not Starquake.
     pub fn new_game(&mut self, method: u8) {
         let ram = self.assets.clone();
         let ram = &ram.ram;
@@ -67,7 +72,7 @@ impl Game {
         // Game variables: zeroed, then the starting values.
         self.pickups_in_room = 0;
         self.var_d2bf = 0;
-        self.bonus = Default::default();
+        self.bonus = Bonus::default();
         self.entry_reason = 0;
         self.saved_state = 0;
         self.seed = 0;

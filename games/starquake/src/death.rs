@@ -34,6 +34,12 @@ impl Game {
     /// Plays the death sequence for `reason`. Returns `false` if that was
     /// the last life (the game is over); otherwise the caller re-enters the
     /// room.
+    /// Plays out a death and returns whether the game goes on.
+    ///
+    /// # Panics
+    ///
+    /// If the entity table has been resized, which would be a bug here
+    /// rather than anything the player can cause.
     pub fn death_sequence(&mut self, reason: u8, host: &mut dyn Host) -> bool {
         self.entry_reason = if reason >= RESTART_FROM_ENTRY { 1 } else { 0 };
         self.death_kind = reason & 7;

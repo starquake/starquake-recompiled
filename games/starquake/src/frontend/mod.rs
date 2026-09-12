@@ -202,7 +202,7 @@ fn game_thread(
 ) {
     let watch = shared.clone();
     let played = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-        play_game(memory, loading_screen, shared, audio)
+        play_game(&memory, loading_screen, shared, audio);
     }));
     if played.is_err() {
         watch.dead.store(true, Ordering::Relaxed);
@@ -212,16 +212,16 @@ fn game_thread(
 }
 
 fn play_game(
-    memory: Vec<u8>,
+    memory: &[u8],
     loading_screen: Option<Vec<u8>>,
     shared: Arc<Shared>,
     audio: Option<audio::Output>,
 ) {
-    let mut parsed = Assets::from_memory(&memory);
+    let mut parsed = Assets::from_memory(memory);
     parsed.loading_screen = loading_screen;
     let assets = Rc::new(parsed);
-    let mut game = Game::from_memory(assets, &memory);
-    let rate = audio.as_ref().map_or(44100, |a| a.rate());
+    let mut game = Game::from_memory(assets, memory);
+    let rate = audio.as_ref().map_or(44100, audio::Output::rate);
     let mut host = FrontHost {
         shared,
         audio,

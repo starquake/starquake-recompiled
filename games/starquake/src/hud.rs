@@ -50,7 +50,7 @@ impl Text {
 const BAR_FULL: u8 = b'(';
 
 impl Game {
-    fn print(&mut self, text: Text) {
+    fn print(&mut self, text: &Text) {
         let assets = self.assets.clone();
         self.printer.print(&mut self.display, &assets.font, &assets.udg, &text.0);
     }
@@ -85,7 +85,7 @@ impl Game {
             carry = sum / 10;
         }
         let digits = self.status.score.map(|d| b'0' + d);
-        self.print(Text::default().at(2, 3).bright(1).ink(7).chars(&digits));
+        self.print(&Text::default().at(2, 3).bright(1).ink(7).chars(&digits));
     }
 
     /// Redraws the score, lives, bars and inventory.
@@ -94,7 +94,7 @@ impl Game {
 
         let lives = self.status.lives;
         self.print(
-            Text::default()
+            &Text::default()
                 .at(3, 11)
                 .ink(6)
                 .chars(&[b'0' + lives / 10, b'0' + lives % 10])
@@ -121,10 +121,10 @@ impl Game {
             let v = *bar;
             let full = vec![BAR_FULL; ((v >> 5) & 3) as usize];
             let last = if v == 0x7F { BAR_FULL } else { b' ' + ((v >> 2) & 7) };
-            self.print(Text::default().at(row, 16).chars(&full).chars(&[last]));
+            self.print(&Text::default().at(row, 16).chars(&full).chars(&[last]));
         }
 
-        self.print(Text::default().at(1, 21).spaces(8).at(2, 21).spaces(8));
+        self.print(&Text::default().at(1, 21).spaces(8).at(2, 21).spaces(8));
 
         for (i, (graphic, attr)) in self.status.inventory.into_iter().enumerate() {
             if attr != 0 {
@@ -141,6 +141,6 @@ impl Game {
         let col = 16 + ((v >> 5) & 3);
         let w = if v < 4 { v + 3 } else { v };
         let glyph = b' ' + ((w >> 2) & 7);
-        self.print(Text::default().ink(8).bright(1).at(index as u8 + 1, col).chars(&[glyph]));
+        self.print(&Text::default().ink(8).bright(1).at(index as u8 + 1, col).chars(&[glyph]));
     }
 }

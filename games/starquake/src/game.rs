@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use crate::assets::Assets;
-use crate::controls::Controls;
+use crate::controls::{Controls, Input};
 use crate::display::{self, Display};
 use crate::entities::{Entity, SLOTS, Spawner};
 use crate::hud::Status;
@@ -125,6 +125,11 @@ impl Game {
     /// Reads the game state out of a memory image of the original program:
     /// the player's snapshot at startup, or the reference machine when
     /// verifying.
+    /// Builds the game's state from the memory the original starts with.
+    ///
+    /// # Panics
+    ///
+    /// If `mem` is shorter than a 48K machine's memory.
     pub fn from_memory(assets: Rc<Assets>, mem: &[u8]) -> Game {
         let word = |a: usize| mem[a] as u16 | (mem[a + 1] as u16) << 8;
         let bytes = |a: usize, n: usize| &mem[a..a + n];
@@ -203,7 +208,7 @@ impl Game {
             effects: Vec::new(),
             tone: None,
             music: Vec::new(),
-            input: Default::default(),
+            input: Input::default(),
             core_slots: bytes(at::CORE_SLOTS, 9).try_into().unwrap(),
             cores_left: mem[at::CORES_LEFT],
             var_d2bf: mem[at::VAR_D2BF],
@@ -243,7 +248,10 @@ impl Game {
 }
 
 fn objects_from_memory(mem: &[u8]) -> RoomObjects {
-    use at::objects::*;
+    use at::objects::{
+        KIND12, MARKERS, MARKERS_END, SPARKLE_CURSOR, SPARKLES, SPAWN, SPAWN_COUNT, TELEPORT_ENTRY,
+        TELEPORT_POS, TYPE7, TYPE7_COUNT, TYPE8, TYPE8_COUNT,
+    };
     let word = |a: usize| mem[a] as usize | (mem[a + 1] as usize) << 8;
     let pairs = |start: usize, count: usize| -> Vec<(u8, u8)> {
         (0..count).map(|i| (mem[start + i * 2], mem[start + i * 2 + 1])).collect()

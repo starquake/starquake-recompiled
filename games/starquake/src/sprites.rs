@@ -118,6 +118,11 @@ impl Game {
 
     /// XORs a two-cell animation frame at (`row`, `col`) and sets its
     /// colour (bit 7 set: see [`Game::xor_cell`]).
+    ///
+    /// # Panics
+    ///
+    /// If the loaded game data is too short to hold what the original keeps
+    /// there, which means the file was not Starquake.
     pub fn draw_strip(&mut self, frame: u8, row: u8, col: u8, attr: u8) {
         let at = STRIP_FRAMES.wrapping_add(frame.rotate_left(4) as u16) as usize;
         let pixels: [u8; 16] = self.assets.ram[at..at + 16].try_into().unwrap();
