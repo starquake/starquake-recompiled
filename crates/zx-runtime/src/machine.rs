@@ -814,6 +814,21 @@ impl Zx {
 
     /// Like [`Zx::call_until`] with several stop addresses.
     pub fn call_until_any(&mut self, addr: u16, stops: &[u16], max_instrs: u64) -> bool {
+        self.call_until_any_with(addr, stops, max_instrs, |_| {})
+    }
+
+    /// Like [`Zx::call_until_any`], calling `watch` before each instruction.
+    ///
+    /// Some of what a routine does leaves no trace in memory afterwards --
+    /// the blocking sound requests are just calls -- so the only way to
+    /// compare them is to watch the original as it runs.
+    pub fn call_until_any_with(
+        &mut self,
+        addr: u16,
+        stops: &[u16],
+        max_instrs: u64,
+        mut watch: impl FnMut(&Zx),
+    ) -> bool {
         const SENTINEL: u16 = 0x0000;
         let sp = self.sp;
         // A call is not a frame. No interrupt arrives during one, so a HALT
@@ -829,6 +844,7 @@ impl Zx {
         self.pc = addr;
         let mut reached = false;
         for _ in 0..max_instrs {
+            watch(self);
             crate::interp::step(self);
             if (self.pc == SENTINEL && self.sp == sp) || stops.contains(&self.pc) {
                 reached = true;

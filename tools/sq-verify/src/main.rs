@@ -168,6 +168,9 @@ fn report(name: &str, failures: &[(String, Vec<String>)], total: usize) -> bool 
 /// rewrite's equivalent.
 type FrameRoutine = (&'static str, u16, fn(&mut Game));
 
+/// A screen drawn once and compared: the same shape.
+type Screen = FrameRoutine;
+
 /// Collects a set of states, reporting a panic rather than unwinding out of
 /// `main`. An empty set makes every check that uses it report "no cases ran".
 fn guarded_states(name: &str, collect: impl FnOnce() -> Vec<Zx>) -> Vec<Zx> {
@@ -443,7 +446,7 @@ fn check_frame_routine(
         let mut g = env.game(&z);
         let done = z.call(addr, 5_000_000);
         run(&mut g);
-        let parts = ["display", "entities", "entry", "objects", "rng", "restore"];
+        let parts = ["display", "entities", "entry", "objects", "rng", "restore", "scratch", "status"];
         let mut d = diff(&env.game(&z), &g, &parts);
         let frames = z.read16(at::FRAMES as u16) as u32 | (z.mem[at::FRAMES + 2] as u32) << 16;
         if frames != g.frames {
@@ -602,11 +605,11 @@ fn check_blob(env: &Env, states: &[Zx]) -> bool {
     for (n, state) in states.iter().enumerate() {
         let mut z = state.clone();
         let mut g = env.game(&z);
-        let input = starquake::controls::Input { keys: z.keys, kempston: z.kempston };
+        let input = input_of(&z);
         let (done, sounds) = run_noting_sounds(&mut z, 0xC552, &[0xC350, 0xA412, 0x5E29], 5_000_000);
         let orig = match z.pc {
             0xC350 => Outcome::Died(z.a),
-            0xA412 => Outcome::Modal(starquake::blob::Modal::SecurityDoor),
+            0xA412 => Outcome::Modal(modal_at(&z)),
             0x5E29 => Outcome::Quit,
             _ if z.a < 0x64 => Outcome::NewRoom(z.a),
             _ => Outcome::Continue,
@@ -621,10 +624,7 @@ fn check_blob(env: &Env, states: &[Zx]) -> bool {
         if sounds != g.effects {
             d.push(format!("sounds: orig {sounds:02x?} new {:02x?}", g.effects));
         }
-        let same = match (orig, new) {
-            (Outcome::Modal(_), Outcome::Modal(_)) => true,
-            (a, b) => a == b,
-        };
+        let same = orig == new;
         if !same {
             d.push(format!("outcome: orig {orig:?} new {new:?}"));
         }
@@ -659,14 +659,34 @@ fn check_death(env: &Env, states: &[Zx]) -> bool {
                 z.pc = 0xC350;
                 z.a = reason;
                 z.halted = false;
-                let ok = z.run_until_any(&[0xA410, 0x0000], 20_000);
+                let mut sounds = Vec::new();
+                let ok = z.run_until_any_with(&[0xA410, 0x0000], 20_000, |z| {
+                    if z.pc == SOUND_ROUTINE {
+                        sounds.push(z.a);
+                    }
+                });
                 let orig_continues = z.pc == 0xA410;
-                let continues = g.death_sequence(reason, &mut starquake::host::NullHost::default());
+                let mut host = SoundLog::default();
+                let continues = g.death_sequence(reason, &mut host);
                 let parts = [
                     "display", "entities", "status", "printer", "rng", "objects", "restore",
                     "entry", "scratch", "pickups",
                 ];
                 let mut d = diff(&env.game(&z), &g, &parts);
+                let asked = host.all(&g);
+                if sounds != asked {
+                    d.push(format!("sounds: orig {sounds:02x?} new {asked:02x?}"));
+                }
+                // `frames` is deliberately not compared here. The death
+                // sequence is mostly blocking sound, and the host is told
+                // `1 + busy / FRAME_T` frames passed, rounding up once per
+                // effect, where the original counts the interrupts that
+                // actually arrived during it. Measured, the two drift by one
+                // to eight frames over a death (orig 413 against 406, 504
+                // against 496), so a comparison here reports the rounding,
+                // not a regression. Anything that consumes whole frames
+                // without sound -- the 80-frame animation, the 50-frame
+                // pause -- is already covered by the state it leaves behind.
                 if orig_continues != continues {
                     d.push(format!("continues: orig {orig_continues} new {continues}"));
                 }
@@ -720,7 +740,12 @@ fn check_game_over(env: &Env, states: &[Zx]) -> bool {
 /// The original is run from the room entry to where it leaves for room 198.
 fn check_core_room(env: &Env) -> bool {
     let base = new_game_machine(env);
-    let parts = ["display", "entities", "status", "rng", "objects", "restore", "pickups"];
+    // "newgame" carries core_slots, cores and cores_left, and "misc" the room
+    // number: the three things delivering a piece exists to change.
+    let parts = [
+        "display", "entities", "status", "rng", "objects", "restore", "pickups", "newgame",
+        "misc",
+    ];
     let mut failures = Vec::new();
     let mut cases = 0;
 
@@ -749,7 +774,13 @@ fn check_core_room(env: &Env) -> bool {
         }
 
         let mut g = env.game(&z);
-        if !z.call_until(0xA426, Some(0xA6C1), 20_000_000) {
+        let mut sounds = Vec::new();
+        let watch = |z: &Zx, sounds: &mut Vec<u8>| {
+            if z.pc == SOUND_ROUTINE {
+                sounds.push(z.a);
+            }
+        };
+        if !z.call_until_any_with(0xA426, &[0xA6C1], 20_000_000, |z| watch(z, &mut sounds)) {
             let at = format!("original did not reach the core room (pc {:04x})", z.pc);
             failures.push((case, vec![at]));
             continue;
@@ -759,14 +790,19 @@ fn check_core_room(env: &Env) -> bool {
         z.t = 0;
         z.int_pending = false;
         z.iff1 = true;
-        if !z.run_until(0xA410, 5000) {
+        if !z.run_until_any_with(&[0xA410], 5000, |z| watch(z, &mut sounds)) {
             let at = format!("original did not finish (pc {:04x})", z.pc);
             failures.push((case, vec![at]));
             continue;
         }
         g.enter_room();
-        let finished = g.core_room(&mut starquake::host::NullHost::default());
+        let mut host = SoundLog::default();
+        let finished = g.core_room(&mut host);
         let mut d = diff(&env.game(&z), &g, &parts);
+        let asked = host.all(&g);
+        if sounds != asked {
+            d.push(format!("sounds: orig {sounds:02x?} new {asked:02x?}"));
+        }
         if finished {
             d.push("the rewrite ended the game; the original came back".into());
         }
@@ -806,7 +842,8 @@ fn check_music(env: &Env) -> bool {
         }
         let original = z.t.saturating_sub(STUB_T);
         let (edges, total) = starquake::music::tune(&env.assets.ram, addr as usize);
-        println!("  tune {tune}: {:.1}s, {} speaker changes", total as f64 / 3_500_000.0, edges.len());
+        let seconds = total as f64 / (starquake::host::FRAMES_PER_SECOND * starquake::sound::FRAME_T) as f64;
+        println!("  tune {tune}: {seconds:.1}s, {} speaker changes", edges.len());
         if original != total {
             let d = format!("length: orig {original} new {total} (off by {})", total as i64 - original as i64);
             failures.push((case, vec![d]));
@@ -863,24 +900,62 @@ fn probe(env: &Env) {
 /// the sequence is the only way to know the rewrite asks for the same sounds
 /// in the same places.
 fn run_noting_sounds(z: &mut Zx, start: u16, stops: &[u16], max: u64) -> (bool, Vec<u8>) {
-    const SENTINEL: u16 = 0x0000;
     const SOUND: u16 = 0xD7C0;
-    let sp = z.sp;
-    z.sp = z.sp.wrapping_sub(2);
-    let at = z.sp;
-    z.write16(at, SENTINEL);
-    z.pc = start;
     let mut ids = Vec::new();
-    for _ in 0..max {
+    let done = z.call_until_any_with(start, stops, max, |z| {
         if z.pc == SOUND {
             ids.push(z.a);
         }
-        zx_runtime::interp::step(z);
-        if (z.pc == SENTINEL && z.sp == sp) || stops.contains(&z.pc) {
-            return (true, ids);
-        }
+    });
+    (done, ids)
+}
+
+/// The blocking sound routine. Its calls leave nothing behind in memory, so
+/// the only way to compare them is to watch the original run.
+const SOUND_ROUTINE: u16 = 0xD7C0;
+
+/// A host that plays nothing and remembers every blocking sound the rewrite
+/// asks for. `sync` clears `effects` each frame, so a sequence that spans
+/// frames -- a death, a core piece going in -- has to be collected as it goes.
+#[derive(Default)]
+struct SoundLog {
+    inner: starquake::host::NullHost,
+    ids: Vec<u8>,
+}
+
+impl starquake::host::Host for SoundLog {
+    fn frame(&mut self, game: &Game) -> (starquake::controls::Input, u32) {
+        self.ids.extend_from_slice(&game.effects);
+        self.inner.frame(game)
     }
-    (false, ids)
+}
+
+impl SoundLog {
+    /// Everything asked for, including whatever was pushed after the last
+    /// frame boundary and so never reached the host.
+    fn all(&self, game: &Game) -> Vec<u8> {
+        let mut ids = self.ids.clone();
+        ids.extend_from_slice(&game.effects);
+        ids
+    }
+}
+
+/// Which screen the original is about to run, from the address it will
+/// return to. `A412` is reached by `call` from four places, and treating
+/// them all alike let the rewrite answer "security door" to a pyramid and
+/// still pass.
+fn modal_at(z: &Zx) -> starquake::blob::Modal {
+    use starquake::blob::Modal;
+    match z.read16(z.sp) {
+        0xCCFC | 0xCD2A => Modal::Cheops,
+        0xCED4 => Modal::TeleportBooth,
+        _ => Modal::SecurityDoor,
+    }
+}
+
+/// The machine's input, as the game reads it.
+fn input_of(machine: &Zx) -> starquake::controls::Input {
+    starquake::controls::Input { keys: machine.keys, kempston: machine.kempston }
 }
 
 /// The screens drawn in one pass: the intro, and the high-score table. Both
@@ -889,28 +964,25 @@ fn check_screens(env: &Env) -> bool {
     let base = new_game_machine(env);
     let parts = ["display", "printer", "rng", "restore"];
     let mut failures = Vec::new();
-    let cases = 2;
+    let screens: [Screen; 2] = [
+        ("intro (666D)", 0x666D, Game::intro_screen),
+        ("core of heroes (654B)", 0x654B, Game::core_of_heroes_screen),
+    ];
 
-    for (name, start, draw) in [
-        ("intro (666D)", 0x666Du16, 0usize),
-        ("core of heroes (654B)", 0x654B, 1),
-    ] {
+    for (name, start, draw) in screens {
         let mut z = base.clone();
         let mut g = env.game(&base);
         if !z.call_until(start, Some(0x6600), 20_000_000) {
             failures.push((name.to_string(), vec!["original did not finish".into()]));
             continue;
         }
-        match draw {
-            0 => g.intro_screen(),
-            _ => g.core_of_heroes_screen(),
-        }
+        draw(&mut g);
         let d = diff(&env.game(&z), &g, &parts);
         if !d.is_empty() {
             failures.push((name.to_string(), d));
         }
     }
-    report("screens", &failures, cases)
+    report("screens", &failures, screens.len())
 }
 
 /// The menu screens, each drawn once: the original is stopped as soon as it
@@ -922,6 +994,23 @@ fn check_menu(env: &Env) -> bool {
     let parts = ["display", "printer", "rng", "restore"];
     let mut failures = Vec::new();
     let mut cases = 0;
+
+    // The rewrite spreads this many turns of the menu loop over a second.
+    // It was hand-copied from `sq-verify menu`; measuring it here makes it a
+    // checked number like every other.
+    cases += 1;
+    let (turns, left) = measure_menu_rate(env);
+    if left {
+        failures.push(("loop rate".to_string(), vec!["the menu loop ended early".into()]));
+    } else if turns != starquake::menu::TURNS_PER_SECOND as u64 {
+        failures.push((
+            "loop rate".to_string(),
+            vec![format!(
+                "orig {turns} turns/s, rewrite paced at {}",
+                starquake::menu::TURNS_PER_SECOND
+            )],
+        ));
+    }
 
     // The title screen, for each control method: the highlighted option and
     // the key names beside it change with it.
@@ -1033,10 +1122,15 @@ fn check_security_doors(env: &Env) -> bool {
                         v.kempston = input;
                         let mut g = env.game(&v);
                         let host_input =
-                            starquake::controls::Input { keys: v.keys, kempston: v.kempston };
+                            input_of(&v);
                         g.frame_display();
                         let event = g.play_logic(&host_input);
-                        let ok = v.run_until_any(&[0xA426, 0xA523], 20_000);
+                        let mut sounds = Vec::new();
+                        let ok = v.run_until_any_with(&[0xA426, 0xA523], 20_000, |v| {
+                            if v.pc == SOUND_ROUTINE {
+                                sounds.push(v.a);
+                            }
+                        });
                         // The door screen is the only thing that re-enters a
                         // room with reason 3.
                         let orig_door = v.pc == 0xA426 && v.mem[at::ENTRY_REASON] == 3;
@@ -1051,12 +1145,17 @@ fn check_security_doors(env: &Env) -> bool {
                         }
                         triggered += 1;
                         let FrameEvent::Modal(m) = event else { unreachable!() };
-                        let reason = g.run_modal(m, &mut starquake::host::NullHost::default());
+                        let mut host = SoundLog::default();
+                        let reason = g.run_modal(m, &mut host);
                         let parts = [
                             "display", "entities", "status", "printer", "rng", "objects",
                             "restore", "scratch", "pickups",
                         ];
                         let mut d = diff(&env.game(&v), &g, &parts);
+                        let asked = host.all(&g);
+                        if sounds != asked {
+                            d.push(format!("sounds: orig {sounds:02x?} new {asked:02x?}"));
+                        }
                         if v.mem[at::ENTRY_REASON] != reason {
                             d.push(format!("reason: orig {} new {reason}", v.mem[at::ENTRY_REASON]));
                         }
@@ -1145,7 +1244,7 @@ fn check_loop(env: &Env, states: &[Zx]) -> bool {
     for (n, state) in states.iter().enumerate() {
         let mut z = state.clone();
         let mut g = env.game(&z);
-        let input = starquake::controls::Input { keys: z.keys, kempston: z.kempston };
+        let input = input_of(&z);
         let start = z.frame;
         let ok = z.run_until(0xA523, 5);
         let event = g.play_frame(&input);
@@ -1272,7 +1371,7 @@ fn render(env: &Env, out: &str) {
                     v.kempston = input;
                     let mut g = env.game(&v);
                     let host_input =
-                        starquake::controls::Input { keys: v.keys, kempston: v.kempston };
+                        input_of(&v);
                     g.frame_display();
                     if let starquake::play::FrameEvent::Modal(m) = g.play_logic(&host_input) {
                         g.run_modal(m, &mut starquake::host::NullHost::default());
@@ -1448,28 +1547,43 @@ fn tape(env: &Env, dir: &std::path::Path) {
 /// How fast the original's menu loop actually goes round. The loop has no
 /// wait in it, so its speed is however long one redraw of the options takes,
 /// and that is what sets how fast the highlight flashes.
-fn menu_rate(env: &Env) {
+/// Turns a second the original's title-menu loop manages, and whether it
+/// ended early (in which case the count is short and means nothing).
+fn measure_menu_rate(env: &Env) -> (u64, bool) {
     let mut z = new_game_machine(env);
     // Drop straight into the loop, past the title screen and its tune.
-    z.sp = z.sp.wrapping_sub(2);
-    let at = z.sp;
-    z.write16(at, 0);
+    z.push(0);
     z.pc = 0x5FF4;
     z.t = 0;
-    let second: u32 = 50 * 69888;
+    let second: u32 = starquake::host::FRAMES_PER_SECOND * starquake::sound::FRAME_T;
+    let sp = z.sp;
     let mut turns = 0u64;
     while z.t < second {
         zx_runtime::interp::step(&mut z);
         if z.pc == 0x5FF4 {
             turns += 1;
         }
+        // The loop is not supposed to end. If it ever returns or parks, the
+        // count would be quietly low, so report that rather than the number.
+        if (z.pc == 0 && z.sp == sp) || z.halted {
+            return (turns, true);
+        }
+    }
+    (turns, false)
+}
+
+fn menu_rate(env: &Env) {
+    let (turns, left) = measure_menu_rate(env);
+    if left {
+        println!("the menu loop left early; the count below is short");
     }
     println!("original menu loop: {turns} turns per second");
     println!("  highlight flips every 2 turns: {:.1} Hz", turns as f64 / 2.0);
-    println!("  the rewrite runs 1 turn per frame: 50 turns/s, 25.0 Hz");
-    if turns > 0 {
-        println!("  to match, advance it every {:.1} frames", 50.0 / turns as f64);
-    }
+    println!(
+        "  the rewrite is paced at {} turns/s: {:.1} Hz",
+        starquake::menu::TURNS_PER_SECOND,
+        starquake::menu::TURNS_PER_SECOND as f64 / 2.0
+    );
 }
 
 fn main() {
