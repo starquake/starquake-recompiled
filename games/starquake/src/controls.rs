@@ -72,6 +72,12 @@ pub fn key_code(ram: &[u8], input: &Input) -> u8 {
     if held == 1 { code } else { 0 }
 }
 
+/// Whether any key at all is held. Unlike [`key_code`] this does not care
+/// how many are down; the music player tests the keyboard this way.
+pub fn any_key(input: &Input) -> bool {
+    input.keys.iter().any(|&row| row & 0x1F != 0x1F)
+}
+
 /// Finds the matrix position (port high byte, bit) of the key the game
 /// calls `name`.
 pub fn key_position(ram: &[u8], name: u8) -> Option<(u8, u8)> {
