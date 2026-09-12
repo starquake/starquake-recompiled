@@ -63,8 +63,8 @@ pub fn run(
                 }
             }
         }
-        if let Some((r, choices)) = &random {
-            if frame >= r.start && !choices.is_empty() {
+        if let Some((r, choices)) = &random
+            && frame >= r.start && !choices.is_empty() {
                 if (frame - r.start) % r.every.max(1) == 0 {
                     held_random.clear();
                     for _ in 0..(rng.next() % 3) {
@@ -75,7 +75,6 @@ pub fn run(
                     z.set_key(k, true);
                 }
             }
-        }
         z.run_frame(no_code, &mut misses);
         on_frame(frame, &z);
     }

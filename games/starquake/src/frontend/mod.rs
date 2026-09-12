@@ -238,7 +238,7 @@ pub fn bench(path: &Path, seconds: u64) -> Result<(), String> {
             } else if n >= 110 && n % 8 < 4 {
                 i.keys[4] = !0x01;
             }
-            if n % 12 == 0 {
+            if n.is_multiple_of(12) {
                 i.kempston = [0x01, 0x02, 0x09, 0x0A, 0x11][(n as usize / 12) % 5];
             }
         }

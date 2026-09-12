@@ -36,7 +36,7 @@ impl Headless {
         let mut rgba = vec![0u8; FULL_W * FULL_H * 4];
         draw(&game.display.mem, game.display.border, self.frame, &mut rgba);
         let pixels: Vec<u32> = rgba
-            .chunks_exact(4)
+            .as_chunks::<4>().0.iter()
             .map(|p| (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32)
             .collect();
         let path = self.dir.join(format!("frame{:06}.png", self.frame));

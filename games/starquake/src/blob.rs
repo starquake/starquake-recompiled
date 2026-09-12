@@ -75,7 +75,7 @@ pub enum Outcome {
 }
 
 fn distance(a: u8, b: u8) -> u8 {
-    if a < b { b - a } else { a - b }
+    b.abs_diff(a)
 }
 
 impl Game {
@@ -631,8 +631,8 @@ impl Game {
             }
             6 => Err(Outcome::Died(0x10)),
             0x0B => {
-                if self.status.inventory.iter().any(|&(g, _)| g == 0x10) {
-                    if let Some((_, index)) = self.objects.teleport {
+                if self.status.inventory.iter().any(|&(g, _)| g == 0x10)
+                    && let Some((_, index)) = self.objects.teleport {
                         let entry = &mut self.teleporters[index].1;
                         if *entry & 0x7F != 0 {
                             *entry &= 0x80;
@@ -640,7 +640,6 @@ impl Game {
                             self.effects.push(8);
                         }
                     }
-                }
                 Ok(false)
             }
             0x0C => {

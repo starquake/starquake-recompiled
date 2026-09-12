@@ -1164,7 +1164,7 @@ fn render(env: &Env, out: &str) {
     // menu should list those, not the ones the snapshot was saved with.
     let mut g = env.game(&base);
     g.control_method = 5;
-    g.udk = [b'Q', b'W', b'E', b'R', b'T'];
+    g.udk = *b"QWERT";
     g.title_draw();
     save(&g, "screen-udk.png");
 
@@ -1228,7 +1228,7 @@ fn effects(env: &Env) {
     // `beep` counts the CALL into the routine itself, so only the `ld a,n`
     // and the stub's own `ret` are outside what it measures.
     const STUB_T: u32 = 7 + 10;
-    println!("{:>3}  {:>9}  {:>9}  {:>6}  {:>6}  {}", "id", "orig", "new", "frames", "edges", "");
+    println!("{:>3}  {:>9}  {:>9}  {:>6}  {:>6}  ", "id", "orig", "new", "frames", "edges");
     // Only the ids the game can ask for: past the table the parameters are
     // whatever happens to follow it, and the effect never ends.
     for id in 0..0x16u8 {
@@ -1281,9 +1281,9 @@ fn keys(env: &Env) {
     pkey.keys[5] &= !0x01;
     let mut five = Input::default();
     five.keys[3] &= !0x10;
-    let mut left = Input::default();
-    left.kempston = 0x02;
-    left.keys[3] &= !0x10; // the arrow presses "5" too, as on a Spectrum
+    // The arrow presses "5" as well, as it does on a Spectrum.
+    let mut left = Input { kempston: 0x02, ..Default::default() };
+    left.keys[3] &= !0x10;
     let cases = [("space", space), ("P", pkey), ("5", five), ("left arrow", left)];
 
     // The operands persist between games, as they do in the original, so a

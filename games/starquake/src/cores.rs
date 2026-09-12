@@ -51,7 +51,7 @@ impl Game {
     /// Twinkles one of the holes still left in the core.
     pub(crate) fn sparkle_core(&mut self) {
         self.rng.step();
-        let slot = ((self.rng.lo() & 0x3F) % 9) as u8;
+        let slot = (self.rng.lo() & 0x3F) % 9;
         if self.core_slots[slot as usize] < 0x80 {
             return;
         }
@@ -94,7 +94,7 @@ impl Game {
         self.cores_left = self.cores_left.wrapping_sub(1);
         self.take_item(slot);
         self.draw_status();
-        if self.cores_left % 2 != 0 {
+        if !self.cores_left.is_multiple_of(2) {
             return false;
         }
 

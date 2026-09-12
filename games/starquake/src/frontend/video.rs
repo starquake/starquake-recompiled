@@ -41,7 +41,7 @@ const PALETTE: [[u8; 3]; 16] = [
 /// Draws Spectrum display memory with a border into an RGBA frame.
 pub fn draw(mem: &[u8], border: u8, frame: u64, out: &mut [u8]) {
     let b = PALETTE[(border & 7) as usize];
-    for px in out.chunks_exact_mut(4) {
+    for px in out.as_chunks_mut::<4>().0 {
         px.copy_from_slice(&[b[0], b[1], b[2], 0xFF]);
     }
     let flash = (frame / 16) % 2 == 1;
@@ -110,8 +110,8 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                if let PhysicalKey::Code(code) = event.physical_key {
-                    if !event.repeat {
+                if let PhysicalKey::Code(code) = event.physical_key
+                    && !event.repeat {
                         let mut input = self.shared.input.lock().unwrap();
                         super::input::apply(
                             &mut input,
@@ -119,7 +119,6 @@ impl ApplicationHandler for App {
                             event.state == ElementState::Pressed,
                         );
                     }
-                }
             }
             WindowEvent::Resized(size) => {
                 if let Some(p) = &mut self.pixels {

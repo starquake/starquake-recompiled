@@ -95,11 +95,10 @@ impl Game {
             // Below the list the original writes into ROM, above it into
             // system variables the rewrite does not have: either way the
             // record is lost.
-            if let Some(slot) = a.checked_sub(RESTORE_START).map(|o| o as usize) {
-                if let Some(byte) = self.restore_mem.get_mut(slot) {
+            if let Some(slot) = a.checked_sub(RESTORE_START).map(|o| o as usize)
+                && let Some(byte) = self.restore_mem.get_mut(slot) {
                     *byte = v;
                 }
-            }
         }
         self.restore_ptr = p.wrapping_add(3);
     }

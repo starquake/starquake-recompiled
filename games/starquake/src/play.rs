@@ -24,7 +24,7 @@ pub mod death {
 }
 
 fn distance(a: u8, b: u8) -> u8 {
-    if a < b { b - a } else { a - b }
+    b.abs_diff(a)
 }
 
 impl Game {

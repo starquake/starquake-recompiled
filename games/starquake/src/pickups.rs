@@ -111,11 +111,10 @@ impl Game {
         }
 
         // An inactive teleporter's pad is blanked.
-        if let Some((_, index)) = self.objects.teleport {
-            if self.teleporters[index].1 & 0x7F == 0 {
+        if let Some((_, index)) = self.objects.teleport
+            && self.teleporters[index].1 & 0x7F == 0 {
                 self.blank_teleport_pad();
             }
-        }
     }
 
     /// Prints bright spaces over the room's teleporter pad.

@@ -35,7 +35,7 @@ enum Step {
 }
 
 fn distance(a: u8, b: u8) -> u8 {
-    if a < b { b - a } else { a - b }
+    b.abs_diff(a)
 }
 
 impl Game {
@@ -253,11 +253,10 @@ impl Game {
                 self.enemy_shot(slot);
             }
         }
-        if self.entities[slot].0[STATE] == 1 {
-            if let Some(reason) = self.enemy_touches_blob(slot) {
+        if self.entities[slot].0[STATE] == 1
+            && let Some(reason) = self.enemy_touches_blob(slot) {
                 return Step::Killed(reason);
             }
-        }
 
         let e = &mut self.entities[slot].0;
         e[ANIM_COUNT] = e[ANIM_COUNT].wrapping_sub(1);

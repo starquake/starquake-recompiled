@@ -27,7 +27,7 @@ fn sz53(v: u8) -> u8 {
 
 #[inline]
 fn parity(v: u8) -> u8 {
-    if v.count_ones() % 2 == 0 { PF } else { 0 }
+    if v.count_ones().is_multiple_of(2) { PF } else { 0 }
 }
 
 #[inline]
