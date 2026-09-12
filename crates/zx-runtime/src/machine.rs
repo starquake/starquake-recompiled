@@ -6,6 +6,7 @@
 
 use zx_core::timing::contention;
 
+
 use zx_core::{BlockOp, Cond, Reg8, Reg16, Snapshot};
 
 pub const CF: u8 = 0x01;
@@ -338,7 +339,8 @@ impl Zx {
             Kind::PortRead | Kind::PortWrite => self.charge_io(c.at),
             _ => {
                 if Zx::contended(c.at) {
-                    self.t += contention(self.t);
+                    let d = contention(self.t);
+                    self.t += d;
                 }
                 self.t += c.len;
             }

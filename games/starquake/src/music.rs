@@ -36,6 +36,36 @@ fn io_delay(t: u32) -> u32 {
     zx_core::timing::contention(t + 1)
 }
 
+/// Advances `t` through an instruction that makes two stack accesses, after
+/// `before` T-states of its own that touch nothing contended.
+///
+/// The stack is contended. The tape's loader opens with `CLEAR 24103` —
+/// 0x5E27 — which puts the machine stack just below the program, at 0x5DEx,
+/// inside the sixteen kilobytes the ULA shares. So every push and pop the
+/// player makes is held up while the picture is being drawn, and the player
+/// makes six of them in every half-cycle.
+///
+/// `before` is the opcode fetch and whatever else precedes the transfer: 4
+/// for a pop or a return, 5 for a push (the fetch plus the cycle spent on
+/// the refresh address), 11 for a call, which has read its address first.
+fn stack_pair(t: &mut u32, before: u32) {
+    *t += before;
+    for _ in 0..2 {
+        *t += zx_core::timing::contention(*t);
+        *t += 3;
+    }
+}
+
+/// `call da64` and the little routine it lands in, which flips the direction
+/// the note is sliding. Two stack writes going in and two reads coming back.
+fn slide_call(t: &mut u32) {
+    stack_pair(t, 11);
+    // ld a,(da41); ld c,a; ld a,78; sub c; ld (da41),a — all in the player's
+    // own page, where the ULA does not reach.
+    *t += 41;
+    stack_pair(t, 4);
+}
+
 /// Speaker changes of a tune, as (T-state offset, level) pairs, and the
 /// tune's whole length in T-states. The tune is generated as though no key
 /// is ever pressed; the caller stops it when one is.
@@ -55,12 +85,17 @@ pub fn tune(ram: &[u8], addr: usize) -> (Vec<(u32, bool)>, u32) {
 
     loop {
         // ld a,(hl); inc hl; push hl; cp 0
-        t += 7 + 6 + 11 + 7;
+        t += 7 + 6;
+        stack_pair(&mut t, 5);
+        t += 7;
         let note = ram[p];
         p += 1;
         if note == 0 {
             // jr z; pop hl; ei; ret
-            t += 12 + 10 + 4 + 10;
+            t += 12;
+            stack_pair(&mut t, 4);
+            t += 4;
+            stack_pair(&mut t, 4);
             break;
         }
         t += 7;
@@ -69,14 +104,19 @@ pub fn tune(ram: &[u8], addr: usize) -> (Vec<(u32, bool)>, u32) {
         t += 4 + 7 + 7 + 4 + 11 + 10 + 11 + 7 + 6 + 7;
         let i = (note & 0x1F) as usize;
         let period = u16::from_le_bytes([ram[NOTES + i * 2], ram[NOTES + i * 2 + 1]]);
-        t += 33 + 7 + 4 + 7 + 4 + 20 + 4;
+        for _ in 0..3 {
+            stack_pair(&mut t, 5);
+        }
+        t += 7 + 4 + 7 + 4 + 20 + 4;
         let scale = (note | 0x1F) as u16;
-        t += 17 + multiply_t(scale);
+        stack_pair(&mut t, 11);
+        t += multiply_t(scale);
         let mut length = (scale as u32).wrapping_mul(tempo) as u16;
 
         // How many half-cycles that is: the period is taken off the length
         // until it runs out, four counted each time.
-        t += 10 + 10;
+        stack_pair(&mut t, 4);
+        t += 10;
         let mut half_cycles: u32 = 0;
         loop {
             t += 24 + 4 + 15;
@@ -91,7 +131,9 @@ pub fn tune(ram: &[u8], addr: usize) -> (Vec<(u32, bool)>, u32) {
         }
 
         // pop hl; pop de; exx; ld bc,$fefe; exx
-        t += 10 + 10 + 4 + 10 + 4;
+        stack_pair(&mut t, 4);
+        stack_pair(&mut t, 4);
+        t += 4 + 10 + 4;
         let (mut hl, mut de) = (period, period);
         while half_cycles != 0 {
             t += 13;
@@ -108,32 +150,41 @@ pub fn tune(ram: &[u8], addr: usize) -> (Vec<(u32, bool)>, u32) {
             // The two copies of the period swap, and the delay on this one
             // is what sets the pitch.
             std::mem::swap(&mut hl, &mut de);
-            t += 4 + 11 + 11;
+            t += 4;
+            stack_pair(&mut t, 5);
+            stack_pair(&mut t, 5);
             let n = if hl == 0 { 65536 } else { hl as u32 };
             t += n * 26 - 5;
-            t += 10;
+            stack_pair(&mut t, 4);
 
             hl = if sliding_down { hl.wrapping_sub(1) } else { hl.wrapping_add(1) };
             t += 6 + 10 + 4 + 4;
             if hl >> 8 != 0 {
-                t += 12 + 12 + 7 + 73 + 68;
+                t += 12 + 12 + 7 + 73;
+                slide_call(&mut t);
                 sliding_down = !sliding_down;
             } else if hl & 0xFF != 2 {
-                t += 7 + 4 + 4 + 12 + 7 + 73 + 68;
+                t += 7 + 4 + 4 + 12 + 7 + 73;
+                slide_call(&mut t);
                 sliding_down = !sliding_down;
             } else {
                 // Wound all the way down: the other copy is nudged out
                 // instead, and the slide is flipped twice, so it stays.
-                t += 7 + 4 + 4 + 7 + 68 + 6 + 12 + 68;
+                t += 7 + 4 + 4 + 7;
+                slide_call(&mut t);
+                t += 6 + 12;
+                slide_call(&mut t);
                 de = de.wrapping_add(1);
             }
 
-            t += 10 + 6 + 4 + 4;
+            stack_pair(&mut t, 4);
+            t += 6 + 4 + 4;
             half_cycles -= 1;
             t += if half_cycles != 0 { 12 } else { 7 };
         }
         // pop hl; jp
-        t += 10 + 10;
+        stack_pair(&mut t, 4);
+        t += 10;
     }
     (out, t)
 }
