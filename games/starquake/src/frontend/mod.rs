@@ -26,7 +26,12 @@ pub struct Shared {
     /// The most recent frame: display memory, border colour, frame number.
     pub screen: Mutex<(Vec<u8>, u8, u64)>,
     pub input: Mutex<Input>,
+    /// Set when either side wants to stop: the window was closed, or the
+    /// game reached the end of its own loop.
     pub quit: AtomicBool,
+    /// Set when the game thread stopped without being asked to, so the
+    /// window can report it rather than sitting on a frozen picture.
+    pub dead: AtomicBool,
 }
 
 /// The game thread's side of the frontend.
@@ -88,7 +93,11 @@ impl Host for FrontHost {
     fn frame(&mut self, game: &Game) -> (Input, u32) {
         if self.shared.quit.load(Ordering::Relaxed) {
             self.report();
-            std::process::exit(0);
+            // The window has gone. Returning lets the game run on harmlessly
+            // for the moment it takes the event loop to finish; tearing the
+            // process down from this thread while the main one is inside
+            // pixels.render() is what used to risk a crash on exit.
+            return (Input::default(), 1);
         }
 
         self.frame_start = Some(Instant::now());
@@ -147,7 +156,13 @@ impl Host for FrontHost {
         let mut input = *self.shared.input.lock().unwrap();
         input.kempston |= pad_bits;
         if pad_pause {
-            input.keys[5] &= !0x01;
+            // Not a fixed key: the pause key depends on the control method,
+            // and Kempston keeps whatever the last keyboard method left,
+            // which on a fresh tape is Space rather than P.
+            let (port, bit) = game.controls.pause;
+            if let Some(row) = (0..8).find(|r| port & (1 << r) == 0) {
+                input.keys[row] &= !(1 << bit);
+            }
         }
 
         let now = Instant::now();
@@ -164,6 +179,23 @@ impl Host for FrontHost {
 }
 
 fn game_thread(
+    memory: Vec<u8>,
+    loading_screen: Option<Vec<u8>>,
+    shared: Arc<Shared>,
+    audio: Option<audio::Output>,
+) {
+    let watch = shared.clone();
+    let played = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+        play_game(memory, loading_screen, shared, audio)
+    }));
+    if played.is_err() {
+        watch.dead.store(true, Ordering::Relaxed);
+    }
+    // Either way the game is over, so the window should come down with it.
+    watch.quit.store(true, Ordering::Relaxed);
+}
+
+fn play_game(
     memory: Vec<u8>,
     loading_screen: Option<Vec<u8>>,
     shared: Arc<Shared>,
@@ -194,7 +226,10 @@ fn game_thread(
     // counter runs throughout, which is what seeds each new game.
     loop {
         match game.menu(&mut host) {
-            starquake::menu::Start::Quit => std::process::exit(0),
+            starquake::menu::Start::Quit => {
+                host.shared.quit.store(true, Ordering::Relaxed);
+                return;
+            }
             starquake::menu::Start::Play(method) => {
                 game.new_game(method);
                 game.intro(&mut host);
@@ -214,6 +249,7 @@ pub fn bench(path: &Path, seconds: u64) -> Result<(), String> {
         screen: Mutex::new((vec![0; starquake::display::BITMAP_LEN + 768], 0, 0)),
         input: Mutex::new(Input::default()),
         quit: AtomicBool::new(false),
+        dead: AtomicBool::new(false),
     });
     let (audio, stream) = match audio::Output::start() {
         Ok((out, s)) => (Some(out), Some(s)),
@@ -261,6 +297,7 @@ pub fn run(path: &Path) -> Result<(), String> {
         screen: Mutex::new((vec![0; starquake::display::BITMAP_LEN + 768], 0, 0)),
         input: Mutex::new(Input::default()),
         quit: AtomicBool::new(false),
+        dead: AtomicBool::new(false),
     });
     let (audio, stream) = match audio::Output::start() {
         Ok((out, stream)) => (Some(out), Some(stream)),

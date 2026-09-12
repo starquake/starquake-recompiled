@@ -1,6 +1,8 @@
 //! Keyboard mapping: the host keyboard to the Spectrum's key matrix, and
 //! the arrow keys to a Kempston joystick.
 
+use std::collections::HashSet;
+
 use starquake::controls::Input;
 use winit::keyboard::KeyCode;
 
@@ -84,18 +86,19 @@ fn kempston(key: KeyCode) -> u8 {
     }
 }
 
-pub fn apply(input: &mut Input, key: KeyCode, pressed: bool) {
-    for &(row, bit) in matrix(key) {
-        if pressed {
+/// Builds the machine's input from the host keys currently held.
+///
+/// Rebuilding from the whole set rather than flipping one bit per event
+/// matters where two host keys share a matrix position: Backspace is Caps
+/// Shift + 0 and the arrows are 5, 6, 7 and 8, so releasing one used to
+/// report the other released as well.
+pub fn build(held: &HashSet<KeyCode>) -> Input {
+    let mut input = Input::default();
+    for &key in held {
+        for &(row, bit) in matrix(key) {
             input.keys[row] &= !(1 << bit);
-        } else {
-            input.keys[row] |= 1 << bit;
         }
+        input.kempston |= kempston(key);
     }
-    let k = kempston(key);
-    if pressed {
-        input.kempston |= k;
-    } else {
-        input.kempston &= !k;
-    }
+    input
 }

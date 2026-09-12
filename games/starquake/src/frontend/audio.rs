@@ -108,6 +108,32 @@ impl Beeper {
     }
 }
 
+/// Builds the output stream for whatever sample format the device wants,
+/// converting from the mono f32 the beeper produces.
+fn build<T>(
+    device: &cpal::Device,
+    config: cpal::StreamConfig,
+    channels: usize,
+    queue: Arc<Mutex<VecDeque<f32>>>,
+) -> Result<cpal::Stream, String>
+where
+    T: cpal::SizedSample + cpal::FromSample<f32>,
+{
+    device
+        .build_output_stream(
+            config,
+            move |data: &mut [T], _| {
+                let mut q = queue.lock().unwrap();
+                for frame in data.chunks_mut(channels) {
+                    frame.fill(T::from_sample(q.pop_front().unwrap_or(0.0)));
+                }
+            },
+            |e| eprintln!("sound error: {e}"),
+            None,
+        )
+        .map_err(|e| e.to_string())
+}
+
 /// The sound card, fed through a queue of mono samples.
 pub struct Output {
     queue: Arc<Mutex<VecDeque<f32>>>,
@@ -123,21 +149,16 @@ impl Output {
         let channels = config.channels as usize;
         let rate = config.sample_rate;
         let queue = Arc::new(Mutex::new(VecDeque::<f32>::new()));
-        let q = queue.clone();
-        let stream = device
-            .build_output_stream(
-                config,
-                move |data: &mut [f32], _| {
-                    let mut q = q.lock().unwrap();
-                    for frame in data.chunks_mut(channels) {
-                        let v = q.pop_front().unwrap_or(0.0);
-                        frame.fill(v);
-                    }
-                },
-                |e| eprintln!("sound error: {e}"),
-                None,
-            )
-            .map_err(|e| e.to_string())?;
+        // The device decides the sample format. CoreAudio converts from f32
+        // for us, but WASAPI in shared mode and ALSA `hw:` devices that
+        // default to 16-bit reject an f32 stream outright, which showed up as
+        // "no sound" and a silent game.
+        let stream = match supported.sample_format() {
+            cpal::SampleFormat::F32 => build::<f32>(&device, config, channels, queue.clone())?,
+            cpal::SampleFormat::I16 => build::<i16>(&device, config, channels, queue.clone())?,
+            cpal::SampleFormat::U16 => build::<u16>(&device, config, channels, queue.clone())?,
+            other => return Err(format!("sample format {other} is not supported")),
+        };
         stream.play().map_err(|e| e.to_string())?;
         Ok((Output { queue, rate }, stream))
     }
