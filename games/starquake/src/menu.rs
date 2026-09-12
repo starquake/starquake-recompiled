@@ -184,17 +184,7 @@ impl Game {
     /// "ARE YOU SURE...": true if the player said yes.
     fn quit_confirmed(&mut self, host: &mut dyn Host) -> bool {
         self.quit_screen();
-        while key_code(&self.assets.ram, &self.input) != 0 {
-            self.sync(host);
-        }
-        let key = loop {
-            let k = key_code(&self.assets.ram, &self.input);
-            if k != 0 {
-                break k;
-            }
-            self.sync(host);
-        };
-        if key != b'Y' {
+        if self.ask_key(host, |k| k != 0) != b'Y' {
             return false;
         }
         self.print_text(at::GOODBYE);
@@ -227,9 +217,7 @@ impl Game {
         index: u8,
         flash: &mut (u8, u8),
     ) -> u8 {
-        while key_code(&self.assets.ram, &self.input) != 0 {
-            self.sync(host);
-        }
+        self.wait_keys_released(host);
         let mut pacer = crate::host::Pacer::new(DEFINE_TURNS_PER_SECOND);
         loop {
             self.sync(host);

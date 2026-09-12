@@ -1,7 +1,6 @@
 //! The screens around a game: the intro, and the framed message screens
 //! the other flows are drawn on.
 
-use crate::controls::key_code;
 use crate::display::{ATTR_LEN, BITMAP_LEN};
 use crate::game::Game;
 use crate::host::Host;
@@ -80,9 +79,7 @@ impl Game {
     /// stops the tune at the next frame instead, which is as often as the
     /// host reports input.
     pub fn tune_until_key(&mut self, host: &mut dyn Host, tune: u8) {
-        while key_code(&self.assets.ram, &self.input) != 0 {
-            self.sync(host);
-        }
+        self.wait_keys_released(host);
         let entry = at::TUNES + tune as usize * 2;
         let ram = self.assets.clone();
         let addr = ram.ram[entry] as usize | (ram.ram[entry + 1] as usize) << 8;
@@ -121,12 +118,7 @@ impl Game {
         let n = screen.len().min(BITMAP_LEN + ATTR_LEN);
         self.display.mem[..n].copy_from_slice(&screen[..n]);
         self.display.border = 0;
-        while key_code(&self.assets.ram, &self.input) != 0 {
-            self.sync(host);
-        }
-        while key_code(&self.assets.ram, &self.input) == 0 {
-            self.sync(host);
-        }
+        self.ask_key(host, |k| k != 0);
     }
 
     /// The report BLOB's flight computer gives on the way down.
@@ -185,16 +177,7 @@ impl Game {
         self.print_text(at::INITIALS_TEXT);
         let mut initials = [b' '; 3];
         for slot in &mut initials {
-            while key_code(&self.assets.ram, &self.input) != 0 {
-                self.sync(host);
-            }
-            let k = loop {
-                let k = key_code(&self.assets.ram, &self.input);
-                if k >= 0x20 {
-                    break k;
-                }
-                self.sync(host);
-            };
+            let k = self.ask_key(host, |k| k >= 0x20);
             *slot = k;
             self.print_bytes(&[k, b' ']);
             self.effects.push(7);

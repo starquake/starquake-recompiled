@@ -3,7 +3,6 @@
 //! reason to re-enter the room with.
 
 use crate::blob::Modal;
-use crate::controls::key_code;
 use crate::entities::field;
 use crate::entry::reason;
 use crate::game::Game;
@@ -245,13 +244,7 @@ impl Game {
         for i in 0..5 {
             self.draw_offer(i);
         }
-        let choice = loop {
-            let k = key_code(&self.assets.ram, &self.input);
-            if (b'1'..=b'5').contains(&k) {
-                break k - b'1';
-            }
-            self.sync(host);
-        };
+        let choice = self.wait_key(host, |k| (b'1'..=b'5').contains(&k)) - b'1';
         for _ in 0..35 {
             self.effects.push(0x10);
             self.draw_offer(choice);
@@ -291,16 +284,7 @@ impl Game {
         self.effects.push(7);
         self.random_ink();
         for i in 0..5 {
-            while key_code(&self.assets.ram, &self.input) != 0 {
-                self.sync(host);
-            }
-            let k = loop {
-                let k = key_code(&self.assets.ram, &self.input);
-                if k >= 0x0A {
-                    break k;
-                }
-                self.sync(host);
-            };
+            let k = self.ask_key(host, |k| k >= 0x0A);
             self.typed_code[i] = k;
             self.print_bytes(&[k, b' ']);
             self.effects.push(0x11);

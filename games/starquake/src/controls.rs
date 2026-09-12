@@ -147,3 +147,36 @@ impl Controls {
         v
     }
 }
+
+impl crate::game::Game {
+    /// Waits until no key is held, or until two or more are: what
+    /// [`key_code`] reports as nothing.
+    ///
+    /// Every screen that asks for a keypress does this first, so a key still
+    /// down from the screen before is not read as the answer to this one.
+    pub fn wait_keys_released(&mut self, host: &mut dyn crate::host::Host) {
+        while key_code(&self.assets.ram, &self.input) != 0 {
+            self.sync(host);
+        }
+    }
+
+    /// Waits for a key `accept` likes and returns its code, running a frame
+    /// between polls so the screen keeps moving.
+    pub fn wait_key(&mut self, host: &mut dyn crate::host::Host, accept: impl Fn(u8) -> bool) -> u8 {
+        loop {
+            let k = key_code(&self.assets.ram, &self.input);
+            if accept(k) {
+                return k;
+            }
+            self.sync(host);
+        }
+    }
+
+    /// [`wait_keys_released`](Self::wait_keys_released) then
+    /// [`wait_key`](Self::wait_key): the pair almost
+    /// every one of these screens wants.
+    pub fn ask_key(&mut self, host: &mut dyn crate::host::Host, accept: impl Fn(u8) -> bool) -> u8 {
+        self.wait_keys_released(host);
+        self.wait_key(host, accept)
+    }
+}
