@@ -814,10 +814,24 @@ impl Zx {
 
     /// Like [`Zx::call_until`] with several stop addresses.
     pub fn call_until_any(&mut self, addr: u16, stops: &[u16], max_instrs: u64) -> bool {
+        self.call_until_any_with(addr, stops, max_instrs, |_| {}).0
+    }
+
+    /// Like [`Zx::call_until_any`], and also how long the call took.
+    ///
+    /// The clock is put back afterwards, so this is the only way to find out.
+    /// Timing a routine is what the sound checks do.
+    pub fn call_until_any_timed(
+        &mut self,
+        addr: u16,
+        stops: &[u16],
+        max_instrs: u64,
+    ) -> (bool, u32) {
         self.call_until_any_with(addr, stops, max_instrs, |_| {})
     }
 
-    /// Like [`Zx::call_until_any`], calling `watch` before each instruction.
+    /// Like [`Zx::call_until_any`], calling `watch` before each instruction,
+    /// and reporting how long the call took.
     ///
     /// Some of what a routine does leaves no trace in memory afterwards --
     /// the blocking sound requests are just calls -- so the only way to
@@ -828,7 +842,7 @@ impl Zx {
         stops: &[u16],
         max_instrs: u64,
         mut watch: impl FnMut(&Zx),
-    ) -> bool {
+    ) -> (bool, u32) {
         const SENTINEL: u16 = 0x0000;
         let sp = self.sp;
         // A call is not a frame. No interrupt arrives during one, so a HALT
@@ -851,10 +865,11 @@ impl Zx {
                 break;
             }
         }
+        let elapsed = self.t.wrapping_sub(t);
         self.t = t;
         self.halted = halted;
         self.ei_delay = ei_delay;
-        reached
+        (reached, elapsed)
     }
 
     // --- interrupts ---------------------------------------------------------
