@@ -16,7 +16,7 @@ jobs:
     name: no game or ROM data committed
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Nothing under assets/ but its README
         run: |
@@ -44,10 +44,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Keep in step with rust-toolchain.toml, which pins the same version
+      # for local builds. Tracking `stable` here would mean a future Rust
+      # release could fail CI on untouched code, because `clippy -D warnings`
+      # gains lints with every release.
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.98.1"
           components: clippy
 
       - uses: Swatinem/rust-cache@v2
@@ -87,3 +92,7 @@ jobs:
   # uploaded to GitHub. Run it locally before opening a pull request:
   #
   #     cargo run --release -p sq-verify
+  #
+  # That matters most when a change was made to satisfy clippy: see
+  # CONTRIBUTING.md for what to do when a lint argues with code that mirrors
+  # the original.
