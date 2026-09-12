@@ -43,11 +43,22 @@ impl Snapshot {
     }
 }
 
-fn decompress(src: &[u8], out: &mut Vec<u8>, limit: usize) {
+/// Expands a compressed block. Returns whether it fitted: a run that would
+/// overrun the page means the file is malformed, and truncating quietly hid
+/// that from the size check the caller makes afterwards.
+fn decompress(src: &[u8], out: &mut Vec<u8>, limit: usize) -> bool {
     let mut i = 0;
     while i < src.len() && out.len() < limit {
-        if src[i] == 0xED && i + 3 < src.len() && src[i + 1] == 0xED {
+        // A marker needs both its count and its byte; a trailing fragment is
+        // malformed rather than two literals.
+        if src[i] == 0xED && i + 1 < src.len() && src[i + 1] == 0xED {
+            if i + 3 >= src.len() {
+                return false;
+            }
             let (count, byte) = (src[i + 2] as usize, src[i + 3]);
+            if out.len() + count > limit {
+                return false;
+            }
             out.extend(std::iter::repeat_n(byte, count));
             i += 4;
         } else {
@@ -55,7 +66,10 @@ fn decompress(src: &[u8], out: &mut Vec<u8>, limit: usize) {
             i += 1;
         }
     }
-    out.truncate(limit);
+    // Stopping with source left over is normal: a v1 file ends with a
+    // 00 ED ED 00 marker after the last page, and a page that fills exactly
+    // leaves it unread. Only the malformed cases above are failures.
+    true
 }
 
 pub fn load_z80(data: &[u8]) -> Result<Snapshot, String> {
@@ -102,7 +116,9 @@ pub fn load_z80(data: &[u8]) -> Result<Snapshot, String> {
         // Version 1: a single 48K block, optionally compressed.
         let body = &data[30..];
         if flags & 0x20 != 0 {
-            decompress(body, &mut s.ram, 0xC000);
+            if !decompress(body, &mut s.ram, 0xC000) {
+                return Err("v1 snapshot is malformed or overruns 49152 bytes".into());
+            }
         } else {
             s.ram.extend_from_slice(&body[..body.len().min(0xC000)]);
         }
@@ -112,10 +128,15 @@ pub fn load_z80(data: &[u8]) -> Result<Snapshot, String> {
         return Ok(s);
     }
 
-    // Versions 2 and 3.
+    // Versions 2 and 3. The extended header's own length lives at 30, and
+    // the fields read below reach byte 34, so both have to be there before
+    // anything is read: a 30-byte file used to panic here.
+    if data.len() < 32 {
+        return Err("truncated snapshot: no extended header length".into());
+    }
     let ext_len = w(30) as usize;
     let header_end = 32 + ext_len;
-    if data.len() < header_end {
+    if data.len() < header_end || header_end < 35 {
         return Err("truncated extended header".into());
     }
     s.pc = w(32);
@@ -145,7 +166,9 @@ pub fn load_z80(data: &[u8]) -> Result<Snapshot, String> {
         };
         let mut block = Vec::with_capacity(0x4000);
         if compressed {
-            decompress(src, &mut block, 0x4000);
+            if !decompress(src, &mut block, 0x4000) {
+                return Err(format!("memory page {page} is malformed or overruns 16384 bytes"));
+            }
         } else {
             block.extend_from_slice(src);
         }

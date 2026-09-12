@@ -76,9 +76,9 @@ pub struct Zx {
     /// Current level of the beeper (EAR output, bit 4 of port 0xFE).
     pub ear: bool,
     /// Level of the beeper at the start of the frame.
-    pub ear_frame_start: bool,
+
     /// T-states within the frame at which the beeper toggled.
-    pub beeper_edges: Vec<u32>,
+
     /// Keyboard half-rows, one byte per address line A8..A15; a 0 bit is a pressed key.
     pub keys: [u8; 8],
     /// Kempston joystick state (bit 0 right, 1 left, 2 down, 3 up, 4 fire).
@@ -95,7 +95,10 @@ impl Zx {
         let mut mem = Box::new([0u8; 0x10000]);
         mem[0x4000..].copy_from_slice(&snap.ram);
         if let Some(rom) = rom {
-            mem[..0x4000].copy_from_slice(&rom[..0x4000]);
+            // A user-supplied file: a short or wrong one should not be an
+            // index panic. Whatever is there is used, and the rest stays zero.
+            let n = rom.len().min(0x4000);
+            mem[..n].copy_from_slice(&rom[..n]);
         }
         Zx {
             a: snap.a,
@@ -130,8 +133,8 @@ impl Zx {
             rom_loaded: rom.is_some(),
             border: snap.border,
             ear: false,
-            ear_frame_start: false,
-            beeper_edges: Vec::with_capacity(4096),
+
+
             keys: [0xFF; 8],
             kempston: 0,
             int_pending: false,
@@ -382,11 +385,7 @@ impl Zx {
     pub fn port_out(&mut self, port: u16, v: u8) {
         if port & 1 == 0 {
             self.border = v & 7;
-            let ear = v & 0x10 != 0;
-            if ear != self.ear {
-                self.ear = ear;
-                self.beeper_edges.push(self.t);
-            }
+            self.ear = v & 0x10 != 0;
         }
     }
 
@@ -817,15 +816,29 @@ impl Zx {
     pub fn call_until_any(&mut self, addr: u16, stops: &[u16], max_instrs: u64) -> bool {
         const SENTINEL: u16 = 0x0000;
         let sp = self.sp;
+        // A call is not a frame. No interrupt arrives during one, so a HALT
+        // falls through to the next instruction rather than waiting for ever,
+        // and the T-states spent belong to whatever frame the caller is in.
+        // All of it is put back afterwards: leaving `t` at twelve frames'
+        // worth and `halted` set used to give the next `run_until` an
+        // interrupt on each of its first dozen instructions.
+        let (t, halted, ei_delay) = (self.t, self.halted, self.ei_delay);
+        self.halted = false;
+        self.ei_delay = false;
         self.push(SENTINEL);
         self.pc = addr;
+        let mut reached = false;
         for _ in 0..max_instrs {
             crate::interp::step(self);
             if (self.pc == SENTINEL && self.sp == sp) || stops.contains(&self.pc) {
-                return true;
+                reached = true;
+                break;
             }
         }
-        false
+        self.t = t;
+        self.halted = halted;
+        self.ei_delay = ei_delay;
+        reached
     }
 
     // --- interrupts ---------------------------------------------------------

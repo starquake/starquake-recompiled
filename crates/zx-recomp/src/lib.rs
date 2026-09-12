@@ -1,24 +1,26 @@
-//! zx-recomp: static recompiler from ZX Spectrum 48K Z80 code to Rust.
+//! zx-recomp: the reverse-engineering tool this project was built with.
 //!
-//! Pipeline:
+//! It runs the original headless and works out what its code does, so the
+//! rewrite can be written from a readable listing rather than from raw bytes:
+//!
 //! 1. Load the user's snapshot (and ROM) and check them against the hashes
 //!    in the game config.
 //! 2. Trace: run the game headless in the interpreter with scripted input,
 //!    recording executed code, jump targets and self-modifying code.
-//! 3. Analyse: recursive descent from every known entry point, then split
-//!    the code into blocks.
-//! 4. Generate Rust, one function per block, for the runtime to dispatch to.
+//! 3. Analyse: recursive descent from every known entry point.
+//! 4. Print an annotated disassembly, marking what the trace actually ran.
 //!
-//! Typically driven from a game crate's `build.rs` via [`build_game`].
+//! It once generated Rust from the analysis as well. That approach was
+//! abandoned in favour of the hand-written rewrite in `games/starquake`,
+//! which needs no runtime, and the generator has been removed.
 
 pub mod analysis;
-pub mod codegen;
 pub mod config;
 pub mod listing;
 pub mod tracer;
 
 use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use zx_core::Snapshot;
 use zx_core::sha1::sha1_hex;
@@ -104,33 +106,6 @@ pub fn read_misses(path: &Path) -> Vec<u16> {
         .collect()
 }
 
-pub struct Output {
-    pub source: String,
-    pub report: String,
-}
-
-pub fn recompile(cfg: &Config, inputs: &Inputs, extra_entries: &[u16]) -> Result<Output, String> {
-    let traced = tracer::run(&cfg.trace, inputs, |_, _| {})?;
-    let analysis = analysis::analyze(
-        cfg,
-        &inputs.memory(),
-        inputs.snapshot.pc,
-        inputs.rom.is_some(),
-        &traced.trace,
-        extra_entries,
-    );
-    let meta = codegen::Meta {
-        name: &cfg.game.name,
-        snapshot_sha1: &inputs.snapshot_sha1,
-        rom_sha1: inputs.rom_sha1.as_deref(),
-    };
-    let source = codegen::generate(&meta, &analysis);
-    Ok(Output {
-        source,
-        report: report(&analysis),
-    })
-}
-
 pub fn report(a: &analysis::Analysis) -> String {
     let s = &a.stats;
     let mut r = String::new();
@@ -143,44 +118,4 @@ pub fn report(a: &analysis::Analysis) -> String {
         let _ = writeln!(r, "  {a:04x}");
     }
     r
-}
-
-/// Entry point for a game crate's `build.rs`: recompiles the game described
-/// by `config_path` into `$OUT_DIR/recompiled.rs`.
-///
-/// Assets are looked up in `$ZX_ASSETS` if set, else in `default_assets`.
-pub fn build_game(config_path: &str, default_assets: &str, misses_file: &str) {
-    let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let config_path = manifest.join(config_path);
-    let assets = std::env::var_os("ZX_ASSETS")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| manifest.join(default_assets));
-    println!("cargo:rerun-if-env-changed=ZX_ASSETS");
-    println!("cargo:rerun-if-changed={}", config_path.display());
-
-    let fail = |msg: String| -> ! {
-        for line in msg.lines() {
-            println!("cargo:warning={line}");
-        }
-        panic!("zx-recomp: {msg}");
-    };
-
-    let text = std::fs::read_to_string(&config_path)
-        .unwrap_or_else(|e| fail(format!("cannot read {}: {e}", config_path.display())));
-    let cfg = Config::parse(&text).unwrap_or_else(|e| fail(format!("{}: {e}", config_path.display())));
-
-    println!("cargo:rerun-if-changed={}", assets.join(&cfg.game.snapshot).display());
-    if let Some(rom) = &cfg.game.rom {
-        println!("cargo:rerun-if-changed={}", assets.join(rom).display());
-    }
-    let misses_path = assets.join(misses_file);
-    println!("cargo:rerun-if-changed={}", misses_path.display());
-
-    let inputs = Inputs::load(&cfg, &assets).unwrap_or_else(|e| fail(e));
-    let misses = read_misses(&misses_path);
-    let out = recompile(&cfg, &inputs, &misses).unwrap_or_else(|e| fail(e));
-
-    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-    std::fs::write(out_dir.join("recompiled.rs"), &out.source).unwrap();
-    std::fs::write(out_dir.join("recomp-report.txt"), &out.report).unwrap();
 }

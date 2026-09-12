@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use zx_recomp::{Config, Inputs, analysis, codegen, read_misses, report, tracer};
+use zx_recomp::{Config, Inputs, analysis, read_misses, report, tracer};
 use zx_runtime::{png, screen};
 
 fn main() {
@@ -22,7 +22,6 @@ fn run() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
     let mut config = None;
     let mut assets = None;
-    let mut out = None;
     let mut misses = None;
     let mut shots: Vec<(u32, PathBuf)> = Vec::new();
     let mut trace_only = false;
@@ -31,7 +30,6 @@ fn run() -> Result<(), String> {
         let mut value = || args.next().ok_or(format!("{a} needs a value"));
         match a.as_str() {
             "--assets" => assets = Some(PathBuf::from(value()?)),
-            "--out" => out = Some(PathBuf::from(value()?)),
             "--listing" => listing = Some(PathBuf::from(value()?)),
             "--misses" => misses = Some(PathBuf::from(value()?)),
             "--shot" => {
@@ -40,6 +38,7 @@ fn run() -> Result<(), String> {
                 shots.push((frame.parse().map_err(|_| "bad frame")?, path.into()));
             }
             "--trace-only" => trace_only = true,
+            _ if a.starts_with("--") => return Err(format!("unknown option {a}")),
             _ if config.is_none() => config = Some(PathBuf::from(a)),
             _ => return Err(format!("unexpected argument {a}")),
         }
@@ -53,14 +52,30 @@ fn run() -> Result<(), String> {
 
     let start = std::time::Instant::now();
     let mut frame_buf = vec![0u32; screen::WIDTH * screen::HEIGHT];
+    for (f, path) in &shots {
+        if *f >= cfg.trace.frames {
+            return Err(format!(
+                "--shot {f}:{} is at or past the {} frames traced",
+                path.display(),
+                cfg.trace.frames
+            ));
+        }
+    }
+    let mut shot_errors = Vec::new();
     let traced = tracer::run(&cfg.trace, &inputs, |frame, z| {
         for (f, path) in &shots {
             if *f == frame {
                 screen::render(z, &mut frame_buf);
-                let _ = std::fs::write(path, png::encode(&frame_buf, screen::WIDTH, screen::HEIGHT));
+                let png = png::encode(&frame_buf, screen::WIDTH, screen::HEIGHT);
+                if let Err(e) = std::fs::write(path, png) {
+                    shot_errors.push(format!("{}: {e}", path.display()));
+                }
             }
         }
     })?;
+    if let Some(e) = shot_errors.first() {
+        return Err(e.clone());
+    }
     println!("traced {} frames in {:.2?}", cfg.trace.frames, start.elapsed());
     let z = &traced.machine;
     println!(
@@ -90,16 +105,6 @@ fn run() -> Result<(), String> {
         let text = zx_recomp::listing::listing(&analysis, &traced.trace, 0x5b00, 0xffff);
         std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
         println!("wrote {}", path.display());
-    }
-    if let Some(out) = out {
-        let meta = codegen::Meta {
-            name: &cfg.game.name,
-            snapshot_sha1: &inputs.snapshot_sha1,
-            rom_sha1: inputs.rom_sha1.as_deref(),
-        };
-        let src = codegen::generate(&meta, &analysis);
-        std::fs::write(&out, src).map_err(|e| format!("{}: {e}", out.display()))?;
-        println!("wrote {}", out.display());
     }
     Ok(())
 }

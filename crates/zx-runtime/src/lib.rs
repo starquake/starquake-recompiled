@@ -31,8 +31,6 @@ impl Zx {
     /// Runs one 50 Hz frame.
     pub fn run_frame(&mut self, code: BlockFn, misses: &mut Misses) {
         self.int_pending = true;
-        self.ear_frame_start = self.ear;
-        self.beeper_edges.clear();
 
         let mut in_fallback = false;
         while self.t < FRAME_T {
@@ -95,8 +93,6 @@ impl Zx {
                     return false;
                 }
                 self.int_pending = true;
-                self.ear_frame_start = self.ear;
-                self.beeper_edges.clear();
             }
             if self.int_pending {
                 if self.iff1 && !self.ei_delay {

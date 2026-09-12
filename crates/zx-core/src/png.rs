@@ -31,6 +31,14 @@ fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
 
 /// Encodes a 0RGB pixel buffer as a PNG.
 pub fn encode(pixels: &[u32], width: usize, height: usize) -> Vec<u8> {
+    // `chunks` panics on a zero width, and a buffer shorter than the image
+    // would emit fewer rows than the header promises.
+    assert!(width > 0 && height > 0, "a {width}x{height} image has no pixels");
+    assert!(
+        pixels.len() >= width * height,
+        "{} pixels is short of the {width}x{height} declared",
+        pixels.len()
+    );
     let mut raw = Vec::with_capacity((width * 3 + 1) * height);
     for row in pixels.chunks(width).take(height) {
         raw.push(0); // filter: none

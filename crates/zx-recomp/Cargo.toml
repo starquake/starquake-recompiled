@@ -1,6 +1,6 @@
 [package]
 name = "zx-recomp"
-description = "Static recompiler from ZX Spectrum 48K Z80 code to Rust"
+description = "Tracing and disassembly tool for reverse-engineering ZX Spectrum 48K games"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

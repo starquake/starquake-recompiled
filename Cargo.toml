@@ -18,12 +18,12 @@ zx-core = { path = "crates/zx-core" }
 zx-runtime = { path = "crates/zx-runtime" }
 zx-recomp = { path = "crates/zx-recomp" }
 
-# Recompiled code is large and branchy; unoptimised it runs far slower than
-# the original machine, so even dev builds get optimisation.
+# The reference interpreter runs the original for the differential checks;
+# unoptimised it is far slower than the machine it models, so even dev builds
+# get some optimisation.
 [profile.dev]
 opt-level = 1
 
-# build.rs runs the recompiler, which traces the game in the interpreter.
 [profile.dev.build-override]
 opt-level = 3
 

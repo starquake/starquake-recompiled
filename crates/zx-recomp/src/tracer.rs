@@ -57,7 +57,7 @@ pub fn run(
     for frame in 0..cfg.frames {
         z.release_all_keys();
         for (at, hold, keys) in &scripted {
-            if frame >= *at && frame < at + hold {
+            if frame >= *at && frame < at.saturating_add(*hold) {
                 for &k in keys {
                     z.set_key(k, true);
                 }
