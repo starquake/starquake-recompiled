@@ -45,10 +45,6 @@ struct FrontHost {
     wait: Vec<u32>,
     frame_start: Option<Instant>,
     bench: bool,
-    /// Published-frame counter, for `SQ_TRACE`.
-    published: u32,
-    since: Instant,
-    trace: bool,
 }
 
 impl FrontHost {
@@ -98,13 +94,6 @@ impl Host for FrontHost {
         self.frame_start = Some(Instant::now());
         let busy = self.beeper.effects(&game.assets.ram, &game.effects);
         let frames = 1 + busy / starquake::sound::FRAME_T;
-        if self.trace && frames > 3 {
-            eprintln!(
-                "stall: {frames} frames ({}ms) of blocking sound, effects {:?}",
-                frames * 20,
-                game.effects
-            );
-        }
         let rest = starquake::sound::FRAME_T - busy % starquake::sound::FRAME_T;
         if game.music.is_empty() {
             self.beeper.tone(game.tone, rest);
@@ -120,12 +109,6 @@ impl Host for FrontHost {
             screen.2 = self.frame;
         }
         self.frame += frames as u64;
-        self.published += 1;
-        if self.trace && self.since.elapsed() >= Duration::from_secs(1) {
-            eprintln!("game: {} frames published/s", self.published);
-            self.published = 0;
-            self.since = Instant::now();
-        }
 
         let t_work = Instant::now();
         // Pace by the clock, at the Spectrum's own frame rate. Waiting on the
@@ -204,9 +187,6 @@ fn game_thread(
         wait: Vec::new(),
         frame_start: None,
         bench: std::env::var_os("SQ_BENCH").is_some(),
-        published: 0,
-        since: Instant::now(),
-        trace: std::env::var_os("SQ_TRACE").is_some(),
     };
     // What the tape showed while it loaded, once, before the game proper.
     game.loading_screen(&mut host);
@@ -216,9 +196,6 @@ fn game_thread(
         match game.menu(&mut host) {
             starquake::menu::Start::Quit => std::process::exit(0),
             starquake::menu::Start::Play(method) => {
-                if std::env::var_os("SQ_TRACE").is_some() {
-                    eprintln!("menu: starting with control method {method}");
-                }
                 game.new_game(method);
                 game.intro(&mut host);
                 game.play(&mut host);

@@ -71,10 +71,6 @@ struct App {
     error: Option<String>,
     /// The game frame last painted, so the same one is not painted twice.
     shown: u64,
-    /// Repaint counter, for `SQ_TRACE`.
-    redraws: u32,
-    since: std::time::Instant,
-    trace: bool,
 }
 
 impl ApplicationHandler for App {
@@ -114,12 +110,6 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                if self.trace {
-                    eprintln!(
-                        "key: {:?} {:?} repeat={}",
-                        event.physical_key, event.state, event.repeat
-                    );
-                }
                 if let PhysicalKey::Code(code) = event.physical_key {
                     if !event.repeat {
                         let mut input = self.shared.input.lock().unwrap();
@@ -137,12 +127,6 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::RedrawRequested => {
-                self.redraws += 1;
-                if self.trace && self.since.elapsed() >= std::time::Duration::from_secs(1) {
-                    eprintln!("window: {} repaints/s", self.redraws);
-                    self.redraws = 0;
-                    self.since = std::time::Instant::now();
-                }
                 if let Some(p) = &mut self.pixels {
                     {
                         let screen = self.shared.screen.lock().unwrap();
@@ -186,9 +170,6 @@ pub fn run(shared: Arc<Shared>) -> Result<(), String> {
         pixels: None,
         error: None,
         shown: u64::MAX,
-        redraws: 0,
-        since: std::time::Instant::now(),
-        trace: std::env::var_os("SQ_TRACE").is_some(),
     };
     event_loop.run_app(&mut app).map_err(|e| e.to_string())?;
     match app.error {

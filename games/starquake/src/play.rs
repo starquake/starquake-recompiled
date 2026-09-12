@@ -117,18 +117,12 @@ impl Game {
             let input = self.input;
             let mut event = self.play_logic(&input);
             if event == FrameEvent::Pause {
-                if std::env::var_os("SQ_TRACE").is_some() {
-                    eprintln!("stall: paused (waiting for the pause key to be let go, then a control)");
-                }
                 // Wait for the pause key to be let go, then for any control.
                 while self.controls.pause_pressed(&self.input) {
                     self.sync(host);
                 }
                 while self.controls.read(&self.input) == 0 {
                     self.sync(host);
-                }
-                if std::env::var_os("SQ_TRACE").is_some() {
-                    eprintln!("stall: unpaused");
                 }
                 let input = self.input;
                 event = self.play_logic(&input);
