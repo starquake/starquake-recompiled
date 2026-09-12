@@ -6,6 +6,7 @@ pub mod decode;
 pub mod png;
 pub mod sha1;
 pub mod snapshot;
+pub mod bus;
 pub mod screen;
 pub mod timing;
 pub mod tape;

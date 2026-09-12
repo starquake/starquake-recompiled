@@ -4,6 +4,8 @@
 //! Recompiled code manipulates this struct directly (`z.a = z.read(z.hl());`),
 //! so everything the generated code touches is public and kept flat.
 
+
+
 use zx_core::{BlockOp, Cond, Reg8, Reg16, Snapshot};
 
 pub const CF: u8 = 0x01;
@@ -319,6 +321,13 @@ impl Zx {
             Cond::P => self.f & SF == 0,
             Cond::M => self.f & SF != 0,
         }
+    }
+
+    // --- ULA contention -----------------------------------------------------
+
+    /// Charges one machine cycle, ULA delay included.
+    pub fn charge(&mut self, c: crate::bus::Cycle) {
+        zx_core::bus::charge(&mut self.t, c);
     }
 
     // --- memory -------------------------------------------------------------

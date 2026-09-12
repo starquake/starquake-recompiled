@@ -45,7 +45,7 @@ const GOODBYE_TILE: u8 = 0x56;
 /// Turns a real Spectrum manages in a second, for each of the two loops that
 /// pace themselves by how fast they redraw. Both are measured from the
 /// original in the interpreter, and `sq-verify` checks the first against it.
-pub const TURNS_PER_SECOND: u32 = 13;
+pub const TURNS_PER_SECOND: u32 = 12;
 pub const DEFINE_TURNS_PER_SECOND: u32 = 344;
 
 /// How many keys the define-keys screen shows, and how many are defined.
