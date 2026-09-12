@@ -229,6 +229,8 @@ impl Game {
             line[5..8].copy_from_slice(&entry[0..3]);
             line[9..15].copy_from_slice(&entry[3..9]);
             let visited = entry[9];
+            // Each line comes up in a new colour.
+            self.random_ink();
             self.print_bytes(&line[..16]);
             self.print_number(visited as u16);
             self.print_bytes(b"/");

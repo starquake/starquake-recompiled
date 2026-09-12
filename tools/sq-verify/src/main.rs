@@ -542,7 +542,7 @@ fn check_blob(env: &Env, states: &[Zx]) -> bool {
         let mut z = state.clone();
         let mut g = env.game(&z);
         let input = starquake::controls::Input { keys: z.keys, kempston: z.kempston };
-        let done = z.call_until_any(0xC552, &[0xC350, 0xA412, 0x5E29], 5_000_000);
+        let (done, sounds) = run_noting_sounds(&mut z, 0xC552, &[0xC350, 0xA412, 0x5E29], 5_000_000);
         let orig = match z.pc {
             0xC350 => Outcome::Died(z.a),
             0xA412 => Outcome::Modal(starquake::blob::Modal::SecurityDoor),
@@ -557,6 +557,9 @@ fn check_blob(env: &Env, states: &[Zx]) -> bool {
             "scratch", "pickups", "misc",
         ];
         let mut d = diff(&env.game(&z), &g, &parts);
+        if sounds != g.effects {
+            d.push(format!("sounds: orig {sounds:02x?} new {:02x?}", g.effects));
+        }
         let same = match (orig, new) {
             (Outcome::Modal(_), Outcome::Modal(_)) => true,
             (a, b) => a == b,
@@ -791,6 +794,62 @@ fn probe(env: &Env) {
             931 + 13 * hl.count_ones()
         );
     }
+}
+
+/// Runs the original from `start` exactly as [`Zx::call_until_any`] would,
+/// but also notes every call to the blocking sound routine and the effect it
+/// was asked for. Those calls leave almost no trace in memory, so comparing
+/// the sequence is the only way to know the rewrite asks for the same sounds
+/// in the same places.
+fn run_noting_sounds(z: &mut Zx, start: u16, stops: &[u16], max: u64) -> (bool, Vec<u8>) {
+    const SENTINEL: u16 = 0x0000;
+    const SOUND: u16 = 0xD7C0;
+    let sp = z.sp;
+    z.sp = z.sp.wrapping_sub(2);
+    let at = z.sp;
+    z.write16(at, SENTINEL);
+    z.pc = start;
+    let mut ids = Vec::new();
+    for _ in 0..max {
+        if z.pc == SOUND {
+            ids.push(z.a);
+        }
+        zx_runtime::interp::step(z);
+        if (z.pc == SENTINEL && z.sp == sp) || stops.contains(&z.pc) {
+            return (true, ids);
+        }
+    }
+    (false, ids)
+}
+
+/// The screens drawn in one pass: the intro, and the high-score table. Both
+/// are stopped where the original starts playing its tune.
+fn check_screens(env: &Env) -> bool {
+    let base = new_game_machine(env);
+    let parts = ["display", "printer", "rng", "restore"];
+    let mut failures = Vec::new();
+    let cases = 2;
+
+    for (name, start, draw) in [
+        ("intro (666D)", 0x666Du16, 0usize),
+        ("core of heroes (654B)", 0x654B, 1),
+    ] {
+        let mut z = base.clone();
+        let mut g = env.game(&base);
+        if !z.call_until(start, Some(0x6600), 20_000_000) {
+            failures.push((name.to_string(), vec!["original did not finish".into()]));
+            continue;
+        }
+        match draw {
+            0 => g.intro_screen(),
+            _ => g.core_of_heroes_screen(),
+        }
+        let d = diff(&env.game(&z), &g, &parts);
+        if !d.is_empty() {
+            failures.push((name.to_string(), d));
+        }
+    }
+    report("screens", &failures, cases)
 }
 
 /// The menu screens, each drawn once: the original is stopped as soon as it
@@ -1320,6 +1379,33 @@ fn tape(env: &Env, dir: &std::path::Path) {
     }
 }
 
+/// How fast the original's menu loop actually goes round. The loop has no
+/// wait in it, so its speed is however long one redraw of the options takes,
+/// and that is what sets how fast the highlight flashes.
+fn menu_rate(env: &Env) {
+    let mut z = new_game_machine(env);
+    // Drop straight into the loop, past the title screen and its tune.
+    z.sp = z.sp.wrapping_sub(2);
+    let at = z.sp;
+    z.write16(at, 0);
+    z.pc = 0x5FF4;
+    z.t = 0;
+    let second: u32 = 50 * 69888;
+    let mut turns = 0u64;
+    while z.t < second {
+        zx_runtime::interp::step(&mut z);
+        if z.pc == 0x5FF4 {
+            turns += 1;
+        }
+    }
+    println!("original menu loop: {turns} turns per second");
+    println!("  highlight flips every 2 turns: {:.1} Hz", turns as f64 / 2.0);
+    println!("  the rewrite runs 1 turn per frame: 50 turns/s, 25.0 Hz");
+    if turns > 0 {
+        println!("  to match, advance it every {:.1} frames", 50.0 / turns as f64);
+    }
+}
+
 fn main() {
     let mut args = std::env::args().skip(1).collect::<Vec<_>>();
     let dir = match args.iter().position(|a| a == "--assets") {
@@ -1338,6 +1424,11 @@ fn main() {
 
     if args.first().map(String::as_str) == Some("effects") {
         effects(&env);
+        return;
+    }
+
+    if args.first().map(String::as_str) == Some("menu") {
+        menu_rate(&env);
         return;
     }
 
@@ -1374,6 +1465,7 @@ fn main() {
     ok &= check_room_entry(&env);
     ok &= check_new_game(&env);
     ok &= check_menu(&env);
+    ok &= check_screens(&env);
     ok &= check_core_room(&env);
     ok &= check_music(&env);
 
