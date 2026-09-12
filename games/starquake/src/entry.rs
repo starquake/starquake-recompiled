@@ -6,8 +6,6 @@ use crate::game::Game;
 
 /// Why the current room was entered.
 pub mod reason {
-    /// Walked in, or a new game.
-    pub const NORMAL: u8 = 0;
     /// Restarting the room after losing a life.
     pub const RESTART: u8 = 1;
     /// Coming back without re-rolling enemies.

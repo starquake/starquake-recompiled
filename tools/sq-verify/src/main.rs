@@ -780,7 +780,7 @@ fn check_core_room(env: &Env) -> bool {
                 sounds.push(z.a);
             }
         };
-        if !z.call_until_any_with(0xA426, &[0xA6C1], 20_000_000, |z| watch(z, &mut sounds)) {
+        if !z.call_until_any_with(0xA426, &[0xA6C1], 20_000_000, |z| watch(z, &mut sounds)).0 {
             let at = format!("original did not reach the core room (pc {:04x})", z.pc);
             failures.push((case, vec![at]));
             continue;
@@ -836,11 +836,12 @@ fn check_music(env: &Env) -> bool {
         }
         z.t = 0;
         let case = format!("tune {tune} at {addr:04x}");
-        if !z.call(STUB, 2_000_000_000) {
+        let (done, elapsed) = z.call_until_any_timed(STUB, &[], 2_000_000_000);
+        if !done {
             failures.push((case, vec!["original did not finish".into()]));
             continue;
         }
-        let original = z.t.saturating_sub(STUB_T);
+        let original = elapsed.saturating_sub(STUB_T);
         let (edges, total) = starquake::music::tune(&env.assets.ram, addr as usize);
         let seconds = total as f64 / (starquake::host::FRAMES_PER_SECOND * starquake::sound::FRAME_T) as f64;
         println!("  tune {tune}: {seconds:.1}s, {} speaker changes", edges.len());
@@ -902,7 +903,7 @@ fn probe(env: &Env) {
 fn run_noting_sounds(z: &mut Zx, start: u16, stops: &[u16], max: u64) -> (bool, Vec<u8>) {
     const SOUND: u16 = 0xD7C0;
     let mut ids = Vec::new();
-    let done = z.call_until_any_with(start, stops, max, |z| {
+    let (done, _) = z.call_until_any_with(start, stops, max, |z| {
         if z.pc == SOUND {
             ids.push(z.a);
         }

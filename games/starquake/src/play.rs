@@ -109,6 +109,24 @@ impl Game {
         self.play_logic(input)
     }
 
+    /// The whole program: what the tape showed while it loaded, once, then
+    /// the title screen, a game and the scores, over and over. Returns when
+    /// the player quits from the menu.
+    pub fn run(&mut self, host: &mut dyn Host) {
+        self.loading_screen(host);
+        loop {
+            match self.menu(host) {
+                crate::menu::Start::Quit => return,
+                crate::menu::Start::Play(method) => {
+                    self.new_game(method);
+                    self.intro(host);
+                    self.play(host);
+                    self.game_over(host);
+                }
+            }
+        }
+    }
+
     /// Plays from entering the current room until the game ends.
     pub fn play(&mut self, host: &mut dyn Host) {
         self.enter_room();

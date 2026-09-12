@@ -145,7 +145,8 @@ impl Game {
                             }
                         }
                     }
-                    match key_code(&self.assets.ram, &self.input) {
+                    let key = key_code(&self.assets.ram, &self.input);
+                    match key {
                         b'Q' => {
                             if self.quit_confirmed(host) {
                                 return Start::Quit;
@@ -158,10 +159,10 @@ impl Game {
                             break 'menu;
                         }
                         b'0' => return Start::Play(self.control_method),
-                        k @ b'1'..=b'5' => {
+                        b'1'..=b'5' => {
                             // The original refuses Kempston when it cannot find
                             // the interface; here the arrow keys always are one.
-                            let method = k - b'0';
+                            let method = key - b'0';
                             if self.control_method != method {
                                 self.control_method = method;
                                 self.effects.push(0x0C);

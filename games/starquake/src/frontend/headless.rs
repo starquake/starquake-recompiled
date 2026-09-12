@@ -8,7 +8,7 @@ use starquake::Game;
 use starquake::assets::Assets;
 use starquake::controls::Input;
 use starquake::host::Host;
-use starquake::sound::{FRAME_T, beep};
+use starquake::sound::FRAME_T;
 
 use super::video::{FULL_H, FULL_W, draw};
 
@@ -46,9 +46,9 @@ impl Headless {
 
 impl Host for Headless {
     fn frame(&mut self, game: &Game) -> (Input, u32) {
-        let busy: u32 = game.effects.iter().map(|&id| beep(&game.assets.ram, id).1).sum();
+        let busy: u32 = game.effects.iter().map(|&id| game.assets.beep(id).1).sum();
         for &id in &game.effects {
-            let d = beep(&game.assets.ram, id).1;
+            let d = game.assets.beep(id).1;
             self.tally[(id & 0x3F) as usize] += 1;
             self.lost[(id & 0x3F) as usize] += (d / FRAME_T) as u64;
         }
@@ -71,16 +71,7 @@ impl Host for Headless {
             println!("  total {} frames lost of {} ({:.0}%)", total, self.frame, 100.0 * total as f64 / self.frame as f64);
             std::process::exit(0);
         }
-        // Get past the loading screen, pick the joystick, then start the
-        // game. Afterwards "0" doubles as the any-key waiting screens want.
-        self.input.keys = [0xFF; 8];
-        if (20..40).contains(&self.frame) {
-            self.input.keys[4] = !0x01;
-        } else if (60..80).contains(&self.frame) {
-            self.input.keys[3] = !0x01;
-        } else if self.frame >= 110 && self.frame % 8 < 4 {
-            self.input.keys[4] = !0x01;
-        }
+        self.input.keys = super::scripted_keys(self.frame);
         if self.frame % 12 < frames as u64 {
             // Mostly walking and jumping about, with some firing.
             self.input.kempston = match self.random() % 8 {
@@ -115,17 +106,6 @@ pub fn run(path: &Path, frames: u64, dir: &Path) -> Result<(), String> {
         tally: [0; 64],
         lost: [0; 64],
     };
-    game.loading_screen(&mut host);
-    loop {
-        match game.menu(&mut host) {
-            starquake::menu::Start::Quit => return Ok(()),
-            starquake::menu::Start::Play(method) => {
-                game.new_game(method);
-                game.intro(&mut host);
-                game.play(&mut host);
-                println!("game over at frame {}: score {:?}", host.frame, game.status.score);
-                game.game_over(&mut host);
-            }
-        }
-    }
+    game.run(&mut host);
+    Ok(())
 }

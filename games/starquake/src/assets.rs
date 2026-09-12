@@ -65,6 +65,10 @@ fn glyphs<const N: usize>(mem: &[u8], start: usize) -> [[u8; 8]; N] {
 
 pub const ROOM_COUNT: usize = 512;
 
+/// Blocking sound effects the game can ask for. Past this the parameter
+/// table holds whatever follows it, and the effect never ends.
+pub const EFFECT_COUNT: usize = 0x16;
+
 /// A tile: up to 8 × 6 character cells, each present cell with its own
 /// bitmap and attribute.
 #[derive(Clone, Debug)]
@@ -97,20 +101,17 @@ pub struct Assets {
     /// Per-tile behaviour byte (colour changes and room objects).
     pub tile_info: [u8; 256],
     pub tiles: Vec<Tile>,
+    /// Every blocking sound effect, simulated once: where the speaker
+    /// changes, and how long the whole thing takes. Its inputs never change
+    /// for the life of the process, and a core piece going into the planet
+    /// queues 25 effects in a single frame.
+    beeps: Vec<(Vec<(u32, bool)>, u32)>,
     /// The picture the tape showed while the game loaded, if it came from
     /// one. Not drawn by the program itself.
     pub loading_screen: Option<Vec<u8>>,
 }
 
 impl Assets {
-    /// Loads and verifies the player's own copy of the game.
-    pub fn load(path: &Path) -> Result<Assets, String> {
-        let (memory, loading_screen) = read_game(path)?;
-        let mut assets = Assets::from_memory(&memory);
-        assets.loading_screen = loading_screen;
-        Ok(assets)
-    }
-
     /// Parses the tables out of a 64K memory image of the original program.
     pub fn from_memory(mem: &[u8]) -> Assets {
         let word = |a: usize| mem[a] as usize | (mem[a + 1] as usize) << 8;
@@ -148,7 +149,17 @@ impl Assets {
             big_blocks,
             tile_info,
             tiles,
+            beeps: (0..EFFECT_COUNT).map(|id| crate::sound::beep(mem, id as u8)).collect(),
             loading_screen: None,
+        }
+    }
+
+    /// A blocking sound effect: its speaker changes and its length. Ids the
+    /// game never asks for are silent and instant rather than a panic.
+    pub fn beep(&self, id: u8) -> (&[(u32, bool)], u32) {
+        match self.beeps.get(id as usize) {
+            Some((edges, t)) => (edges, *t),
+            None => (&[], 0),
         }
     }
 
