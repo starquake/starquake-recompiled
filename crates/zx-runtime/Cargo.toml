@@ -4,6 +4,7 @@ description = "Reference ZX Spectrum 48K machine (Z80 interpreter, ULA, tracing)
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 zx-core.workspace = true

@@ -28,7 +28,11 @@ impl Rng {
             return;
         }
         self.b_countdown = 5;
-        self.b = self.b.wrapping_mul(17).wrapping_add(0xC5).wrapping_add(self.c);
+        self.b = self
+            .b
+            .wrapping_mul(17)
+            .wrapping_add(0xC5)
+            .wrapping_add(self.c);
 
         self.c_countdown = self.c_countdown.wrapping_sub(1);
         if self.c_countdown != 0 {

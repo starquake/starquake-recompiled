@@ -38,17 +38,29 @@ pub struct Cycle {
 impl Cycle {
     #[must_use]
     pub const fn read(at: u16) -> Cycle {
-        Cycle { at, len: 3, kind: Kind::Read }
+        Cycle {
+            at,
+            len: 3,
+            kind: Kind::Read,
+        }
     }
 
     #[must_use]
     pub const fn write(at: u16) -> Cycle {
-        Cycle { at, len: 3, kind: Kind::Write }
+        Cycle {
+            at,
+            len: 3,
+            kind: Kind::Write,
+        }
     }
 
     #[must_use]
     pub const fn fetch(at: u16, len: u32) -> Cycle {
-        Cycle { at, len, kind: Kind::Read }
+        Cycle {
+            at,
+            len,
+            kind: Kind::Read,
+        }
     }
 }
 
@@ -68,11 +80,22 @@ impl Cycles {
 
     #[must_use]
     pub fn new() -> Cycles {
-        Cycles { buf: [Cycle { at: 0, len: 0, kind: Kind::Idle }; Cycles::MAX], len: 0 }
+        Cycles {
+            buf: [Cycle {
+                at: 0,
+                len: 0,
+                kind: Kind::Idle,
+            }; Cycles::MAX],
+            len: 0,
+        }
     }
 
     pub fn push(&mut self, c: Cycle) {
-        debug_assert!(self.len < Cycles::MAX, "an instruction with more than {} cycles", Cycles::MAX);
+        debug_assert!(
+            self.len < Cycles::MAX,
+            "an instruction with more than {} cycles",
+            Cycles::MAX
+        );
         if self.len < Cycles::MAX {
             self.buf[self.len] = c;
             self.len += 1;
@@ -82,7 +105,11 @@ impl Cycles {
     /// `n` one-T-state cycles with `at` on the address bus.
     pub fn idle(&mut self, at: u16, n: u32) {
         for _ in 0..n {
-            self.push(Cycle { at, len: 1, kind: Kind::Idle });
+            self.push(Cycle {
+                at,
+                len: 1,
+                kind: Kind::Idle,
+            });
         }
     }
 }

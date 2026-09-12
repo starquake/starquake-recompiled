@@ -129,7 +129,10 @@ pub fn load_z80(data: &[u8]) -> Result<Snapshot, String> {
             s.ram.extend_from_slice(&body[..body.len().min(0xC000)]);
         }
         if s.ram.len() != 0xC000 {
-            return Err(format!("v1 snapshot holds {} bytes, expected 49152", s.ram.len()));
+            return Err(format!(
+                "v1 snapshot holds {} bytes, expected 49152",
+                s.ram.len()
+            ));
         }
         return Ok(s);
     }
@@ -152,7 +155,9 @@ pub fn load_z80(data: &[u8]) -> Result<Snapshot, String> {
         _ => hw <= 1 || hw == 3,
     };
     if !is_48k {
-        return Err(format!("snapshot is for hardware mode {hw}; only 48K snapshots are supported"));
+        return Err(format!(
+            "snapshot is for hardware mode {hw}; only 48K snapshots are supported"
+        ));
     }
 
     s.ram = vec![0; 0xC000];
@@ -161,7 +166,11 @@ pub fn load_z80(data: &[u8]) -> Result<Snapshot, String> {
         let len = w(pos) as usize;
         let page = data[pos + 2];
         pos += 3;
-        let (raw, compressed) = if len == 0xFFFF { (0x4000, false) } else { (len, true) };
+        let (raw, compressed) = if len == 0xFFFF {
+            (0x4000, false)
+        } else {
+            (len, true)
+        };
         let src = data.get(pos..pos + raw).ok_or("truncated memory block")?;
         pos += raw;
         let offset = match page {
@@ -173,13 +182,18 @@ pub fn load_z80(data: &[u8]) -> Result<Snapshot, String> {
         let mut block = Vec::with_capacity(0x4000);
         if compressed {
             if !decompress(src, &mut block, 0x4000) {
-                return Err(format!("memory page {page} is malformed or overruns 16384 bytes"));
+                return Err(format!(
+                    "memory page {page} is malformed or overruns 16384 bytes"
+                ));
             }
         } else {
             block.extend_from_slice(src);
         }
         if block.len() != 0x4000 {
-            return Err(format!("memory page {page} decompressed to {} bytes", block.len()));
+            return Err(format!(
+                "memory page {page} decompressed to {} bytes",
+                block.len()
+            ));
         }
         s.ram[offset..offset + 0x4000].copy_from_slice(&block);
     }

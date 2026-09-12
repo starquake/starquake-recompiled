@@ -124,7 +124,8 @@ pub fn cycles(z: &Zx, d: &Decoded, pc: u16) -> Cycles {
                 }
             } else if let Op8::Imm(_) = src {
                 out.push(read(operands));
-            } else if matches!(dst, Op8::Mem(Addr::Abs(_))) || matches!(src, Op8::Mem(Addr::Abs(_))) {
+            } else if matches!(dst, Op8::Mem(Addr::Abs(_))) || matches!(src, Op8::Mem(Addr::Abs(_)))
+            {
                 // `LD (nn),A` and `LD A,(nn)` read the address first.
                 out.push(read(operands));
                 out.push(read(operands.wrapping_add(1)));
@@ -247,14 +248,30 @@ pub fn cycles(z: &Zx, d: &Decoded, pc: u16) -> Cycles {
         // --- ports ----------------------------------------------------------
         InA(n) => {
             out.push(read(operands));
-            out.push(Cycle { at: (z.a as u16) << 8 | n as u16, len: 4, kind: Kind::PortRead });
+            out.push(Cycle {
+                at: (z.a as u16) << 8 | n as u16,
+                len: 4,
+                kind: Kind::PortRead,
+            });
         }
         OutA(n) => {
             out.push(read(operands));
-            out.push(Cycle { at: (z.a as u16) << 8 | n as u16, len: 4, kind: Kind::PortWrite });
+            out.push(Cycle {
+                at: (z.a as u16) << 8 | n as u16,
+                len: 4,
+                kind: Kind::PortWrite,
+            });
         }
-        InC(_) => out.push(Cycle { at: z.bc(), len: 4, kind: Kind::PortRead }),
-        OutC(_) => out.push(Cycle { at: z.bc(), len: 4, kind: Kind::PortWrite }),
+        InC(_) => out.push(Cycle {
+            at: z.bc(),
+            len: 4,
+            kind: Kind::PortRead,
+        }),
+        OutC(_) => out.push(Cycle {
+            at: z.bc(),
+            len: 4,
+            kind: Kind::PortWrite,
+        }),
 
         // --- block instructions ---------------------------------------------
         Block(op) => {
@@ -277,7 +294,11 @@ pub fn cycles(z: &Zx, d: &Decoded, pc: u16) -> Cycles {
                 }
                 BlockOp::Ini | BlockOp::Ind | BlockOp::Inir | BlockOp::Indr => {
                     idle(&mut out, z.ir(d.m1), 1);
-                    out.push(Cycle { at: bc, len: 4, kind: Kind::PortRead });
+                    out.push(Cycle {
+                        at: bc,
+                        len: 4,
+                        kind: Kind::PortRead,
+                    });
                     out.push(write(hl));
                     if op.repeats() && z.b.wrapping_sub(1) != 0 {
                         idle(&mut out, hl, 5);
@@ -289,7 +310,11 @@ pub fn cycles(z: &Zx, d: &Decoded, pc: u16) -> Cycles {
                     let bc = (z.b.wrapping_sub(1) as u16) << 8 | z.c as u16;
                     idle(&mut out, z.ir(d.m1), 1);
                     out.push(read(hl));
-                    out.push(Cycle { at: bc, len: 4, kind: Kind::PortWrite });
+                    out.push(Cycle {
+                        at: bc,
+                        len: 4,
+                        kind: Kind::PortWrite,
+                    });
                     if op.repeats() && z.b.wrapping_sub(1) != 0 {
                         idle(&mut out, bc, 5);
                     }

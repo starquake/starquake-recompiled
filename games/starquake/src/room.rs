@@ -96,15 +96,19 @@ impl Game {
     fn record_restore(&mut self, attr_offset: usize, attr: u8) {
         let addr = (0x4000 + attr_offset) as u16;
         let p = self.restore_ptr;
-        for (i, v) in [addr as u8, (addr >> 8) as u8, attr].into_iter().enumerate() {
+        for (i, v) in [addr as u8, (addr >> 8) as u8, attr]
+            .into_iter()
+            .enumerate()
+        {
             let a = p.wrapping_add(i as u16);
             // Below the list the original writes into ROM, above it into
             // system variables the rewrite does not have: either way the
             // record is lost.
             if let Some(slot) = a.checked_sub(RESTORE_START).map(|o| o as usize)
-                && let Some(byte) = self.restore_mem.get_mut(slot) {
-                    *byte = v;
-                }
+                && let Some(byte) = self.restore_mem.get_mut(slot)
+            {
+                *byte = v;
+            }
         }
         self.restore_ptr = p.wrapping_add(3);
     }
@@ -113,12 +117,17 @@ impl Game {
     /// cells have attribute `attr`. As in the original, the list end then
     /// moves back by eight records rather than four.
     pub fn remove_restore_block(&mut self, row: u8, col: u8, attr: u8) {
-        let target = (0x4000 + crate::display::attr_offset_for(crate::display::cell_offset(row, col))) as u16;
+        let target = (0x4000
+            + crate::display::attr_offset_for(crate::display::cell_offset(row, col)))
+            as u16;
         let at = |a: u16| (a.wrapping_sub(RESTORE_START) as usize).min(RESTORE_LEN - 1);
         let mut hl: u16 = 0x5BBE;
         for _ in 0..0x35 {
             let m = &self.restore_mem;
-            if m[at(hl)] == attr && m[at(hl - 1)] == (target >> 8) as u8 && m[at(hl - 2)] == target as u8 {
+            if m[at(hl)] == attr
+                && m[at(hl - 1)] == (target >> 8) as u8
+                && m[at(hl - 2)] == target as u8
+            {
                 let entry = hl - 2;
                 for i in 0..(0x5BDF - entry) {
                     self.restore_mem[at(entry + i)] = self.restore_mem[at(entry + 12 + i)];
@@ -157,7 +166,9 @@ impl Game {
                     continue;
                 }
                 let cell = cells.next().expect("mask and cell count agree");
-                let offset = self.display.put_cell(row + dy as u8, col.wrapping_add(dx), &cell.pixels);
+                let offset =
+                    self.display
+                        .put_cell(row + dy as u8, col.wrapping_add(dx), &cell.pixels);
                 let attr = match cell.attr & 0x3F {
                     0x36 => (cell.attr & 0xC0) | self.colour,
                     0x00 => (cell.attr & 0xF8) | alt_ink,
@@ -197,7 +208,12 @@ impl Game {
 
     /// XORs a 2 × 2 character graphic onto the screen at (`row`, `col`).
     pub fn draw_block2x2(&mut self, graphic: &[u8; 32], row: u8, col: u8, attr: u8) {
-        let cells = [(row, col), (row, col + 1), (row + 1, col), (row + 1, col + 1)];
+        let cells = [
+            (row, col),
+            (row, col + 1),
+            (row + 1, col),
+            (row + 1, col + 1),
+        ];
         for (k, (r, c)) in cells.into_iter().enumerate() {
             self.xor_cell(r, c, &graphic[k * 8..k * 8 + 8], attr);
         }
@@ -264,7 +280,12 @@ impl Game {
 
     fn draw_big_block(&mut self, block: u8, row: u8, col: u8) {
         let tiles = self.assets.big_blocks[block as usize];
-        let slots = [(row + 3, col + 4), (row + 3, col), (row, col + 4), (row, col)];
+        let slots = [
+            (row + 3, col + 4),
+            (row + 3, col),
+            (row, col + 4),
+            (row, col),
+        ];
         for (tile, (r, c)) in tiles.into_iter().zip(slots) {
             self.tile_info(self.assets.tile_info[tile as usize], r, c);
             self.rng.step();
@@ -278,7 +299,11 @@ impl Game {
             let colour = loop {
                 self.rng.step();
                 // Colours 2, 3, 5, 6 (and 7 for the last), never 4 (green).
-                let n = if i < 3 { self.rng.lo() & 3 } else { (self.rng.hi() & 0x3F) % 5 };
+                let n = if i < 3 {
+                    self.rng.lo() & 3
+                } else {
+                    (self.rng.hi() & 0x3F) % 5
+                };
                 let c = if n >= 2 { n + 1 } else { n } + 2;
                 if !self.room_colours.contains(&c) {
                     break c;

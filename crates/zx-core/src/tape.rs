@@ -66,7 +66,9 @@ pub fn load_tap(bytes: &[u8]) -> Result<Tape, String> {
                 });
             }
             DATA => {
-                let Some((start, length)) = pending.take() else { continue };
+                let Some((start, length)) = pending.take() else {
+                    continue;
+                };
                 let data = &block[1..len - 1];
                 // The last byte is a checksum: the flag and every data byte
                 // XORed together. A bit-flipped tape used to load in silence.
@@ -105,5 +107,8 @@ pub fn load_tap(bytes: &[u8]) -> Result<Tape, String> {
             format!("the tape's {blocks} code block(s) placed nothing in RAM")
         });
     }
-    Ok(Tape { ram, loading_screen })
+    Ok(Tape {
+        ram,
+        loading_screen,
+    })
 }

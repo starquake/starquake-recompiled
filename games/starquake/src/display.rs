@@ -78,6 +78,14 @@ impl Display {
 
     /// Renders to 0RGB pixels, `WIDTH` × `HEIGHT`, with no border.
     pub fn render(&self, flash_phase: bool, out: &mut [u32]) {
-        zx_core::screen::render(&self.mem, &self.mem[BITMAP_LEN..], flash_phase, out, WIDTH, 0, |c| c);
+        zx_core::screen::render(
+            &self.mem,
+            &self.mem[BITMAP_LEN..],
+            flash_phase,
+            out,
+            WIDTH,
+            0,
+            |c| c,
+        );
     }
 }

@@ -78,7 +78,11 @@ impl FrontHost {
         let pct = |p: usize| ms[(ms.len() - 1) * p / 100];
         eprintln!(
             "frames {}  median {}ms  p90 {}ms  p99 {}ms  max {}ms",
-            ms.len(), pct(50), pct(90), pct(99), ms[ms.len() - 1]
+            ms.len(),
+            pct(50),
+            pct(90),
+            pct(99),
+            ms[ms.len() - 1]
         );
         let mut worst = self.times.clone();
         worst.sort_by_key(|t| std::cmp::Reverse(t.0));
@@ -96,10 +100,17 @@ impl FrontHost {
         let med = |v: &Vec<u32>| v[v.len() / 2];
         eprintln!(
             "per frame: work median {}us max {}us | throttle wait median {}us max {}us",
-            med(&w), w[w.len() - 1], med(&q), q[q.len() - 1]
+            med(&w),
+            w[w.len() - 1],
+            med(&q),
+            q[q.len() - 1]
         );
         if let Some(out) = &self.audio {
-            eprintln!("audio rate {} threshold {} samples", out.rate(), out.rate() as usize / FRAMES_PER_SECOND as usize * 3);
+            eprintln!(
+                "audio rate {} threshold {} samples",
+                out.rate(),
+                out.rate() as usize / FRAMES_PER_SECOND as usize * 3
+            );
         }
     }
 }
@@ -183,7 +194,8 @@ impl Host for FrontHost {
 
         let now = Instant::now();
         if self.bench {
-            self.work.push((t_work - self.frame_start.unwrap_or(t_work)).as_micros() as u32);
+            self.work
+                .push((t_work - self.frame_start.unwrap_or(t_work)).as_micros() as u32);
             self.wait.push((now - t_work).as_micros() as u32);
             if let Some(last) = self.last {
                 self.times.push(((now - last).as_millis() as u32, frames));
@@ -246,7 +258,13 @@ fn play_game(
 /// What both ways of running the game need: the game's own copy of the tape,
 /// the state shared with whatever is showing it, and a sound card if there is
 /// one. The stream has to be held for as long as the sound should play.
-type Started = (Vec<u8>, Option<Vec<u8>>, Arc<Shared>, Option<audio::Output>, Option<cpal::Stream>);
+type Started = (
+    Vec<u8>,
+    Option<Vec<u8>>,
+    Arc<Shared>,
+    Option<audio::Output>,
+    Option<cpal::Stream>,
+);
 
 fn start(path: &Path) -> Result<Started, String> {
     // Reading checks the file is a supported version.

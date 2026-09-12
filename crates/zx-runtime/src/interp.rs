@@ -151,7 +151,11 @@ fn execute(z: &mut Zx, d: &Decoded, pc: u16, next: u16) {
         }
         Res(n, o, copy) | Set(n, o, copy) => {
             let v = get8(z, o);
-            let v = if matches!(d.instr, Res(..)) { v & !(1 << n) } else { v | (1 << n) };
+            let v = if matches!(d.instr, Res(..)) {
+                v & !(1 << n)
+            } else {
+                v | (1 << n)
+            };
             set8(z, o, v);
             if let Some(r) = copy {
                 z.set_r8(r, v);

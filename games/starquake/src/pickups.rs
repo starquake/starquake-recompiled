@@ -88,7 +88,11 @@ impl Game {
         let chosen = reduce((self.rng.hi() ^ seed_hi) & 0x7F, spawns);
         self.last_spawn_index = chosen;
         let room = self.room;
-        if let Some(item) = self.items.iter_mut().find(|i| i.row() == 0 && i.room() == room) {
+        if let Some(item) = self
+            .items
+            .iter_mut()
+            .find(|i| i.row() == 0 && i.room() == room)
+        {
             let (col, row) = self.objects.spawn_points[chosen as usize];
             let colour = reduce((self.rng.b as u8 ^ self.seed as u8) & 0x3F, 6) + 2;
             item.0[0] = colour.rotate_right(3) | col;
@@ -114,18 +118,26 @@ impl Game {
 
         // An inactive teleporter's pad is blanked.
         if let Some((_, index)) = self.objects.teleport
-            && self.teleporters[index].1 & 0x7F == 0 {
-                self.blank_teleport_pad();
-            }
+            && self.teleporters[index].1 & 0x7F == 0
+        {
+            self.blank_teleport_pad();
+        }
     }
 
     /// Prints bright spaces over the room's teleporter pad.
     pub fn blank_teleport_pad(&mut self) {
-        let Some(((col, row), _)) = self.objects.teleport else { return };
+        let Some(((col, row), _)) = self.objects.teleport else {
+            return;
+        };
         let col = (col & 0xFC) | 1;
         for r in row..row + 3 {
             let assets = self.assets.clone();
-            self.printer.print(&mut self.display, &assets.font, &assets.udg, &[0x13, 1, 0x16, r, col, b' ']);
+            self.printer.print(
+                &mut self.display,
+                &assets.font,
+                &assets.udg,
+                &[0x13, 1, 0x16, r, col, b' '],
+            );
         }
     }
 
@@ -162,7 +174,12 @@ impl Game {
         let attr = (reduce(self.rng.hi() & 0x3F, 6) + 2) | 0x40;
         let g = self.assets.graphic32(graphic);
         self.draw_block2x2(&g, row, col, attr);
-        self.bonus = Bonus { col, row, graphic, attr };
+        self.bonus = Bonus {
+            col,
+            row,
+            graphic,
+            attr,
+        };
         self.add_marker(1, row, col);
         self.pickups_in_room += 1;
     }

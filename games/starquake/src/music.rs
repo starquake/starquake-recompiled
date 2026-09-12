@@ -54,7 +54,14 @@ mod cycle {
     }
 
     fn stack(t: &mut u32, kind: Kind) {
-        charge(t, Cycle { at: STACK, len: 3, kind });
+        charge(
+            t,
+            Cycle {
+                at: STACK,
+                len: 3,
+                kind,
+            },
+        );
     }
 
     /// `PUSH rr`: the opcode, a cycle spent on the refresh address, then the
@@ -217,7 +224,11 @@ pub fn tune(ram: &[u8], addr: usize) -> (Vec<(u32, bool)>, u32) {
             t += n * 26 - 5;
             cycle::pop(&mut t);
 
-            hl = if sliding_down { hl.wrapping_sub(1) } else { hl.wrapping_add(1) };
+            hl = if sliding_down {
+                hl.wrapping_sub(1)
+            } else {
+                hl.wrapping_add(1)
+            };
             t += 6 + 10 + 4 + 4;
             if hl >> 8 != 0 {
                 t += 12 + 12 + 7 + 73;

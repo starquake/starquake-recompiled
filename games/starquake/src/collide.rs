@@ -60,7 +60,10 @@ impl Game {
             // Two columns above and below, or three when it straddles one.
             let cols = if wide { 3 } else { 2 };
             let row_solid = |start: u16| (0..cols).any(|c| self.solid(start.wrapping_add(c)));
-            let (above, below) = (row_solid(at.wrapping_sub(32)), row_solid(at.wrapping_add(64)));
+            let (above, below) = (
+                row_solid(at.wrapping_sub(32)),
+                row_solid(at.wrapping_add(64)),
+            );
             if above {
                 self.collision[0] |= blocked::ABOVE;
             }
@@ -72,8 +75,12 @@ impl Game {
             }
             // Two rows beside the entity, or three when it straddles a row.
             let rows = if tall { 3 } else { 2 };
-            let column_solid = |start: u16| (0..rows).any(|r| self.solid(start.wrapping_add(32 * r)));
-            let (left, right) = (column_solid(at.wrapping_sub(1)), column_solid(at.wrapping_add(2)));
+            let column_solid =
+                |start: u16| (0..rows).any(|r| self.solid(start.wrapping_add(32 * r)));
+            let (left, right) = (
+                column_solid(at.wrapping_sub(1)),
+                column_solid(at.wrapping_add(2)),
+            );
             if left {
                 self.collision[0] |= blocked::LEFT;
             }

@@ -243,9 +243,17 @@ impl Instr {
         match *self {
             Jp(None, a) | Jr(None, a) => Flow::Jump(a),
             Jp(Some(_), a) | Jr(Some(_), a) | Djnz(a) => Flow::Branch(a),
-            Call(c, a) => Flow::Call { target: a, conditional: c.is_some() },
-            Rst(n) => Flow::Call { target: n as u16, conditional: false },
-            Ret(c) => Flow::Return { conditional: c.is_some() },
+            Call(c, a) => Flow::Call {
+                target: a,
+                conditional: c.is_some(),
+            },
+            Rst(n) => Flow::Call {
+                target: n as u16,
+                conditional: false,
+            },
+            Ret(c) => Flow::Return {
+                conditional: c.is_some(),
+            },
             Reti | Retn => Flow::Return { conditional: false },
             JpInd(_) => Flow::Indirect,
             Halt => Flow::Halt,
@@ -449,7 +457,11 @@ fn decode_main<F: Fn(u16) -> u8>(c: &mut Cursor<F>, idx: Option<Idx>) -> Decoded
                 let o = op8(c, y);
                 let n = c.byte();
                 idx_mem_extra = 9;
-                (Ld8(o, Op8::Imm(n)), if matches!(o, Op8::Mem(_)) { 10 } else { 7 }, 0)
+                (
+                    Ld8(o, Op8::Imm(n)),
+                    if matches!(o, Op8::Mem(_)) { 10 } else { 7 },
+                    0,
+                )
             }
             _ => {
                 let i = [Rlca, Rrca, Rla, Rra, Daa, Cpl, Scf, Ccf][y as usize];
@@ -467,7 +479,11 @@ fn decode_main<F: Fn(u16) -> u8>(c: &mut Cursor<F>, idx: Option<Idx>) -> Decoded
                 let dst = op8(c, 6);
                 (Ld8(dst, Op8::Reg(reg_plain(z))), 7, 0)
             } else {
-                (Ld8(Op8::Reg(reg_idx(y, idx)), Op8::Reg(reg_idx(z, idx))), 4, 0)
+                (
+                    Ld8(Op8::Reg(reg_idx(y, idx)), Op8::Reg(reg_idx(z, idx))),
+                    4,
+                    0,
+                )
             }
         }
         2 => {
@@ -822,7 +838,10 @@ mod tests {
     fn index_prefixes() {
         assert_eq!(dis(&[0xdd, 0x7e, 0x05]), ("ld a,(ix+$05)".into(), 3, 19));
         assert_eq!(dis(&[0xfd, 0x66, 0xfe]), ("ld h,(iy-$02)".into(), 3, 19));
-        assert_eq!(dis(&[0xdd, 0x36, 0x01, 0x99]), ("ld (ix+$01),$99".into(), 4, 19));
+        assert_eq!(
+            dis(&[0xdd, 0x36, 0x01, 0x99]),
+            ("ld (ix+$01),$99".into(), 4, 19)
+        );
         assert_eq!(dis(&[0xdd, 0x34, 0x01]), ("inc (ix+$01)".into(), 3, 23));
         assert_eq!(dis(&[0xdd, 0x7c]), ("ld a,ixh".into(), 2, 8));
         assert_eq!(dis(&[0xdd, 0x21, 0, 0x60]), ("ld ix,$6000".into(), 4, 14));
@@ -835,12 +854,21 @@ mod tests {
     fn cb_ed() {
         assert_eq!(dis(&[0xcb, 0x46]), ("bit 0,(hl)".into(), 2, 12));
         assert_eq!(dis(&[0xcb, 0x11]), ("rl c".into(), 2, 8));
-        assert_eq!(dis(&[0xdd, 0xcb, 0x03, 0xc6]), ("set 0,(ix+$03)".into(), 4, 23));
-        assert_eq!(dis(&[0xfd, 0xcb, 0x03, 0x00]), ("rlc (iy+$03),b".into(), 4, 23));
+        assert_eq!(
+            dis(&[0xdd, 0xcb, 0x03, 0xc6]),
+            ("set 0,(ix+$03)".into(), 4, 23)
+        );
+        assert_eq!(
+            dis(&[0xfd, 0xcb, 0x03, 0x00]),
+            ("rlc (iy+$03),b".into(), 4, 23)
+        );
         assert_eq!(dis(&[0xed, 0xb0]), ("ldir".into(), 2, 16));
         assert_eq!(dis(&[0xed, 0x52]), ("sbc hl,de".into(), 2, 15));
         assert_eq!(dis(&[0xed, 0x5f]), ("ld a,r".into(), 2, 9));
-        assert_eq!(dis(&[0xed, 0x73, 0x00, 0x80]), ("ld ($8000),sp".into(), 4, 20));
+        assert_eq!(
+            dis(&[0xed, 0x73, 0x00, 0x80]),
+            ("ld ($8000),sp".into(), 4, 20)
+        );
         assert_eq!(dis(&[0xed, 0x00]), ("nop".into(), 2, 8));
     }
 }

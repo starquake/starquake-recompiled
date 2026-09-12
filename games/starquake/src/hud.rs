@@ -52,7 +52,8 @@ const BAR_FULL: u8 = b'(';
 impl Game {
     fn print(&mut self, text: &Text) {
         let assets = self.assets.clone();
-        self.printer.print(&mut self.display, &assets.font, &assets.udg, &text.0);
+        self.printer
+            .print(&mut self.display, &assets.font, &assets.udg, &text.0);
     }
 
     /// Draws the panel frame from tiles. Bright cells in it are not
@@ -120,7 +121,11 @@ impl Game {
             }
             let v = *bar;
             let full = vec![BAR_FULL; ((v >> 5) & 3) as usize];
-            let last = if v == 0x7F { BAR_FULL } else { b' ' + ((v >> 2) & 7) };
+            let last = if v == 0x7F {
+                BAR_FULL
+            } else {
+                b' ' + ((v >> 2) & 7)
+            };
             self.print(&Text::default().at(row, 16).chars(&full).chars(&[last]));
         }
 
@@ -141,6 +146,12 @@ impl Game {
         let col = 16 + ((v >> 5) & 3);
         let w = if v < 4 { v + 3 } else { v };
         let glyph = b' ' + ((w >> 2) & 7);
-        self.print(&Text::default().ink(8).bright(1).at(index as u8 + 1, col).chars(&[glyph]));
+        self.print(
+            &Text::default()
+                .ink(8)
+                .bright(1)
+                .at(index as u8 + 1, col)
+                .chars(&[glyph]),
+        );
     }
 }

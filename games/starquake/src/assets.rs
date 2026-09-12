@@ -41,7 +41,10 @@ pub fn read_game(path: &Path) -> Result<(Vec<u8>, Option<Vec<u8>>), String> {
             ))
         }
     };
-    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("tap")) {
+    if path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("tap"))
+    {
         want(TAPE_SHA1)?;
         let tape = zx_core::tape::load_tap(&bytes)?;
         Ok((tape.memory(), tape.loading_screen))
@@ -161,7 +164,9 @@ impl Assets {
             big_blocks,
             tile_info,
             tiles,
-            beeps: (0..EFFECT_COUNT).map(|id| crate::sound::beep(mem, id as u8)).collect(),
+            beeps: (0..EFFECT_COUNT)
+                .map(|id| crate::sound::beep(mem, id as u8))
+                .collect(),
             loading_screen: None,
         }
     }

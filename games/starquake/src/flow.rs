@@ -94,7 +94,11 @@ impl Game {
                 next += 1;
             }
             // `sync` cleared this and kept its capacity; extending reuses it.
-            self.music.extend(edges[first..next].iter().map(|&(at, level)| (at - t, level)));
+            self.music.extend(
+                edges[first..next]
+                    .iter()
+                    .map(|&(at, level)| (at - t, level)),
+            );
             self.sync(host);
             // The original's player scans a half-row of the keyboard between
             // speaker toggles and stops on any pressed bit, so two keys held

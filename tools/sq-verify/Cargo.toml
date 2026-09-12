@@ -4,7 +4,7 @@ description = "Checks the Starquake rewrite against the original program running
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-publish = false
+publish.workspace = true
 
 [dependencies]
 starquake = { path = "../../games/starquake", default-features = false }

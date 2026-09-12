@@ -16,7 +16,7 @@ jobs:
     name: no game or ROM data committed
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Nothing under assets/ but its README
         run: |
@@ -44,7 +44,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Keep in step with rust-toolchain.toml, which pins the same version
       # for local builds. Tracking `stable` here would mean a future Rust
@@ -73,11 +73,31 @@ jobs:
       # is fetched rather than committed — the same reason the game and the
       # ROM are not here. Pinned by hash, so a changed file is caught rather
       # than quietly changing what we test against.
-      - name: Z80 test corpus
+      #
+      # The cache key IS the pin, so a hit can only be the bytes we asked for
+      # and a change to either hash misses and re-fetches. That keeps a
+      # SourceForge outage from turning `main` red on an unrelated change.
+      - name: Cache the Z80 test corpus
+        id: corpus
+        uses: actions/cache@v4
+        with:
+          path: |
+            assets/tests.in
+            assets/tests.expected
+          key: fuse-z80-corpus-fec4e44d-207dc604
+
+      - name: Fetch the Z80 test corpus
+        if: steps.corpus.outputs.cache-hit != 'true'
         run: |
           base='https://sourceforge.net/p/fuse-emulator/code/HEAD/tree/trunk/fuse/z80/tests'
           curl -fsSL --retry 3 -o assets/tests.in "$base/tests.in?format=raw"
           curl -fsSL --retry 3 -o assets/tests.expected "$base/tests.expected?format=raw"
+
+      # Verified whether it was downloaded or restored: a cache can be
+      # poisoned, and the pin is worth nothing if it is only checked on the
+      # path that was already trustworthy.
+      - name: Verify the Z80 test corpus
+        run: |
           printf '%s  %s\n' \
             fec4e44dfa4fa889f976aa546a774d48c2a7366ab12312d449f79e85e68d77d7 assets/tests.in \
             207dc604db5d2a0a49ebd40e1bcb985a919e7a6e3dea1a52884ee05f9a1bf005 assets/tests.expected \
@@ -94,6 +114,9 @@ jobs:
             | tee /tmp/fuse.log
           grep -q '1335/1335 cases match' /tmp/fuse.log
 
+      - name: Formatting
+        run: cargo fmt --all --check
+
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
@@ -108,6 +131,18 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --workspace --no-deps --locked
+
+  # What the dependency tree is allowed to contain. Its own job, because it
+  # depends on nothing this repository builds and there is no reason to make
+  # it wait for a compile.
+  dependencies:
+    name: dependency policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
 
   # sq-verify is deliberately absent: it needs the player's own copy of the
   # game and the Spectrum ROM, which are never committed and should not be

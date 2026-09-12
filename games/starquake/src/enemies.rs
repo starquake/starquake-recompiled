@@ -220,7 +220,10 @@ impl Game {
         let y = e[Y];
         if (x | y.wrapping_add(1)) & 7 == 0 {
             let at = attr_addr(x, y.wrapping_add(1));
-            if [0, 1, 33, 32].iter().any(|&o| self.screen_byte(at + o) == ENEMY_BARRIER) {
+            if [0, 1, 33, 32]
+                .iter()
+                .any(|&o| self.screen_byte(at + o) == ENEMY_BARRIER)
+            {
                 return;
             }
         }
@@ -257,9 +260,10 @@ impl Game {
             }
         }
         if self.entities[slot].0[STATE] == 1
-            && let Some(reason) = self.enemy_touches_blob(slot) {
-                return Step::Killed(reason);
-            }
+            && let Some(reason) = self.enemy_touches_blob(slot)
+        {
+            return Step::Killed(reason);
+        }
 
         let e = &mut self.entities[slot].0;
         e[ANIM_COUNT] = e[ANIM_COUNT].wrapping_sub(1);

@@ -4,8 +4,6 @@
 //! Recompiled code manipulates this struct directly (`z.a = z.read(z.hl());`),
 //! so everything the generated code touches is public and kept flat.
 
-
-
 use zx_core::{BlockOp, Cond, Reg8, Reg16, Snapshot};
 
 pub const CF: u8 = 0x01;
@@ -29,7 +27,11 @@ fn sz53(v: u8) -> u8 {
 
 #[inline]
 fn parity(v: u8) -> u8 {
-    if v.count_ones().is_multiple_of(2) { PF } else { 0 }
+    if v.count_ones().is_multiple_of(2) {
+        PF
+    } else {
+        0
+    }
 }
 
 #[inline]
@@ -142,7 +144,6 @@ impl Zx {
             rom_loaded: rom.is_some(),
             border: snap.border,
             ear: false,
-
 
             keys: [0xFF; 8],
             kempston: 0,
@@ -418,7 +419,11 @@ impl Zx {
         let a = self.a;
         let r16 = a as u16 + v as u16 + carry as u16;
         let r = r16 as u8;
-        let overflow = if !(a ^ v) & (a ^ r) & 0x80 != 0 { PF } else { 0 };
+        let overflow = if !(a ^ v) & (a ^ r) & 0x80 != 0 {
+            PF
+        } else {
+            0
+        };
         self.f = sz53(r) | ((a ^ v ^ r) & HF) | overflow | (r16 >> 8) as u8;
         self.a = r;
     }
@@ -670,7 +675,11 @@ impl Zx {
         let r32 = hl as u32 + v as u32 + (self.f & CF) as u32;
         let r = r32 as u16;
         let hi = (r >> 8) as u8;
-        let overflow = if !(hl ^ v) & (hl ^ r) & 0x8000 != 0 { PF } else { 0 };
+        let overflow = if !(hl ^ v) & (hl ^ r) & 0x8000 != 0 {
+            PF
+        } else {
+            0
+        };
         self.f = (hi & (SF | XF | YF))
             | if r == 0 { ZF } else { 0 }
             | (((hl ^ v ^ r) >> 8) as u8 & HF)
@@ -686,7 +695,11 @@ impl Zx {
             .wrapping_sub((self.f & CF) as u32);
         let r = r32 as u16;
         let hi = (r >> 8) as u8;
-        let overflow = if (hl ^ v) & (hl ^ r) & 0x8000 != 0 { PF } else { 0 };
+        let overflow = if (hl ^ v) & (hl ^ r) & 0x8000 != 0 {
+            PF
+        } else {
+            0
+        };
         self.f = (hi & (SF | XF | YF))
             | if r == 0 { ZF } else { 0 }
             | NF

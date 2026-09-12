@@ -234,11 +234,18 @@ fn form_block(ctx: &Ctx, start: u16, entries: &BTreeSet<u16>, max: usize) -> Blo
         }
         let d = ctx.decode(pc);
         let interpret = ctx.interpret(pc);
-        instrs.push(BlockInstr { addr: pc, d, interpret });
+        instrs.push(BlockInstr {
+            addr: pc,
+            d,
+            interpret,
+        });
         let terminates = match d.instr.flow() {
             Flow::Jump(_) | Flow::Indirect | Flow::Halt => true,
             Flow::Return { conditional } => !conditional,
-            Flow::Call { conditional, target } => {
+            Flow::Call {
+                conditional,
+                target,
+            } => {
                 !conditional
                     || ctx.cfg.analysis.noreturn.contains(&target)
                     || ctx.cfg.analysis.inline_strings.contains(&target)

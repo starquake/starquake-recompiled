@@ -155,11 +155,18 @@ impl Game {
         let speed = p2 & 0x0F;
 
         let e = &mut self.entities[slot];
-        e.set_word(field::GRAPHIC_BASE, (kind as u16).wrapping_mul(0xC0).wrapping_add(GRAPHIC_SETS));
+        e.set_word(
+            field::GRAPHIC_BASE,
+            (kind as u16).wrapping_mul(0xC0).wrapping_add(GRAPHIC_SETS),
+        );
         e.0[field::COLOUR] = colour & 7;
         e.0[field::ANIM_COUNT] = p1;
         e.0[field::ANIM_PERIOD] = (p2 >> 4) % 5 + 4;
-        e.0[field::TURN_PERIOD] = if speed == 0 { 0x64 } else { 1 << (speed % 5 + 1) };
+        e.0[field::TURN_PERIOD] = if speed == 0 {
+            0x64
+        } else {
+            1 << (speed % 5 + 1)
+        };
         e.0[field::TURN_COUNT] = 8;
         e.0[field::BEHAVIOUR] = if kind == 2 { 5 } else { (p3 & 0x0F) % 5 };
         e.0[field::DIRECTION] = 0x55u8.rotate_right(p3 as u32);

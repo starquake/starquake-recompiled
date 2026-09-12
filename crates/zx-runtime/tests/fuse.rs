@@ -66,7 +66,10 @@ fn hex16(s: &str) -> u16 {
 
 /// Reads the `<address> <byte>... -1` lines that end a test, stopping at the
 /// terminator `end` (a lone `-1` in `tests.in`, a blank line in the expected).
-fn read_mem<'a>(lines: &mut impl Iterator<Item = &'a str>, blank_ends: bool) -> Vec<(u16, Vec<u8>)> {
+fn read_mem<'a>(
+    lines: &mut impl Iterator<Item = &'a str>,
+    blank_ends: bool,
+) -> Vec<(u16, Vec<u8>)> {
     let mut mem = Vec::new();
     for line in lines {
         let line = line.trim();
@@ -151,7 +154,11 @@ fn parse_expected(text: &str) -> Vec<Case> {
                 break line.to_string();
             }
             if f[1] == "MC" {
-                events.push((f[0].parse().expect("event time"), f[1].to_string(), hex16(f[2])));
+                events.push((
+                    f[0].parse().expect("event time"),
+                    f[1].to_string(),
+                    hex16(f[2]),
+                ));
             }
         };
         let state = read_state(&mut lines, &regs_line);
@@ -167,10 +174,32 @@ fn parse_expected(text: &str) -> Vec<Case> {
 
 fn blank_machine() -> Zx {
     let snap = Snapshot {
-        a: 0, f: 0, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0,
-        a_: 0, f_: 0, b_: 0, c_: 0, d_: 0, e_: 0, h_: 0, l_: 0,
-        ix: 0, iy: 0, sp: 0, pc: 0, i: 0, r: 0,
-        iff1: false, iff2: false, im: 0, border: 0,
+        a: 0,
+        f: 0,
+        b: 0,
+        c: 0,
+        d: 0,
+        e: 0,
+        h: 0,
+        l: 0,
+        a_: 0,
+        f_: 0,
+        b_: 0,
+        c_: 0,
+        d_: 0,
+        e_: 0,
+        h_: 0,
+        l_: 0,
+        ix: 0,
+        iy: 0,
+        sp: 0,
+        pc: 0,
+        i: 0,
+        r: 0,
+        iff1: false,
+        iff2: false,
+        im: 0,
+        border: 0,
         ram: vec![0; 0xC000],
     };
     let mut z = Zx::new(&snap, None);
@@ -217,9 +246,18 @@ fn actual(z: &Zx) -> State {
     alt.exx();
     State {
         regs: [
-            z.af(), z.bc(), z.de(), z.hl(),
-            alt.af(), alt.bc(), alt.de(), alt.hl(),
-            z.ix, z.iy, z.sp, z.pc,
+            z.af(),
+            z.bc(),
+            z.de(),
+            z.hl(),
+            alt.af(),
+            alt.bc(),
+            alt.de(),
+            alt.hl(),
+            z.ix,
+            z.iy,
+            z.sp,
+            z.pc,
         ],
         i: z.i,
         r: z.r,
@@ -254,7 +292,10 @@ fn differences(want: &State, got: &State) -> Vec<String> {
     let mut out = Vec::new();
     for (i, name) in NAMES.iter().enumerate() {
         if want.regs[i] != got.regs[i] {
-            out.push(format!("{name} want {:04x} got {:04x}", want.regs[i], got.regs[i]));
+            out.push(format!(
+                "{name} want {:04x} got {:04x}",
+                want.regs[i], got.regs[i]
+            ));
         }
     }
     let mut byte = |name: &str, w: u8, g: u8| {
@@ -287,8 +328,10 @@ fn corpus() -> Option<(Vec<Case>, Vec<Case>)> {
         PathBuf::from,
     );
     let (input, expected) = (dir.join("tests.in"), dir.join("tests.expected"));
-    let (Ok(input), Ok(expected)) = (std::fs::read_to_string(&input), std::fs::read_to_string(&expected))
-    else {
+    let (Ok(input), Ok(expected)) = (
+        std::fs::read_to_string(&input),
+        std::fs::read_to_string(&expected),
+    ) else {
         println!(
             "skipped: no Z80 test corpus in {}; see assets/README.md for where to get \
              tests.in and tests.expected",
@@ -299,7 +342,11 @@ fn corpus() -> Option<(Vec<Case>, Vec<Case>)> {
     let cases = parse_in(&input);
     let expect = parse_expected(&expected);
     assert!(!cases.is_empty(), "the corpus parsed to no tests");
-    assert_eq!(cases.len(), expect.len(), "the two corpus files disagree on how many tests there are");
+    assert_eq!(
+        cases.len(),
+        expect.len(),
+        "the two corpus files disagree on how many tests there are"
+    );
     for (a, b) in cases.iter().zip(&expect) {
         assert_eq!(a.name, b.name, "the corpus files are out of step");
     }
@@ -308,7 +355,9 @@ fn corpus() -> Option<(Vec<Case>, Vec<Case>)> {
 
 #[test]
 fn matches_the_z80_test_corpus() {
-    let Some((cases, expect)) = corpus() else { return };
+    let Some((cases, expect)) = corpus() else {
+        return;
+    };
 
     let mut failures: Vec<String> = Vec::new();
     for (case, want) in cases.iter().zip(&expect) {
@@ -336,9 +385,14 @@ fn matches_the_z80_test_corpus() {
                 before.mem[(*at as usize + i) & 0xFFFF] = b;
             }
         }
-        let wrong: Vec<usize> = (0..0x10000).filter(|&a| before.mem[a] != z.mem[a]).collect();
+        let wrong: Vec<usize> = (0..0x10000)
+            .filter(|&a| before.mem[a] != z.mem[a])
+            .collect();
         for &a in wrong.iter().take(4) {
-            diffs.push(format!("[{a:04x}] want {:02x} got {:02x}", before.mem[a], z.mem[a]));
+            diffs.push(format!(
+                "[{a:04x}] want {:02x} got {:02x}",
+                before.mem[a], z.mem[a]
+            ));
         }
         if wrong.len() > 4 {
             diffs.push(format!("and {} more bytes of memory", wrong.len() - 4));
@@ -358,7 +412,11 @@ fn matches_the_z80_test_corpus() {
         if failures.len() > 40 {
             println!("  ... and {} more", failures.len() - 40);
         }
-        panic!("{} of {} Z80 conformance cases differ", failures.len(), cases.len());
+        panic!(
+            "{} of {} Z80 conformance cases differ",
+            failures.len(),
+            cases.len()
+        );
     }
 }
 
@@ -369,7 +427,9 @@ fn matches_the_z80_test_corpus() {
 /// which is what decides how much the ULA charges it — see `bus.rs`.
 #[test]
 fn bus_activity_matches_the_z80_test_corpus() {
-    let Some((cases, expect)) = corpus() else { return };
+    let Some((cases, expect)) = corpus() else {
+        return;
+    };
 
     let mut failures: Vec<String> = Vec::new();
     let mut checked = 0usize;
@@ -388,18 +448,32 @@ fn bus_activity_matches_the_z80_test_corpus() {
         let total: u32 = bus::cycles(&z, &d, z.pc).iter().map(|c| c.len).sum();
         let (short, long) = (u32::from(d.t), u32::from(d.t) + u32::from(d.t_extra));
         if total != short && total != long {
-            failures.push(format!("{}: cycles add to {total}, decoder says {short} or {long}", case.name));
+            failures.push(format!(
+                "{}: cycles add to {total}, decoder says {short} or {long}",
+                case.name
+            ));
             continue;
         }
         if got != want_events {
             let show = |v: &[(u32, String, u16)]| {
-                v.iter().map(|(t, k, a)| format!("{t} {k} {a:04x}")).collect::<Vec<_>>().join(" | ")
+                v.iter()
+                    .map(|(t, k, a)| format!("{t} {k} {a:04x}"))
+                    .collect::<Vec<_>>()
+                    .join(" | ")
             };
-            failures.push(format!("{}:\n    want {}\n    got  {}", case.name, show(&want_events), show(&got)));
+            failures.push(format!(
+                "{}:\n    want {}\n    got  {}",
+                case.name,
+                show(&want_events),
+                show(&got)
+            ));
         }
     }
 
-    println!("Z80 bus model: {}/{checked} cases match", checked - failures.len());
+    println!(
+        "Z80 bus model: {}/{checked} cases match",
+        checked - failures.len()
+    );
     if !failures.is_empty() {
         for f in failures.iter().take(25) {
             println!("  {f}");

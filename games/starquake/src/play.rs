@@ -66,7 +66,10 @@ impl Game {
             if distance(col.rotate_left(3), bx) >= 0x0E {
                 continue;
             }
-            let top = 0x1Au8.wrapping_sub(rec[base + 1]).rotate_left(3).wrapping_sub(2);
+            let top = 0x1Au8
+                .wrapping_sub(rec[base + 1])
+                .rotate_left(3)
+                .wrapping_sub(2);
             if top >= by && top - by < 0x17 && rec[base + 5] != 0 {
                 return true;
             }
