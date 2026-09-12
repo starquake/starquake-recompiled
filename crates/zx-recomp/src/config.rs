@@ -131,6 +131,11 @@ fn default_every() -> u32 {
 }
 
 impl Config {
+    /// Reads a recompiler configuration from TOML.
+    ///
+    /// # Errors
+    ///
+    /// If the text is not valid TOML, or does not match the schema.
     pub fn parse(text: &str) -> Result<Config, String> {
         toml::from_str(text).map_err(|e| e.to_string())
     }

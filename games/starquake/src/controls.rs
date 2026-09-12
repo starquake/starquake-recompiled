@@ -118,6 +118,12 @@ impl Controls {
 
     /// Sets the keyboard controls from key names in the order the game's
     /// tables use: left, right, down, up, fire; then the pause key.
+    /// Sets the five control keys and the pause key by name.
+    ///
+    /// # Panics
+    ///
+    /// If a name is not one the Spectrum's keyboard has. The names come from
+    /// the original's own table, so only a caller inventing one can trip it.
     pub fn set_keys(&mut self, ram: &[u8], names: [u8; 5], pause: u8) {
         const ORDER: [usize; 5] = [0, 3, 1, 2, 4];
         for (&name, &slot) in names.iter().zip(&ORDER) {

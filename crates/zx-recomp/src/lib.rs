@@ -57,6 +57,12 @@ fn check_hash(what: &str, actual: &str, expected: Option<&str>) -> Result<(), St
 }
 
 impl Inputs {
+    /// Reads the snapshot and ROM the configuration names, from `assets`.
+    ///
+    /// # Errors
+    ///
+    /// If either file is missing or unreadable, its SHA-1 does not match the
+    /// one the configuration pins, or the snapshot will not parse.
     pub fn load(cfg: &Config, assets: &Path) -> Result<Inputs, String> {
         let snap_path = assets.join(&cfg.game.snapshot);
         let snap_bytes = read(&snap_path, "snapshot")?;

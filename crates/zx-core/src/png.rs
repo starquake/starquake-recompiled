@@ -30,6 +30,11 @@ fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
 }
 
 /// Encodes a 0RGB pixel buffer as a PNG.
+///
+/// # Panics
+///
+/// If either dimension is zero, or `pixels` holds fewer than
+/// `width * height` entries.
 pub fn encode(pixels: &[u32], width: usize, height: usize) -> Vec<u8> {
     // `chunks` panics on a zero width, and a buffer shorter than the image
     // would emit fewer rows than the header promises.

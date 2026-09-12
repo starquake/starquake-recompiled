@@ -8,7 +8,10 @@
 //! off scenery and the room edges.
 
 use crate::collide::{attr_addr, blocked};
-use crate::entities::field::*;
+use crate::entities::field::{
+    ANIM_COUNT, ANIM_PERIOD, BEHAVIOUR, COLOUR, DIRECTION, GRAPHIC, GRAPHIC_BASE, SPEED_X, SPEED_Y,
+    START_X, START_Y, STATE, STATE_COUNT, TURN_COUNT, TURN_PERIOD, X, Y,
+};
 use crate::game::Game;
 
 /// Direction table in the original (bits: 1 right, 2 left, 4 down, 8 up).

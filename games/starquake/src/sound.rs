@@ -22,6 +22,11 @@ pub use zx_core::timing::FRAME_T;
 /// Speaker changes of a blocking sound effect, as (T-state offset, level)
 /// pairs, and its total duration in T-states. Simulates the original
 /// routine instruction by instruction, so the pitch and length match.
+///
+/// # Panics
+///
+/// If the loaded game data is too short to hold what the original keeps
+/// there, which means the file was not Starquake.
 pub fn beep(ram: &[u8], id: u8) -> (Vec<(u32, bool)>, u32) {
     let p = BEEPS + id.wrapping_mul(5) as usize;
     let ix: [u8; 5] = ram[p..p + 5].try_into().unwrap();

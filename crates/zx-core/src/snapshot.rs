@@ -72,6 +72,12 @@ fn decompress(src: &[u8], out: &mut Vec<u8>, limit: usize) -> bool {
     true
 }
 
+/// Loads a `.z80` snapshot, v1, v2 or v3.
+///
+/// # Errors
+///
+/// If the file is too short for its header, names a machine other than a
+/// 48K Spectrum, or holds a compressed page that runs off the end.
 pub fn load_z80(data: &[u8]) -> Result<Snapshot, String> {
     if data.len() < 30 {
         return Err("file too short for a .z80 header".into());

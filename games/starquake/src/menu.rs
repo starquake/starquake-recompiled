@@ -259,6 +259,11 @@ impl Game {
 
     /// The define-keys screen as it first appears, with every key still
     /// free. Returns the table of key names it drew.
+    ///
+    /// # Panics
+    ///
+    /// If the loaded game data is too short to hold what the original keeps
+    /// there, which means the file was not Starquake.
     pub fn define_keys_draw(&mut self) -> [u8; KEYS] {
         self.clear_screen();
         let table: [u8; KEYS] = self.assets.ram[at::KEY_LAYOUT..at::KEY_LAYOUT + KEYS]

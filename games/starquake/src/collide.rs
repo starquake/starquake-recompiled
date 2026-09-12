@@ -53,7 +53,20 @@ impl Game {
         let wide = x & 7 != 0;
         let tall = y.wrapping_add(1) & 7 != 0;
 
-        if !vertical {
+        if vertical {
+            if tall {
+                return 0;
+            }
+            // Two columns above and below, or three when it straddles one.
+            let cols = if wide { 3 } else { 2 };
+            let row_solid = |start: u16| (0..cols).any(|c| self.solid(start.wrapping_add(c)));
+            let (above, below) = (row_solid(at.wrapping_sub(32)), row_solid(at.wrapping_add(64)));
+            if above {
+                self.collision[0] |= blocked::ABOVE;
+            }
+            // (The original returns the below flag without storing it.)
+            self.collision[0] | if below { blocked::BELOW } else { 0 }
+        } else {
             if wide {
                 return 0;
             }
@@ -66,18 +79,6 @@ impl Game {
             }
             // (The original returns the right flag without storing it.)
             self.collision[0] | if right { blocked::RIGHT } else { 0 }
-        } else {
-            if tall {
-                return 0;
-            }
-            let cols = if wide { 3 } else { 2 };
-            let row_solid = |start: u16| (0..cols).any(|c| self.solid(start.wrapping_add(c)));
-            let (above, below) = (row_solid(at.wrapping_sub(32)), row_solid(at.wrapping_add(64)));
-            if above {
-                self.collision[0] |= blocked::ABOVE;
-            }
-            // (The original returns the below flag without storing it.)
-            self.collision[0] | if below { blocked::BELOW } else { 0 }
         }
     }
 }

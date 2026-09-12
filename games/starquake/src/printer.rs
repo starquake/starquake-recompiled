@@ -76,6 +76,13 @@ impl Printer {
         }
     }
 
+    /// Prints one byte: a character, or one of the original's control
+    /// codes for colour, position and so on.
+    ///
+    /// # Panics
+    ///
+    /// On a control code the original does not define. Text comes from the
+    /// game's own data, so this fires only if a text address is wrong.
     pub fn put(&mut self, d: &mut Display, font: &Font, udg: &[[u8; 8]], b: u8) {
         match self.pending {
             Pending::Operand(code) => {

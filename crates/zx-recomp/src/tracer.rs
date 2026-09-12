@@ -33,6 +33,17 @@ impl Rng {
     }
 }
 
+/// Runs the interpreter for the configured number of frames, calling
+/// `on_frame` with the machine at each frame boundary.
+///
+/// # Errors
+///
+/// If the configuration names a key the Spectrum does not have.
+///
+/// # Panics
+///
+/// If the machine was built without tracing enabled, which this function
+/// does itself, so only a change here can cause it.
 pub fn run(
     cfg: &config::Trace,
     inputs: &Inputs,

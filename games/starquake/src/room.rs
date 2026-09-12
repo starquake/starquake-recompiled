@@ -139,6 +139,12 @@ impl Game {
     }
 
     /// Draws `tile` with its top-left cell at (`row`, `col`).
+    /// Draws one tile of a room.
+    ///
+    /// # Panics
+    ///
+    /// If a tile's mask and its list of cells disagree, which would mean the
+    /// tile data was read wrongly.
     pub fn draw_tile(&mut self, tile: u8, row: u8, col: u8) {
         let r = self.rng.lo() & 7;
         let alt_ink = if r >= 2 { r } else { (row & 7) | 2 };
