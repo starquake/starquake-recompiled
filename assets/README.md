@@ -9,6 +9,7 @@ ignored by git):
 | `starquake.tap` | Starquake (Bubble Bus, 1985), `.tap` tape, SHA-1 `65450d6f33692c2c2868c0b497037f2cfd0ef3bd` | the game |
 | `starquake.z80` | The same game as a 48K `.z80` snapshot, SHA-1 `8cf0722b752f7fe1651734b32a240e714525e480` | development tools only |
 | `48.rom` | ZX Spectrum 48K ROM, SHA-1 `5ea7c2b824672e914525d1d5c419d71b84a426a2` | development tools only (the reference interpreter) |
+| `tests.in`, `tests.expected` | The Fuse project's Z80 test corpus | development tools only (the processor conformance test) |
 
 **Only `starquake.tap` is needed to play.** The other two are used by
 `sq-verify`, which compares the rewrite against the original; you can ignore
@@ -33,6 +34,21 @@ the ROM, and the easiest legitimate sources are:
 
 This is an informal permission rather than a formal licence, but it is the
 basis emulator projects and Linux distributions have relied on for years.
+
+**The Z80 test corpus.** Two text files from the
+[Fuse](https://fuse-emulator.sourceforge.net/) project, stating for 1335
+cases what a Z80's registers, memory and T-state count should be after
+running. They are GPL-licensed, which is why they are fetched rather than
+copied in here:
+
+```sh
+base='https://sourceforge.net/p/fuse-emulator/code/HEAD/tree/trunk/fuse/z80/tests'
+curl -L -o assets/tests.in "$base/tests.in?format=raw"
+curl -L -o assets/tests.expected "$base/tests.expected?format=raw"
+```
+
+Without them `cargo test` says the conformance test was skipped, and every
+other check still runs.
 
 ## Why a tape rather than a snapshot
 
