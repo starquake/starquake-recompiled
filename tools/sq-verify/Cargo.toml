@@ -10,3 +10,6 @@ publish = false
 starquake = { path = "../../games/starquake", default-features = false }
 zx-core.workspace = true
 zx-runtime.workspace = true
+
+[lints]
+workspace = true

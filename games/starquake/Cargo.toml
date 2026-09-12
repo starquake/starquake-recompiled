@@ -23,3 +23,6 @@ gilrs = { version = "0.11", optional = true }
 [[bin]]
 name = "starquake"
 required-features = ["frontend"]
+
+[lints]
+workspace = true

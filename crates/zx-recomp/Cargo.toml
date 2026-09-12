@@ -10,3 +10,6 @@ zx-core.workspace = true
 zx-runtime.workspace = true
 serde = { version = "1", features = ["derive"] }
 toml = "1"
+
+[lints]
+workspace = true
