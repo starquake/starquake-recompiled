@@ -144,13 +144,60 @@ fn diff(orig: &Game, new: &Game, parts: &[&str]) -> Vec<String> {
 }
 
 fn report(name: &str, failures: &[(String, Vec<String>)], total: usize) -> bool {
-    for (case, diffs) in failures.iter().take(4) {
+    let show = if std::env::var_os("SQ_ALL").is_some() { failures.len() } else { 4 };
+    for (case, diffs) in failures.iter().take(show) {
         for d in diffs {
             println!("  {name} {case}: {d}");
         }
     }
-    println!("{name}: {}/{total} cases match", total - failures.len());
+    if failures.len() > show {
+        println!("  {name}: {} more failing cases not shown (SQ_ALL=1)", failures.len() - show);
+    }
+    // A check that ran nothing has proved nothing, so it must not pass: an
+    // empty state list used to make a dozen checks report "0/0 cases match"
+    // and the whole run succeed.
+    if total == 0 {
+        println!("{name}: no cases ran");
+        return false;
+    }
+    println!("{name}: {}/{total} cases match", total.saturating_sub(failures.len()));
     failures.is_empty()
+}
+
+/// One per-frame routine to check: its name, the original's address, and the
+/// rewrite's equivalent.
+type FrameRoutine = (&'static str, u16, fn(&mut Game));
+
+/// Collects a set of states, reporting a panic rather than unwinding out of
+/// `main`. An empty set makes every check that uses it report "no cases ran".
+fn guarded_states(name: &str, collect: impl FnOnce() -> Vec<Zx>) -> Vec<Zx> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(collect)) {
+        Ok(states) => states,
+        Err(_) => {
+            println!("{name}: PANICKED while collecting states");
+            Vec::new()
+        }
+    }
+}
+
+/// Runs one check, turning a panic into a reported failure.
+///
+/// The hook installed in `main` silences panic messages, so without this a
+/// panic in the rewrite unwinds out of `main` with no output at all, taking
+/// the remaining checks and the summary line with it.
+fn guarded(name: &str, check: impl FnOnce() -> bool) -> bool {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(check)) {
+        Ok(ok) => ok,
+        Err(e) => {
+            let msg = e
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| e.downcast_ref::<&str>().copied())
+                .unwrap_or("(no message)");
+            println!("{name}: PANICKED: {msg}");
+            false
+        }
+    }
 }
 
 fn check_rooms(env: &Env) -> bool {
@@ -955,6 +1002,10 @@ fn check_security_doors(env: &Env) -> bool {
     println!("  security doors found: {}", doors.len());
     let mut failures = Vec::new();
     let mut triggered = 0;
+    // Every position tried is a comparison, whether or not it reaches a door
+    // screen. Counting only the ones that did let the failure count exceed
+    // the total and underflow the "x/y match" line.
+    let mut cases = 0;
     for &(room, mx, my) in doors.iter().take(40) {
         let mut z = base.clone();
         z.write16(at::ROOM as u16, room);
@@ -970,6 +1021,7 @@ fn check_security_doors(env: &Env) -> bool {
             for dx in [0i32, -2, 2] {
                 for input in [1u8, 2] {
                     for master_key in [false, true] {
+                        cases += 1;
                         let mut v = z.clone();
                         v.mem[at::ENTITIES + 5] = mx.wrapping_add(dx as u8);
                         v.mem[at::ENTITIES + 6] = my.wrapping_add(dy as u8);
@@ -1019,8 +1071,8 @@ fn check_security_doors(env: &Env) -> bool {
             }
         }
     }
-    println!("  door screens reached: {triggered}");
-    report("security doors (D5FD)", &failures, triggered)
+    println!("  door screens reached: {triggered} of {cases} positions tried");
+    report("security doors (D5FD)", &failures, cases)
 }
 
 /// New-game setup (`629D` up to the intro at `666D`) for every control
@@ -1424,6 +1476,10 @@ fn main() {
     let mut args = std::env::args().skip(1).collect::<Vec<_>>();
     let dir = match args.iter().position(|a| a == "--assets") {
         Some(i) => {
+            if i + 1 >= args.len() {
+                eprintln!("--assets needs a directory");
+                std::process::exit(2);
+            }
             let d = PathBuf::from(args.remove(i + 1));
             args.remove(i);
             d
@@ -1466,44 +1522,53 @@ fn main() {
         return;
     }
 
-    // The checks run the rewrite inside `catch_unwind`, so a panic there is
-    // a failure to report rather than something to print. `SQ_PANIC=1`
+    // Panic messages are silenced so an expected panic inside a check does
+    // not spew; `guarded` reports one as a failed check instead. `SQ_PANIC=1`
     // shows them, for when a panic is the thing being investigated.
     if std::env::var_os("SQ_PANIC").is_none() {
         std::panic::set_hook(Box::new(|_| {}));
     }
     let mut ok = true;
-    ok &= check_rooms(&env);
-    ok &= check_room_prelude(&env);
-    ok &= check_room_build(&env);
-    ok &= check_room_entry(&env);
-    ok &= check_new_game(&env);
-    ok &= check_menu(&env);
-    ok &= check_screens(&env);
-    ok &= check_core_room(&env);
-    ok &= check_music(&env);
+    ok &= guarded("room tiles", || check_rooms(&env));
+    ok &= guarded("room prelude (panel)", || check_room_prelude(&env));
+    ok &= guarded("room build with pickups (new game)", || check_room_build(&env));
+    ok &= guarded("room entry with enemies (room chains)", || check_room_entry(&env));
+    ok &= guarded("new game (629D)", || check_new_game(&env));
+    ok &= guarded("menu (5E81)", || check_menu(&env));
+    ok &= guarded("screens", || check_screens(&env));
+    ok &= guarded("core room (A6C1)", || check_core_room(&env));
+    ok &= guarded("music (D9DE)", || check_music(&env));
 
-    let states = gameplay_states(&env, 150, 7);
+    let states = guarded_states("gameplay states", || gameplay_states(&env, 150, 7));
     println!("gameplay states: {}", states.len());
-    ok &= check_frame_routine(&env, &states, "sprites (DF70)", 0xDF70, Game::draw_sprites);
-    ok &= check_frame_routine(&env, &states, "sprite colours (D8B1)", 0xD8B1, Game::colour_sprites);
-    ok &= check_frame_routine(&env, &states, "platforms (DBEC)", 0xDBEC, Game::tick_platforms);
-    ok &= check_frame_routine(&env, &states, "sparkles (DCE6)", 0xDCE6, Game::tick_sparkles);
-    ok &= check_frame_routine(&env, &states, "force fields (A66C)", 0xA66C, Game::tick_force_fields);
-    ok &= check_enemies(&env, &states);
-    ok &= check_blob(&env, &states);
-    ok &= check_loop(&env, &states);
-    ok &= check_death(&env, &states);
-    ok &= check_game_over(&env, &states);
-    ok &= check_security_doors(&env);
+    let frame_routines: [FrameRoutine; 5] = [
+        ("sprites (DF70)", 0xDF70, Game::draw_sprites),
+        ("sprite colours (D8B1)", 0xD8B1, Game::colour_sprites),
+        ("platforms (DBEC)", 0xDBEC, Game::tick_platforms),
+        ("sparkles (DCE6)", 0xDCE6, Game::tick_sparkles),
+        ("force fields (A66C)", 0xA66C, Game::tick_force_fields),
+    ];
+    for (name, addr, f) in frame_routines {
+        ok &= guarded(name, || check_frame_routine(&env, &states, name, addr, f));
+    }
+    ok &= guarded("enemies (A01B)", || check_enemies(&env, &states));
+    ok &= guarded("BLOB (C5BD)", || check_blob(&env, &states));
+    ok &= guarded("main loop (A523)", || check_loop(&env, &states));
+    ok &= guarded("death sequence (C350)", || check_death(&env, &states));
+    ok &= guarded("game over screen (6730)", || check_game_over(&env, &states));
+    ok &= guarded("security doors (D5FD)", || check_security_doors(&env));
 
-    let tour = room_tour_states(&env, 120);
+    let tour = guarded_states("room tour states", || room_tour_states(&env, 120));
     println!("room tour states: {}", tour.len());
-    ok &= check_frame_routine(&env, &tour, "tour: sprite colours", 0xD8B1, Game::colour_sprites);
-    ok &= check_frame_routine(&env, &tour, "tour: force fields", 0xA66C, Game::tick_force_fields);
-    ok &= check_enemies(&env, &tour);
-    ok &= check_blob(&env, &tour);
-    ok &= check_loop(&env, &tour);
+    ok &= guarded("tour: sprite colours", || {
+        check_frame_routine(&env, &tour, "tour: sprite colours", 0xD8B1, Game::colour_sprites)
+    });
+    ok &= guarded("tour: force fields", || {
+        check_frame_routine(&env, &tour, "tour: force fields", 0xA66C, Game::tick_force_fields)
+    });
+    ok &= guarded("enemies (A01B)", || check_enemies(&env, &tour));
+    ok &= guarded("BLOB (C5BD)", || check_blob(&env, &tour));
+    ok &= guarded("main loop (A523)", || check_loop(&env, &tour));
     if !ok {
         std::process::exit(1);
     }
