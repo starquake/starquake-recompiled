@@ -1,11 +1,12 @@
 //! The title screen and the menu around a game: choosing how to play,
 //! defining your own keys, and quitting.
 //!
-//! The original's menu loop has no wait in it: it goes round as fast as it
-//! can redraw the options, reading the keyboard each time. On a real
-//! Spectrum that is 13 times a second (measured with `sq-verify menu`), so
-//! the turns are spread across the 50 Hz frames the [`Host`] gives us rather
-//! than run one per frame, which would flash four times too fast.
+//! Neither menu loop here has a wait in it on the original: each goes round
+//! as fast as it can redraw itself, reading the keyboard every time. On a
+//! real Spectrum the title menu manages about 13 turns a second and the
+//! define-keys loop about 344, so one is slower than the frames the [`Host`]
+//! gives us and the other much faster. [`crate::host::Pacer`] spreads both
+//! over frames at their own rate.
 
 use crate::controls::key_code;
 use crate::game::Game;
@@ -41,10 +42,11 @@ const TITLE_RIGHT: u8 = 0x89;
 const STAR: u8 = 0x90;
 const GOODBYE_TILE: u8 = 0x56;
 
-/// Turns of the menu loop a real Spectrum manages in a second, and the
-/// frames we have to spread them over.
-const TURNS_PER_SECOND: u32 = 13;
-const FRAMES_PER_SECOND: u32 = 50;
+/// Turns a real Spectrum manages in a second, for each of the two loops that
+/// pace themselves by how fast they redraw. Both are measured from the
+/// original in the interpreter, and `sq-verify` checks the first against it.
+pub const TURNS_PER_SECOND: u32 = 13;
+pub const DEFINE_TURNS_PER_SECOND: u32 = 344;
 
 /// How many keys the define-keys screen shows, and how many are defined.
 const KEYS: usize = 40;
@@ -123,55 +125,50 @@ impl Game {
             // The highlight flashes between these two colours.
             let mut ink = 7u8;
             let mut countdown = 2u8;
-            let (mut frames, mut turns) = (0u32, 0u32);
-            loop {
+            let mut pacer = crate::host::Pacer::new(TURNS_PER_SECOND);
+            'menu: loop {
                 self.sync(host);
-                frames += 1;
-                let due = frames * TURNS_PER_SECOND / FRAMES_PER_SECOND;
-                if due == turns {
-                    continue;
-                }
-                turns = due;
-
-                self.draw_options(ink);
-                countdown -= 1;
-                if countdown == 0 {
-                    countdown = 2;
-                    ink = 9 - ink;
-                    if ink == 7 {
-                        // A star twinkles in the top right, and now and then
-                        // the corners are redrawn in a new colour.
-                        self.restore_ptr &= 0x00FF;
-                        self.draw_tile(STAR, 0, 0x1E);
-                        self.rng.step();
-                        if self.rng.lo() < 0x28 {
-                            self.draw_corners();
+                for _ in 0..pacer.turns() {
+                    self.draw_options(ink);
+                    countdown -= 1;
+                    if countdown == 0 {
+                        countdown = 2;
+                        ink = 9 - ink;
+                        if ink == 7 {
+                            // A star twinkles in the top right, and now and then
+                            // the corners are redrawn in a new colour.
+                            self.restore_ptr &= 0x00FF;
+                            self.draw_tile(STAR, 0, 0x1E);
+                            self.rng.step();
+                            if self.rng.lo() < 0x28 {
+                                self.draw_corners();
+                            }
                         }
                     }
-                }
-                match key_code(&self.assets.ram, &self.input) {
-                    b'Q' => {
-                        if self.quit_confirmed(host) {
-                            return Start::Quit;
+                    match key_code(&self.assets.ram, &self.input) {
+                        b'Q' => {
+                            if self.quit_confirmed(host) {
+                                return Start::Quit;
+                            }
+                            break 'menu;
                         }
-                        break;
-                    }
-                    b'6' => {
-                        self.define_keys(host);
-                        self.control_method = 5;
-                        break;
-                    }
-                    b'0' => return Start::Play(self.control_method),
-                    k @ b'1'..=b'5' => {
-                        // The original refuses Kempston when it cannot find
-                        // the interface; here the arrow keys always are one.
-                        let method = k - b'0';
-                        if self.control_method != method {
-                            self.control_method = method;
-                            self.effects.push(0x0C);
+                        b'6' => {
+                            self.define_keys(host);
+                            self.control_method = 5;
+                            break 'menu;
                         }
+                        b'0' => return Start::Play(self.control_method),
+                        k @ b'1'..=b'5' => {
+                            // The original refuses Kempston when it cannot find
+                            // the interface; here the arrow keys always are one.
+                            let method = k - b'0';
+                            if self.control_method != method {
+                                self.control_method = method;
+                                self.effects.push(0x0C);
+                            }
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
         }
@@ -232,18 +229,24 @@ impl Game {
         while key_code(&self.assets.ram, &self.input) != 0 {
             self.sync(host);
         }
+        let mut pacer = crate::host::Pacer::new(DEFINE_TURNS_PER_SECOND);
         loop {
-            let (countdown, ink) = flash;
-            *countdown -= 1;
-            if *countdown == 0 {
-                *countdown = 0x32;
-                *ink = 9 - *ink;
-            }
-            // A dash flashes where the key will appear.
-            let ink = *ink;
-            self.print_bytes(&[0x10, ink, b'-', 0x08, 0x10, 7]);
-            let key = key_code(&self.assets.ram, &self.input);
             self.sync(host);
+            // This loop runs far faster than the frame rate on a Spectrum, so
+            // a frame is worth about seven turns of it. One turn per frame
+            // flashed the dash once a second instead of about seven times.
+            for _ in 0..pacer.turns() {
+                let (countdown, ink) = &mut *flash;
+                *countdown -= 1;
+                if *countdown == 0 {
+                    *countdown = 0x32;
+                    *ink = 9 - *ink;
+                }
+                // A dash flashes where the key will appear.
+                let ink = *ink;
+                self.print_bytes(&[0x10, ink, b'-', 0x08, 0x10, 7]);
+            }
+            let key = key_code(&self.assets.ram, &self.input);
             if key == 0 {
                 continue;
             }
