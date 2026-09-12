@@ -1,0 +1,25 @@
+[package]
+name = "starquake"
+description = "A Rust reimplementation of Starquake (Bubble Bus, 1985). Requires your own copy of the original game."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+default = ["frontend"]
+# The playable program (window, input, sound). The library alone has no
+# platform dependencies.
+frontend = ["dep:pixels", "dep:winit", "dep:cpal", "dep:gilrs"]
+
+[dependencies]
+# Only the snapshot loader and SHA-1; no emulation.
+zx-core.workspace = true
+pixels = { version = "0.17", optional = true }
+winit = { version = "0.30", optional = true }
+cpal = { version = "0.18", optional = true }
+gilrs = { version = "0.11", optional = true }
+
+[[bin]]
+name = "starquake"
+required-features = ["frontend"]

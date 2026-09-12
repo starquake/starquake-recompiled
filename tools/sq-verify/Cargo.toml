@@ -1,0 +1,12 @@
+[package]
+name = "sq-verify"
+description = "Checks the Starquake rewrite against the original program running in the reference interpreter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+starquake = { path = "../../games/starquake", default-features = false }
+zx-core.workspace = true
+zx-runtime.workspace = true

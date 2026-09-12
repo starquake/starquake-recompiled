@@ -1,0 +1,143 @@
+//! Input: the Spectrum keyboard matrix and Kempston joystick, and the
+//! game's configurable controls.
+
+/// The state of the input devices, as the original would read them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Input {
+    /// Keyboard half-rows (address lines A8–A15); a 0 bit is a pressed key.
+    pub keys: [u8; 8],
+    /// Kempston joystick (bit 0 right, 1 left, 2 down, 3 up, 4 fire).
+    pub kempston: u8,
+}
+
+impl Default for Input {
+    fn default() -> Self {
+        Input {
+            keys: [0xFF; 8],
+            kempston: 0,
+        }
+    }
+}
+
+impl Input {
+    /// Keyboard bits for port `0xFE` with high address byte `hi`: rows
+    /// whose address line is low are combined.
+    pub fn keyboard(&self, hi: u8) -> u8 {
+        let mut v = 0x1F;
+        for (row, bits) in self.keys.iter().enumerate() {
+            if hi & (1 << row) == 0 {
+                v &= bits;
+            }
+        }
+        v
+    }
+}
+
+/// Which controls are in use. The original keeps these as operands inside
+/// its input routine, which the menu rewrites.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Controls {
+    pub kempston: bool,
+    /// Bits before any key is read (always 0 in practice).
+    pub initial: u8,
+    /// Keyboard controls: port high byte, bit, and direction bits to add,
+    /// in the order left, down, up, right, fire.
+    pub keys: [(u8, u8, u8); 5],
+    /// Pause key: port high byte and bit.
+    pub pause: (u8, u8),
+}
+
+/// Key names in keyboard-matrix order (5 per half-row, from `0xFE` to
+/// `0x7F`), in the original.
+const KEY_NAMES: usize = 0x62D3;
+/// Key codes for typing, same order.
+const KEY_CODES: usize = 0xD5A0;
+
+/// The code of the one key held down, or 0 if none or several are
+/// (letters and digits are ASCII, space 0x20, Enter 2, the shifts 1 and 3).
+pub fn key_code(ram: &[u8], input: &Input) -> u8 {
+    let mut code = 0;
+    let mut held = 0;
+    let mut port = 0xFEu8;
+    for row in 0..8 {
+        let bits = !input.keyboard(port) & 0x1F;
+        for bit in 0..5 {
+            if bits & (1 << bit) != 0 {
+                code = ram[KEY_CODES + row * 5 + bit];
+                held += 1;
+            }
+        }
+        port = port.rotate_left(1);
+    }
+    if held == 1 { code } else { 0 }
+}
+
+/// Finds the matrix position (port high byte, bit) of the key the game
+/// calls `name`.
+pub fn key_position(ram: &[u8], name: u8) -> Option<(u8, u8)> {
+    let mut port = 0xFEu8;
+    for row in 0..8 {
+        for bit in 0..5 {
+            if ram[KEY_NAMES + row * 5 + bit] == name {
+                return Some((port, bit as u8));
+            }
+        }
+        port = port.rotate_left(1);
+    }
+    None
+}
+
+/// Where the operands live in the original.
+const KEMPSTON_FLAG: usize = 0xC567;
+const INITIAL: usize = 0xC577;
+const PORTS: [usize; 5] = [0xC57A, 0xC585, 0xC590, 0xC59B, 0xC5A6];
+const BIT_OPCODES: [usize; 5] = [0xC57E, 0xC589, 0xC594, 0xC59F, 0xC5AA];
+const VALUES: [usize; 5] = [0xC582, 0xC58D, 0xC598, 0xC5A3, 0xC5AD];
+const PAUSE_PORT: usize = 0xC55C;
+/// The operand byte of `bit n,a`, past the `CB` prefix — as with the keys
+/// above, it is the second byte that carries the bit number.
+const PAUSE_BIT_OPCODE: usize = 0xC560;
+
+impl Controls {
+    pub fn from_memory(mem: &[u8]) -> Controls {
+        Controls {
+            kempston: mem[KEMPSTON_FLAG] == 1,
+            initial: mem[INITIAL],
+            keys: std::array::from_fn(|i| {
+                (mem[PORTS[i]], (mem[BIT_OPCODES[i]].wrapping_sub(0x42) >> 3) & 7, mem[VALUES[i]])
+            }),
+            pause: (mem[PAUSE_PORT], (mem[PAUSE_BIT_OPCODE].wrapping_sub(0x47) >> 3) & 7),
+        }
+    }
+
+    /// Sets the keyboard controls from key names in the order the game's
+    /// tables use: left, right, down, up, fire; then the pause key.
+    pub fn set_keys(&mut self, ram: &[u8], names: [u8; 5], pause: u8) {
+        const ORDER: [usize; 5] = [0, 3, 1, 2, 4];
+        for (&name, &slot) in names.iter().zip(&ORDER) {
+            let (port, bit) = key_position(ram, name).expect("known key name");
+            self.keys[slot].0 = port;
+            self.keys[slot].1 = bit;
+        }
+        self.pause = key_position(ram, pause).expect("known key name");
+    }
+
+    pub fn pause_pressed(&self, input: &Input) -> bool {
+        input.keyboard(self.pause.0) & (1 << self.pause.1) == 0
+    }
+
+    /// Direction bits (1 right, 2 left, 4 down, 8 up) and fire (0x10).
+    pub fn read(&self, input: &Input) -> u8 {
+        if self.kempston && input.kempston != 0 {
+            return input.kempston;
+        }
+        let pressed = |&(port, bit, _): &(u8, u8, u8)| input.keyboard(port) & (1 << bit) == 0;
+        let mut v = self.initial;
+        for key in &self.keys {
+            if pressed(key) {
+                v = v.wrapping_add(key.2);
+            }
+        }
+        v
+    }
+}

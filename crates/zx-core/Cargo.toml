@@ -1,0 +1,8 @@
+[package]
+name = "zx-core"
+description = "Z80 decoder, disassembler and ZX Spectrum snapshot loader shared by zx-recomp and zx-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

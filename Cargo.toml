@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/zx-core",
+    "crates/zx-runtime",
+    "crates/zx-recomp",
+    "games/starquake",
+    "tools/sq-verify",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+zx-core = { path = "crates/zx-core" }
+zx-runtime = { path = "crates/zx-runtime" }
+zx-recomp = { path = "crates/zx-recomp" }
+
+# Recompiled code is large and branchy; unoptimised it runs far slower than
+# the original machine, so even dev builds get optimisation.
+[profile.dev]
+opt-level = 1
+
+# build.rs runs the recompiler, which traces the game in the interpreter.
+[profile.dev.build-override]
+opt-level = 3
+
+[profile.release.build-override]
+opt-level = 3

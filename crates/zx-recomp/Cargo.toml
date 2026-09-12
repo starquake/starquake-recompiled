@@ -1,0 +1,12 @@
+[package]
+name = "zx-recomp"
+description = "Static recompiler from ZX Spectrum 48K Z80 code to Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zx-core.workspace = true
+zx-runtime.workspace = true
+serde = { version = "1", features = ["derive"] }
+toml = "1"
