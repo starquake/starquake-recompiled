@@ -1,0 +1,11 @@
+# Revisions that only moved whitespace. `git blame` skips these, so it
+# reaches the commit that actually wrote a line.
+#
+# Configure it once per clone:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub honours this file without any configuration.
+
+# Reformat the tree with rustfmt
+29c46502924abf6db5f9540d9a129d34d9a842a1
