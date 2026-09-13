@@ -37,7 +37,10 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: macos-13
+          # Cross-compiled: GitHub no longer has Intel macOS runners, and a
+          # job asking for `macos-13` waits in the queue forever. The smoke
+          # test below runs the result under Rosetta.
+          - os: macos-latest
             target: x86_64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -62,6 +65,23 @@ jobs:
 
       - name: Build
         run: cargo build --release --locked --all-features -p starquake --target ${{ matrix.target }}
+
+      # Proves the binary starts on its runner: from an empty folder it must
+      # say it found no tape and exit 1, which is as far as it gets without
+      # one. Not on Windows, where a release build says that in a dialog box
+      # and the job would wait for somebody to close it.
+      - name: Smoke test
+        if: runner.os != 'Windows'
+        run: |
+          bin="$PWD/target/${{ matrix.target }}/release/starquake"
+          empty=$(mktemp -d)
+          cd "$empty"
+          set +e
+          out=$(HOME="$empty" XDG_DATA_HOME="$empty" "$bin" 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          [ "$code" -eq 1 ] && grep -q "no copy of Starquake found" <<< "$out"
 
       # Named for the target, since four of these land in one release. A
       # tarball everywhere but Windows, where a zip is what Explorer opens
