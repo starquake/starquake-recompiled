@@ -14,7 +14,8 @@ use crate::game::Game;
 pub const COLS: u16 = 16;
 pub const ROWS: u16 = 32;
 
-/// The character rows the room occupies on screen, and its width.
+/// The first and last character rows the room occupies on screen, and its
+/// last column.
 const FIRST_ROW: u8 = crate::room::TOP_ROW;
 const LAST_ROW: u8 = 23;
 const LAST_COL: u8 = 31;
