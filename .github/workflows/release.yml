@@ -80,9 +80,10 @@ jobs:
             cp target/${{ matrix.target }}/release/starquake "$dir/"
           fi
           # The player's guide, not the repository README, which is about
-          # working on the code.
+          # working on the code. Plain text, because anyone can open it.
           cp docs/player/* "$dir/"
-          cp LICENSE-MIT LICENSE-APACHE THIRD-PARTY.md "$dir/"
+          cp LICENSE-MIT LICENSE-APACHE "$dir/"
+          cp THIRD-PARTY.md "$dir/THIRD-PARTY.txt"
           if [ "$RUNNER_OS" = "Windows" ]; then
             7z a -tzip "$dir.zip" "$dir" > /dev/null
             echo "ASSET=$dir.zip" >> "$GITHUB_ENV"

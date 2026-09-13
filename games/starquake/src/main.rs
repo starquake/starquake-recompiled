@@ -121,7 +121,7 @@ fn find_tape() -> Result<PathBuf, String> {
     for p in &tried {
         msg.push_str(&format!("  {}\n", p.display()));
     }
-    msg.push_str("\nSee ASSETS.md, or assets/README.md in the repository, for where to get one.");
+    msg.push_str("\nSee README.txt, or assets/README.md in the repository, for where to get one.");
     Err(msg)
 }
 
