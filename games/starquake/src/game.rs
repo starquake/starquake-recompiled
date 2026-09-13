@@ -83,6 +83,10 @@ pub struct Game {
     pub effects: Vec<u8>,
     /// Tone to play for the rest of this frame (see [`Game::sound_tick`]).
     pub tone: Option<u8>,
+    /// The codes of the teleporters whose booths have been entered this game,
+    /// in the order they were seen, for a frontend that shows them (#50).
+    /// Not part of the original's state: nothing in the game reads it.
+    pub teleporters_seen: Vec<[u8; 5]>,
     /// Which part of the program is running, for a frontend that shows
     /// something beside it. Not part of the original's state: nothing in
     /// the game reads it.
@@ -239,6 +243,7 @@ impl Game {
             effects: Vec::new(),
             tone: None,
             scene: Scene::Loading,
+            teleporters_seen: Vec::new(),
             play_work: false,
             work: crate::sound::Work::default(),
             work_at_effect: None,

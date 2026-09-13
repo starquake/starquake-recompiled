@@ -54,6 +54,7 @@ impl Game {
     /// If the loaded game data is too short to hold what the original keeps
     /// there, which means the file was not Starquake.
     pub fn new_game(&mut self, method: u8) {
+        self.teleporters_seen.clear();
         let ram = self.assets.clone();
         let ram = &ram.ram;
 

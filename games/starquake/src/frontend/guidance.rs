@@ -69,6 +69,8 @@ pub struct Guidance {
     playing: bool,
     /// An action confirmed and not yet carried out.
     requested: Option<Action>,
+    /// The codes of the teleporters seen this game, for level 1 (#50).
+    teleporters: Vec<[u8; 5]>,
     /// Bumped on every change, so a watcher can tell something changed.
     version: u64,
 }
@@ -120,6 +122,19 @@ impl Guidance {
     /// first time. Lowering either never does.
     pub fn raises_record(&self) -> bool {
         self.level > self.record.highest || (self.training && !self.record.training)
+    }
+
+    /// The teleporter codes seen this game.
+    pub fn teleporters(&self) -> &[[u8; 5]] {
+        &self.teleporters
+    }
+
+    /// Takes the game's list of teleporters seen, if it has changed.
+    pub fn set_teleporters(&mut self, seen: &[[u8; 5]]) {
+        if self.teleporters != seen {
+            self.teleporters = seen.to_vec();
+            self.version += 1;
+        }
     }
 
     /// The rows the picker shows: ending a game only while one is played.
@@ -513,6 +528,17 @@ mod tests {
                 Setting::Exit
             ]
         );
+    }
+
+    #[test]
+    fn teleporters_are_taken_only_when_they_change() {
+        let mut g = Guidance::default();
+        let before = g.version();
+        g.set_teleporters(&[]);
+        assert_eq!(g.version(), before, "nothing new, nothing to redraw");
+        g.set_teleporters(&[*b"ABCDE"]);
+        assert_eq!(g.teleporters(), [*b"ABCDE"]);
+        assert!(g.version() > before);
     }
 
     #[test]
