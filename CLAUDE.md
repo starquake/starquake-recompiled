@@ -46,6 +46,12 @@ beside the rewritten code and compares the result byte for byte.
 in its GitHub issue. Chat is optional and the maintainer may not read it: an
 answer given in chat is written back into the issue body before acting on it.
 
+- **Claude reviews its own diff before handing a PR over**: the whole branch
+  against `main`, for what the gates cannot see (leftovers from earlier
+  iterations, behaviour against the ticket, input and state edge cases).
+  Defects are fixed straight away and listed in the PR; judgement calls are a
+  review comment on their line, left for the maintainer to answer `fix`,
+  `skip` or `ticket` (`build-slice`).
 - **Everything lands via a pull request** with an issue behind it, including
   chores and docs. One issue, one deliverable; a ticket that needs several PRs
   in different states is split into sub-issues. A PR says `Closes #NN` only

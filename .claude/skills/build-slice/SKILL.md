@@ -81,6 +81,75 @@ guide to reviewing, not a defence.
 Comments follow the same rule: the answer goes in the **first line**. Keep
 mechanical churn (regenerated files, formatting) in its own commit.
 
+## Review the whole diff
+
+Before the PR is handed over, read the change back as a reviewer would, all
+of it against `main`, not just the last commit (#74):
+
+```bash
+git fetch origin && git diff origin/main...HEAD
+```
+
+The gates prove it compiles, lints and passes its tests. They cannot see:
+
+- **Leftovers**: code, names, comments and docs from an earlier iteration, or
+  from a design the maintainer changed along the way. A lint catches an unused
+  function; it does not catch a comment describing behaviour that is gone.
+- **The ticket**: each item in *Decisions*, and the approved mockup, against
+  what the code actually does.
+- **States and inputs**: what every key and button does in every state of
+  the thing built; what crosses between threads; what a key or button still
+  held does when a screen changes under it.
+- **Tests** that assert the decisions, not the current implementation.
+- **Fidelity**: whether anything could move a differential suite or the Z80
+  corpus.
+
+**Sort each finding into one of two kinds** (#74):
+
+- **A defect**, with one right answer: a bug, leftover code or a stale
+  comment, a name from an earlier iteration, a test that does not test what it
+  says. **Fix it without asking**, in its own commit.
+- **A judgement call**: anything that changes what the player sees or how it
+  behaves, departs from the ticket's *Decisions* or the approved mockup,
+  widens or narrows the scope, or touches fidelity to the original. **Do not
+  fix it; ask.** When unsure which kind a finding is, it is a judgement call.
+
+Ask by posting a review comment on the line it is about. It opens with the 🤖
+attribution line, says what is wrong, gives the recommended fix, and ends
+with the three words the maintainer can reply with:
+
+```bash
+gh api repos/starquake/starquake-recompiled/pulls/<n>/comments \
+  -f commit_id="$(git rev-parse HEAD)" -f path=<file> -F line=<line> -f side=RIGHT \
+  -f body="$(cat finding.md)"
+```
+
+| reply starts with | Claude |
+|---|---|
+| `fix` | fixes it as recommended (or as the reply amends), pushes, replies with the commit, and resolves the thread |
+| `skip` | leaves it, replies to acknowledge, and resolves the thread |
+| `ticket` | files it as a Backlog issue, replies with the link, and resolves the thread |
+
+Any other reply is a question or an extra comment: answer it in the thread,
+and act on it only when it asks for a change. Resolve a thread once it is
+acted on and nothing is left to answer; **the ruleset blocks merging while any
+conversation is unresolved**, so a thread left open holds the PR. Resolving
+takes the thread's node id:
+
+```bash
+gh api graphql -f query='{ repository(owner:"starquake", name:"starquake-recompiled") {
+  pullRequest(number:<n>) { reviewThreads(first:50) { nodes { id isResolved
+    comments(first:1) { nodes { databaseId } } } } } } }'
+gh api graphql -f query='mutation { resolveReviewThread(input:{threadId:"<id>"}) { thread { isResolved } } }'
+``` Replies arrive through the board
+monitor, which watches PR review comments. A finding with no line to anchor
+to (something missing) goes on the file's first changed line, saying so.
+
+The PR body gets a *Found in review* section: each defect fixed, with its
+commit, and how many judgement calls are waiting as comments (or that there
+were none of either). The card moves to `Your review` with those still open;
+the maintainer's replies are part of the review.
+
 ## Finish
 
 - Docs: update `README.md` / `CLAUDE.md` if anything they say changed. If the
