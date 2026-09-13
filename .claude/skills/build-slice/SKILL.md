@@ -104,8 +104,31 @@ The gates prove it compiles, lints and passes its tests. They cannot see:
 - **Fidelity**: whether anything could move a differential suite or the Z80
   corpus.
 
-Fix what it finds in its own commit before handover, and give the PR body a
-*Found in review* line listing the findings, or saying there were none.
+**Post each finding as a review comment on the line it is about**, and do not
+fix it yet: the maintainer decides. Each comment opens with the 🤖 attribution
+line, says what is wrong and what the fix would be, and ends with the three
+words the maintainer can reply with:
+
+```bash
+gh api repos/starquake/starquake-recompiled/pulls/<n>/comments \
+  -f commit_id="$(git rev-parse HEAD)" -f path=<file> -F line=<line> -f side=RIGHT \
+  -f body="$(cat finding.md)"
+```
+
+| reply starts with | Claude |
+|---|---|
+| `fix` | fixes it as described (or as the reply amends), pushes, and replies with the commit |
+| `skip` | leaves it, replies to acknowledge, and resolves the thread |
+| `ticket` | files it as a Backlog issue, replies with the link, and resolves the thread |
+
+Any other reply is a question or an extra comment: answer it in the thread,
+and act on it only when it asks for a change. Replies arrive through the board
+monitor, which watches PR review comments. A finding with no line to anchor to
+(something missing) goes on the file's first changed line, saying so.
+
+The PR body gets a *Found in review* line: how many findings are posted, or
+that there were none. The card moves to `Your review` with the findings still
+open; the maintainer's replies are part of the review.
 
 ## Finish
 

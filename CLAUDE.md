@@ -48,8 +48,9 @@ answer given in chat is written back into the issue body before acting on it.
 
 - **Claude reviews its own diff before handing a PR over**: the whole branch
   against `main`, for what the gates cannot see (leftovers from earlier
-  iterations, behaviour against the ticket, input and state edge cases). The
-  findings are fixed first and listed in the PR (`build-slice`).
+  iterations, behaviour against the ticket, input and state edge cases). Each
+  finding is a review comment on its line, left for the maintainer, who
+  replies `fix`, `skip` or `ticket` (`build-slice`).
 - **Everything lands via a pull request** with an issue behind it, including
   chores and docs. One issue, one deliverable; a ticket that needs several PRs
   in different states is split into sub-issues. A PR says `Closes #NN` only
