@@ -69,9 +69,40 @@ fn tape_candidates() -> Vec<PathBuf> {
         out.push(dir.join(TAPE));
         out.push(dir.join("assets").join(TAPE));
     }
+    if let Some(dir) = data_dir() {
+        out.push(dir.join("starquake-recompiled").join(TAPE));
+    }
     out.push(PathBuf::from(TAPE));
     out.push(PathBuf::from("assets").join(TAPE));
     out
+}
+
+/// Where this system keeps application data a user installed themselves.
+///
+/// No crate for this: it is one environment variable per platform and a
+/// fallback, and the alternative is a dependency for six lines.
+///
+/// On Linux and the other unices it is the XDG Base Directory Specification:
+/// `$XDG_DATA_HOME`, falling back to `~/.local/share`. Not `~/.local`, which
+/// the specification does not define.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn data_dir() -> Option<PathBuf> {
+    if let Some(xdg) = std::env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(xdg));
+    }
+    std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share"))
+}
+
+/// Where this system keeps application data a user installed themselves.
+#[cfg(target_os = "macos")]
+fn data_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support"))
+}
+
+/// Where this system keeps application data a user installed themselves.
+#[cfg(windows)]
+fn data_dir() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(PathBuf::from)
 }
 
 /// The first candidate that exists, or a message naming every place tried.

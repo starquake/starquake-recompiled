@@ -26,8 +26,14 @@ cargo run --release -p starquake -- assets/starquake.tap
 
 The tape can also sit next to the program. Put `starquake.tap` in the same
 folder as `starquake` and run it with no arguments; that is how a release
-archive is meant to be used. It looks beside the executable first, then in the
-working directory, and names every place it tried if it finds nothing.
+archive is meant to be used.
+
+With no argument it looks beside the executable, then in this system's usual
+place for application data, then in the working directory. That middle one is
+`~/.local/share/starquake-recompiled/` on Linux (or `$XDG_DATA_HOME`),
+`~/Library/Application Support/starquake-recompiled/` on macOS, and
+`%APPDATA%\starquake-recompiled\` on Windows. If it finds nothing it names
+every place it tried.
 
 | Key | Action |
 |-----|--------|
