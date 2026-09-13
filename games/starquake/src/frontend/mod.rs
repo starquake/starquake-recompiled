@@ -78,13 +78,9 @@ struct FrontHost {
     bench: bool,
     /// The scene last passed on to the window.
     scene: Scene,
-    /// Frames left to hold A, S, D, F and G for "End this game".
-    abandon: u32,
+    /// "End this game" was chosen and the game has not yet ended.
+    abandon: bool,
 }
-
-/// How long "End this game" holds its keys at most: a second, for when it
-/// is chosen during something that does not read them, like a death.
-const ABANDON_FRAMES: u32 = 50;
 
 impl FrontHost {
     /// Holds the game between frames while the guidance picker is open,
@@ -269,16 +265,20 @@ impl Host for FrontHost {
             .unwrap()
             .take(guidance::Action::EndGame)
         {
-            self.abandon = ABANDON_FRAMES;
+            self.abandon = true;
         }
         // "End this game" holds A, S, D, F and G, the original's own way to
-        // abandon a game, until the game has left play. The keys come up
-        // before the game-over screen, where a held key would cut its tune.
-        if self.abandon > 0 && game.scene == Scene::Play {
-            input.keys[1] &= !0x1F;
-            self.abandon -= 1;
-        } else {
-            self.abandon = 0;
+        // abandon a game. BLOB's control reads them on the play loop's own
+        // frames only (`play_work`), so they are held on those frames and on
+        // no others: not during a death, a door or a teleporter booth, which
+        // reads letters for its code. The request lasts until the game has
+        // left play, however long that takes.
+        if self.abandon {
+            if game.scene != Scene::Play {
+                self.abandon = false;
+            } else if game.play_work {
+                input.keys[1] &= !0x1F;
+            }
         }
         game.controls.press(&mut input, pad.bits);
         if pad.start {
@@ -341,7 +341,7 @@ fn play_game(
         frame_start: None,
         bench: std::env::var_os("SQ_BENCH").is_some(),
         scene: Scene::Loading,
-        abandon: 0,
+        abandon: false,
     };
     // The frame counter runs throughout, which is what seeds each new game.
     game.run(&mut host);
