@@ -24,6 +24,11 @@ the development tools' ZX Spectrum ROM can legitimately be had.
 cargo run --release -p starquake -- assets/starquake.tap
 ```
 
+The tape can also just sit next to the program, which is how a release archive
+is meant to be used: put `starquake.tap` in the same folder as `starquake` and
+run it with no arguments. It looks beside the executable first, then in the
+working directory, and names every place it tried if it finds nothing.
+
 | Key | Action |
 |-----|--------|
 | Arrow keys | Move. They drive the Kempston joystick and press `5` `6` `7` `8`, which are the Spectrum's own cursor keys, so they work in the Kempston, cursor and UDK methods alike |

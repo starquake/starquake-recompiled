@@ -11,6 +11,48 @@ mod frontend;
 
 use std::path::PathBuf;
 
+/// The default name of the tape, when none is given on the command line.
+const TAPE: &str = "starquake.tap";
+
+/// Where to look for the tape, in order, when the player has not said.
+///
+/// Beside the executable comes first, because that is what somebody who has
+/// just unpacked a release archive will have done, and it is the case that
+/// used not to work. The working directory comes after, so a development
+/// checkout still finds `assets/starquake.tap` exactly as it always did.
+fn tape_candidates() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        out.push(dir.join(TAPE));
+        out.push(dir.join("assets").join(TAPE));
+    }
+    out.push(PathBuf::from(TAPE));
+    out.push(PathBuf::from("assets").join(TAPE));
+    out
+}
+
+/// The first candidate that exists, or a message naming every place tried.
+fn find_tape() -> Result<PathBuf, String> {
+    let tried = tape_candidates();
+    if let Some(found) = tried.iter().find(|p| p.is_file()) {
+        return Ok(found.clone());
+    }
+    let mut msg = String::from(
+        "error: no copy of Starquake found.\n\n\
+         This program contains no part of the original game and reads its \
+         graphics, maps,\ntext and sound from your own copy at startup. Put \
+         `starquake.tap` next to the\nprogram, or name it on the command \
+         line:\n\n    starquake path/to/starquake.tap\n\nLooked in:\n",
+    );
+    for p in &tried {
+        msg.push_str(&format!("  {}\n", p.display()));
+    }
+    msg.push_str("\nSee ASSETS.md, or assets/README.md in the repository, for where to get one.");
+    Err(msg)
+}
+
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let headless = args.iter().position(|a| a == "--headless").map(|i| {
@@ -27,10 +69,16 @@ fn main() {
         let rest: Vec<String> = args.drain(i..).skip(1).collect();
         rest.first().and_then(|s| s.parse().ok()).unwrap_or(20)
     });
-    let path = args
-        .first()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("assets/starquake.tap"));
+    let path = match args.first() {
+        Some(given) => PathBuf::from(given),
+        None => match find_tape() {
+            Ok(found) => found,
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        },
+    };
     if let Some(secs) = bench {
         if let Err(e) = frontend::bench(&path, secs) {
             eprintln!("error: {e}");
