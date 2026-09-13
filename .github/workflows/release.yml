@@ -79,8 +79,10 @@ jobs:
           else
             cp target/${{ matrix.target }}/release/starquake "$dir/"
           fi
-          cp README.md LICENSE-MIT LICENSE-APACHE THIRD-PARTY.md "$dir/"
-          cp assets/README.md "$dir/ASSETS.md"
+          # The player's guide, not the repository README, which is about
+          # working on the code.
+          cp docs/player/* "$dir/"
+          cp LICENSE-MIT LICENSE-APACHE THIRD-PARTY.md "$dir/"
           if [ "$RUNNER_OS" = "Windows" ]; then
             7z a -tzip "$dir.zip" "$dir" > /dev/null
             echo "ASSET=$dir.zip" >> "$GITHUB_ENV"
