@@ -85,9 +85,15 @@ gamepad, opens the guidance menu and pauses the game:
 
 Guidance has levels from 0, the original game, to 5; each adds to the
 ones below it. Turning it up, or training mode on, shows on that
-game's score, so the menu asks before keeping such a change. This
-version has the menu and the panel; what the levels and training mode
-do is still to come.
+game's score, so the menu asks before keeping such a change. So far:
+
+  Level 1  The codes of the teleporters you have seen.
+  Level 2  A map of the rooms you have visited. Walls are lines, and
+           a gap in one is a way on; the square is where you are and
+           the diamonds are the teleporters you have seen. A way on
+           can still need a lift or be behind a door.
+
+Levels 3 to 5 and training mode are still to come.
 
 
 LEGAL
