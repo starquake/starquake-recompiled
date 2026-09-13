@@ -154,6 +154,31 @@ window, and reports how long frames actually took. The game is paced by the
 clock at the Spectrum's own frame rate (19.968ms), so a median away from that
 means the pacing is wrong, not that the game is slow.
 
+## How this was built
+
+@starquake started this project, said what it should be, and steered it
+throughout. Claude, Anthropic's AI assistant, wrote it: about 14,000 lines of
+Rust over three sessions, and every commit in this repository.
+
+It began as an attempt to translate a Spectrum game into Rust at compile time
+rather than emulate it. That is static recompilation, and `crates/zx-recomp`
+is named after it. The attempt was dropped when @starquake decided the game
+should need no Z80 runtime at all, a choice made knowing that a hand rewrite
+was several times more work. `zx-recomp` now traces and disassembles the
+original, and the rewrite was written from its listings.
+
+@starquake supplied the game and the ROM, set the rule that nothing from
+either may be embedded in the binary, chose the direction at each fork,
+corrected the work, and holds the only merge authority here. Claude wrote the
+code, the notes in `docs/re`, the tests and the documentation.
+
+Reference material: the original program, disassembled by `zx-recomp`; the
+Z80 instruction set, including the undocumented flag behaviour; the
+[`.z80` format reference](https://worldofspectrum.org/faq/reference/z80format.htm);
+the [Fuse](https://fuse-emulator.sourceforge.net/) project's Z80 test corpus,
+which found three faults in the reference interpreter; and
+[World of Spectrum](https://worldofspectrum.net/) for the game and the ROM.
+
 ## Legal
 
 Starquake is copyright © 1985 Stephen Crow / Bubble Bus Software. This project
