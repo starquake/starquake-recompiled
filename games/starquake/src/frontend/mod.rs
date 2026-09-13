@@ -118,7 +118,13 @@ impl FrontHost {
 impl Host for FrontHost {
     fn frame(&mut self, game: &Game) -> (Input, u32) {
         if self.shared.quit.load(Ordering::Relaxed) {
-            self.report();
+            if self.bench {
+                // There is no window in the bench, and the game is running on
+                // the main thread, so nothing else will end the process: the
+                // report is what it was for.
+                self.report();
+                std::process::exit(0);
+            }
             // The window has gone. Returning lets the game run on harmlessly
             // for the moment it takes the event loop to finish; tearing the
             // process down from this thread while the main one is inside
