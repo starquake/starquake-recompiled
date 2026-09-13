@@ -189,8 +189,13 @@ impl Guidance {
         self.version += 1;
     }
 
+    /// Opens or closes the picker. It always opens on its top row, the
+    /// guidance level, so the highlight is never left on an action.
     pub fn toggle_picker(&mut self) {
         self.picker = !self.picker;
+        if self.picker {
+            self.focus = Setting::Level;
+        }
         self.armed = None;
         self.version += 1;
     }
@@ -292,6 +297,20 @@ mod tests {
         g.focus_down();
         g.activate();
         assert!(!g.take(Action::Exit), "the first press was cancelled");
+    }
+
+    #[test]
+    fn the_picker_opens_on_its_top_row() {
+        let mut g = Guidance::default();
+        g.set_playing(true);
+        g.toggle_picker();
+        for _ in 0..5 {
+            g.focus_down();
+        }
+        assert_eq!(g.focus(), Setting::Exit);
+        g.toggle_picker();
+        g.toggle_picker();
+        assert_eq!(g.focus(), Setting::Level);
     }
 
     #[test]
