@@ -1,5 +1,10 @@
 # cargo-about: what goes into THIRD-PARTY.md.
 #
+# THIRD-PARTY.md is generated from about.hbs. Do not edit it by hand: CI
+# regenerates it and fails if the result differs. The note used to be at the
+# top of the file itself, but a release ships that file as THIRD-PARTY.txt,
+# where a comment would show as text.
+#
 # The licences here mirror `deny.toml`'s allow list on purpose. deny.toml
 # decides what the project will take on as a dependency; this decides what
 # gets attributed when a binary is shipped. If they ever disagree, one of them

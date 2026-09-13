@@ -25,7 +25,7 @@ cargo run --release -p starquake -- assets/starquake.tap
 ```
 
 Where to put the tape, the controls, and everything else a player needs are
-in [docs/player/README.md](docs/player/README.md). That folder is what a
+in [docs/player/README.txt](docs/player/README.txt). That folder is what a
 release archive carries besides the program.
 
 ## Status
