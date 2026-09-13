@@ -78,7 +78,13 @@ struct FrontHost {
     bench: bool,
     /// The scene last passed on to the window.
     scene: Scene,
+    /// Frames left to hold A, S, D, F and G for "End this game".
+    abandon: u32,
 }
+
+/// How long "End this game" holds its keys at most: a second, for when it
+/// is chosen during something that does not read them, like a death.
+const ABANDON_FRAMES: u32 = 50;
 
 impl FrontHost {
     /// Holds the game between frames while the guidance picker is open,
@@ -108,6 +114,12 @@ impl FrontHost {
             }
             if pad.right {
                 guidance.change(true);
+            }
+            if pad.south {
+                guidance.activate();
+                if guidance.take(guidance::Action::Exit) {
+                    self.shared.quit.store(true, Ordering::Relaxed);
+                }
             }
         }
         self.next_frame = Instant::now();
@@ -180,9 +192,12 @@ impl Host for FrontHost {
 
         self.frame_start = Some(Instant::now());
         if game.scene != self.scene {
+            let mut guidance = self.shared.guidance.lock().unwrap();
             if game.scene == Scene::Play {
-                self.shared.guidance.lock().unwrap().new_game();
+                guidance.new_game();
             }
+            guidance.set_playing(game.scene == Scene::Play);
+            drop(guidance);
             self.scene = game.scene;
             *self.shared.scene.lock().unwrap() = game.scene;
         }
@@ -244,6 +259,24 @@ impl Host for FrontHost {
             pad = self.hold_for_picker();
         }
         let mut input = *self.shared.input.lock().unwrap();
+        if self
+            .shared
+            .guidance
+            .lock()
+            .unwrap()
+            .take(guidance::Action::EndGame)
+        {
+            self.abandon = ABANDON_FRAMES;
+        }
+        // "End this game" holds A, S, D, F and G, the original's own way to
+        // abandon a game, until the game has left play. The keys come up
+        // before the game-over screen, where a held key would cut its tune.
+        if self.abandon > 0 && game.scene == Scene::Play {
+            input.keys[1] &= !0x1F;
+            self.abandon -= 1;
+        } else {
+            self.abandon = 0;
+        }
         game.controls.press(&mut input, pad.bits);
         if pad.start {
             game.controls.press_pause(&mut input);
@@ -305,6 +338,7 @@ fn play_game(
         frame_start: None,
         bench: std::env::var_os("SQ_BENCH").is_some(),
         scene: Scene::Loading,
+        abandon: 0,
     };
     // The frame counter runs throughout, which is what seeds each new game.
     game.run(&mut host);

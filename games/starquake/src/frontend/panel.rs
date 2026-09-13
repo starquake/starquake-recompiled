@@ -37,6 +37,10 @@ const ACCENT_DIM: Rgb = [0x5e, 0x7f, 0xb8];
 const NOTCH: Rgb = [0x26, 0x2b, 0x37];
 const LABEL_FOCUSED: Rgb = [0xa9, 0xc5, 0xff];
 const BUTTON_LINE: Rgb = [0x3a, 0x3f, 0x4c];
+const DANGER: Rgb = [0xe0, 0x67, 0x6f];
+const DANGER_FILL: Rgb = [0x2a, 0x16, 0x18];
+const DANGER_TITLE: Rgb = [0xf3, 0xc6, 0xca];
+const DANGER_TEXT: Rgb = [0xe0, 0xa3, 0xa8];
 
 /// What each level adds, for the picker.
 const ADDS: [&str; 6] = [
@@ -176,7 +180,22 @@ impl Panel {
 
     fn picker(&mut self, canvas: &mut Canvas, guidance: &Guidance) {
         canvas.shade(0.0, 0.0, WINDOW_W, WINDOW_H, DIM, 184);
-        let (w, h) = (480.0, 416.0);
+        // Two settings, then the actions, each taller while it waits for its
+        // second press.
+        let actions: Vec<Setting> = guidance
+            .rows()
+            .into_iter()
+            .filter(|r| matches!(r, Setting::EndGame | Setting::Exit))
+            .collect();
+        let action_h = |r: Setting| {
+            if guidance.armed() == Some(r) {
+                54.0
+            } else {
+                40.0
+            }
+        };
+        let actions_h: f32 = actions.iter().map(|&r| action_h(r) + 4.0).sum::<f32>() - 4.0;
+        let (w, h) = (480.0, 372.0 + 8.0 + actions_h + 12.0 + 52.0);
         let x = (WINDOW_W - w) / 2.0;
         let y = (WINDOW_H - h) / 2.0;
         canvas.round_rect(x, y, w, h, 12.0, BADGE_LINE);
@@ -299,13 +318,60 @@ impl Panel {
             )],
         );
 
+        // The actions: pressed once, a row turns red and asks again.
+        let mut ay = y + 380.0;
+        canvas.round_rect(x + 1.0, y + 372.0, w - 2.0, 1.0, 0.0, RULE);
+        for &row in &actions {
+            let rh = action_h(row);
+            let (label, again) = match row {
+                Setting::EndGame => ("End this game", "Press Enter again to end it"),
+                _ => ("Exit Starquake", "Press Enter again to exit"),
+            };
+            let armed = guidance.armed() == Some(row);
+            let focused = guidance.focus() == row;
+            if armed {
+                canvas.round_rect(rx, ay, rw, rh, 10.0, DANGER);
+                canvas.round_rect(rx + 2.0, ay + 2.0, rw - 4.0, rh - 4.0, 8.0, DANGER_FILL);
+            } else if focused {
+                canvas.round_rect(rx, ay, rw, rh, 10.0, ACCENT);
+                canvas.round_rect(rx + 2.0, ay + 2.0, rw - 4.0, rh - 4.0, 8.0, SELECTED);
+            }
+            let colour = if armed {
+                DANGER_TITLE
+            } else if focused {
+                TITLE
+            } else {
+                VALUE_DIM
+            };
+            self.fonts.text(
+                Some(canvas),
+                rx + 16.0,
+                ay + 11.0,
+                None,
+                1.0,
+                &[span(label, 15.0, Weight::SemiBold, colour)],
+            );
+            if armed {
+                self.fonts.text(
+                    Some(canvas),
+                    rx + 16.0,
+                    ay + 31.0,
+                    None,
+                    1.0,
+                    &[span(again, 12.0, Weight::Regular, DANGER_TEXT)],
+                );
+            }
+            ay += rh + 4.0;
+        }
+
         // What the keys do.
-        let foot = y + 372.0;
+        let foot = y + h - 52.0;
         canvas.round_rect(x + 1.0, foot, w - 2.0, 1.0, 0.0, RULE);
         let mut hx = x + 28.0;
         for (keys, what) in [
-            (["\u{2191}", "\u{2193}"], "choose"),
-            (["\u{2190}", "\u{2192}"], "change"),
+            (&["\u{2191}", "\u{2193}"][..], "choose"),
+            (&["\u{2190}", "\u{2192}"][..], "change"),
+            (&["Enter"][..], "do it"),
         ] {
             for k in keys {
                 hx += self.key_cap(canvas, hx, foot + 16.0, k) + 4.0;
@@ -313,19 +379,13 @@ impl Panel {
             let spans = [span(what, 12.0, Weight::Regular, HINT)];
             self.fonts
                 .text(Some(canvas), hx + 2.0, foot + 18.0, None, 1.0, &spans);
-            hx += self.fonts.measure(&spans) + 22.0;
+            hx += self.fonts.measure(&spans) + 18.0;
         }
         let done = [span("done", 12.0, Weight::Regular, HINT)];
-        let or = [span("or", 12.0, Weight::Regular, HINT)];
-        let mut kx = x + w - 28.0 - self.fonts.measure(&done);
+        let kx = x + w - 28.0 - self.fonts.measure(&done);
         self.fonts
             .text(Some(canvas), kx, foot + 18.0, None, 1.0, &done);
-        kx -= self.key_width("Select") + 6.0;
-        self.key_cap(canvas, kx, foot + 16.0, "Select");
-        kx -= self.fonts.measure(&or) + 6.0;
-        self.fonts
-            .text(Some(canvas), kx, foot + 18.0, None, 1.0, &or);
-        kx -= self.key_width("Esc") + 6.0;
+        let kx = kx - self.key_width("Esc") - 6.0;
         self.key_cap(canvas, kx, foot + 16.0, "Esc");
     }
 
@@ -487,9 +547,21 @@ mod render_check {
             (
                 "picker-training",
                 {
-                    let mut g = picker;
+                    let mut g = picker.clone();
                     g.focus_down();
                     g.change(true);
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                "picker-end-armed",
+                {
+                    let mut g = picker;
+                    g.set_playing(true);
+                    g.focus_down();
+                    g.focus_down();
+                    g.activate();
                     g
                 },
                 Scene::Play,

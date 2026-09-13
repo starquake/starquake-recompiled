@@ -305,6 +305,13 @@ impl App {
             KeyCode::ArrowDown => guidance.focus_down(),
             KeyCode::ArrowLeft => guidance.change(false),
             KeyCode::ArrowRight => guidance.change(true),
+            KeyCode::Enter | KeyCode::NumpadEnter => {
+                guidance.activate();
+                if guidance.take(super::guidance::Action::Exit) {
+                    // The window closes on the next turn of the event loop.
+                    self.shared.quit.store(true, Ordering::Relaxed);
+                }
+            }
             _ => {}
         }
         if guidance.picker_open() && !open {

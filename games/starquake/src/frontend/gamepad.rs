@@ -30,13 +30,17 @@ pub struct Pad {
     pub down: bool,
     pub left: bool,
     pub right: bool,
+    /// The bottom face button (A on an Xbox pad), which does the picker's
+    /// highlighted action.
+    pub south: bool,
 }
 
 pub struct Gamepad {
     gilrs: Option<gilrs::Gilrs>,
-    /// Whether Select and the four directions were down at the last poll,
+    /// Whether Select, the four directions and the bottom face button were
+    /// down at the last poll,
     /// to tell a press from a hold.
-    was: [bool; 5],
+    was: [bool; 6],
 }
 
 impl Gamepad {
@@ -44,13 +48,13 @@ impl Gamepad {
         match gilrs::Gilrs::new() {
             Ok(gilrs) => Gamepad {
                 gilrs: Some(gilrs),
-                was: [false; 5],
+                was: [false; 6],
             },
             Err(e) => {
                 eprintln!("no gamepad support: {e}");
                 Gamepad {
                     gilrs: None,
-                    was: [false; 5],
+                    was: [false; 6],
                 }
             }
         }
@@ -66,7 +70,7 @@ impl Gamepad {
         while gilrs.next_event().is_some() {}
 
         let (mut bits, mut start) = (0u8, false);
-        let mut now = [false; 5];
+        let mut now = [false; 6];
         for (_id, pad) in gilrs.gamepads() {
             use gilrs::{Axis, Button};
             let (x, y) = (pad.value(Axis::LeftStickX), pad.value(Axis::LeftStickY));
@@ -102,6 +106,7 @@ impl Gamepad {
             now[2] |= pad.is_pressed(Button::DPadDown) || y < -DEADZONE;
             now[3] |= pad.is_pressed(Button::DPadLeft) || x < -DEADZONE;
             now[4] |= pad.is_pressed(Button::DPadRight) || x > DEADZONE;
+            now[5] |= pad.is_pressed(Button::South);
         }
         let pressed = |i: usize| now[i] && !self.was[i];
         let result = Pad {
@@ -112,6 +117,7 @@ impl Gamepad {
             down: pressed(2),
             left: pressed(3),
             right: pressed(4),
+            south: pressed(5),
         };
         self.was = now;
         result
