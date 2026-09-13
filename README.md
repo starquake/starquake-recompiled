@@ -144,10 +144,10 @@ means the pacing is off rather than the game being slow.
 
 ## How this was built
 
-Claude, Anthropic's AI assistant, wrote this project while working with
-@starquake, over three sessions between 11 and 13 September 2026. It produced
-about 14,000 lines of Rust. Every commit here was drafted by Claude,
-including this paragraph.
+@starquake started this project, said what it should be, and steered it the
+whole way. Claude, Anthropic's AI assistant, did the building: about 14,000
+lines of Rust over three sessions, and every commit here, including this
+paragraph.
 
 Better to say so than to let people work it out from the commit messages.
 
@@ -173,7 +173,7 @@ here, as the tracer and disassembler the rewrite was written from.
 
 ### Who did what
 
-@starquake provided what the work needed, and made the decisions:
+@starquake set the brief and every decision under it:
 
 - The original idea, and then the decision to drop it: a hand rewrite with no
   Z80 runtime, chosen in the knowledge that it was several times more work.
@@ -190,7 +190,7 @@ here, as the tracer and disassembler the rewrite was written from.
 - Review and merging. Claude has not merged a pull request here; the branch
   ruleset needs a label only @starquake can add.
 
-Claude did the rest:
+Claude built what was asked for:
 
 - Read the original's Z80 code and wrote the notes in `docs/re`.
 - Wrote the Rust: the game, the reference interpreter, the differential
