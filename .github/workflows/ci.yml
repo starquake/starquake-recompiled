@@ -129,14 +129,6 @@ jobs:
       - name: Formatting
         run: cargo fmt --all --check
 
-      # A release archive carries release/README.md with this repository's
-      # controls table copied in. Building it here means a pull request that
-      # breaks it, or lets development material into it, fails now rather
-      # than at release time.
-      - name: Release documents build
-        if: runner.os == 'Linux'
-        run: python3 release/docs.py "$RUNNER_TEMP/release-docs"
-
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 

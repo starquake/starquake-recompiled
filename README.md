@@ -24,31 +24,9 @@ the development tools' ZX Spectrum ROM can legitimately be had.
 cargo run --release -p starquake -- assets/starquake.tap
 ```
 
-The tape can also sit next to the program. Put `starquake.tap` in the same
-folder as `starquake` and run it with no arguments; that is how a release
-archive is meant to be used.
-
-With no argument it looks beside the executable, then in this system's usual
-place for application data, then in the working directory. That middle one is
-`~/.local/share/starquake-recompiled/` on Linux (or `$XDG_DATA_HOME`),
-`~/Library/Application Support/starquake-recompiled/` on macOS, and
-`%APPDATA%\starquake-recompiled\` on Windows. If it finds nothing it names
-every place it tried.
-
-<!-- release:controls -->
-| Key | Action |
-|-----|--------|
-| Arrow keys | Move. They drive the Kempston joystick and press `5` `6` `7` `8`, which are the Spectrum's own cursor keys, so they work in the Kempston, cursor and UDK methods alike |
-| Up | Pick up / swap items; with the hover platform, rise |
-| Down | Build a platform |
-| Alt, `.` or `,` | Fire (Kempston) |
-| Gamepad | D-pad or left stick to move, any face or shoulder button to fire, Start to pause. Works whichever control method is chosen, because it presses what that method reads. USB or Bluetooth alike, since a paired controller is an ordinary gamepad to the operating system. Some controllers need the right mode: an 8BitDo in Switch mode is detected but sends no input, so try one of its other modes |
-| P | Pause |
-| A S D F G together | Abandon the game |
-
-At the title screen, **1**–**5** choose how to play, **6** defines your own
-keys, **0** starts the game and **Q** quits. Any key stops the tune.
-<!-- /release:controls -->
+Where to put the tape, the controls, and everything else a player needs are
+in [docs/player/README.md](docs/player/README.md). That folder is what a
+release archive carries besides the program.
 
 ## Status
 
@@ -92,7 +70,7 @@ in the original, which here take one step per frame.
 | `crates/zx-core` | Z80 decoder, `.z80` loader, PNG writer. |
 | `crates/zx-recomp` | Tracing and disassembly-listing tool used for reverse engineering (development only). |
 | `docs/re` | Reverse-engineering notes. |
-| `release` | What a release archive carries besides the program: the README for players, and the script that builds it. |
+| `docs/player` | The guide for players: where to put the tape, and the controls. A release archive carries this folder. |
 
 ## Verification
 
