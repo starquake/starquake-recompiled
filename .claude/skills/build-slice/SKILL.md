@@ -81,6 +81,32 @@ guide to reviewing, not a defence.
 Comments follow the same rule: the answer goes in the **first line**. Keep
 mechanical churn (regenerated files, formatting) in its own commit.
 
+## Review the whole diff
+
+Before the PR is handed over, read the change back as a reviewer would, all
+of it against `main`, not just the last commit (#74):
+
+```bash
+git fetch origin && git diff origin/main...HEAD
+```
+
+The gates prove it compiles, lints and passes its tests. They cannot see:
+
+- **Leftovers**: code, names, comments and docs from an earlier iteration, or
+  from a design the maintainer changed along the way. A lint catches an unused
+  function; it does not catch a comment describing behaviour that is gone.
+- **The ticket**: each item in *Decisions*, and the approved mockup, against
+  what the code actually does.
+- **States and inputs**: what every key and button does in every state of
+  the thing built; what crosses between threads; what a key or button still
+  held does when a screen changes under it.
+- **Tests** that assert the decisions, not the current implementation.
+- **Fidelity**: whether anything could move a differential suite or the Z80
+  corpus.
+
+Fix what it finds in its own commit before handover, and give the PR body a
+*Found in review* line listing the findings, or saying there were none.
+
 ## Finish
 
 - Docs: update `README.md` / `CLAUDE.md` if anything they say changed. If the
