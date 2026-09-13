@@ -125,9 +125,11 @@ impl Game {
             match self.menu(host) {
                 crate::menu::Start::Quit => return,
                 crate::menu::Start::Play(method) => {
-                    self.scene = Scene::Play;
                     self.new_game(method);
                     self.intro(host);
+                    // From here the original reads A S D F G to abandon the
+                    // game, which is what the frontend's End this game uses.
+                    self.scene = Scene::Play;
                     self.play(host);
                     self.scene = Scene::GameOver;
                     self.game_over(host);

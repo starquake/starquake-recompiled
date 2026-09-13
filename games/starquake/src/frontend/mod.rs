@@ -89,16 +89,16 @@ const ABANDON_FRAMES: u32 = 50;
 impl FrontHost {
     /// Holds the game between frames while the guidance picker is open,
     /// taking the gamepad's side of it: up and down choose a row, left and
-    /// right change a setting, A does an action, and B or Select goes back. No time
-    /// passes for the game, so its pacing starts again from now. Returns the
-    /// pad as it was when the picker closed.
+    /// right change a setting, A does an action, and B or Select goes back.
+    /// No time passes for the game, so its pacing starts again from now.
+    /// Returns no input for the frame it resumes on, so the button that
+    /// closed the picker is not also a shot in the game.
     fn hold_for_picker(&mut self) -> gamepad::Pad {
-        let mut pad = gamepad::Pad::default();
         while self.shared.guidance.lock().unwrap().picker_open()
             && !self.shared.quit.load(Ordering::Relaxed)
         {
             std::thread::sleep(Duration::from_millis(20));
-            pad = self.pad.poll();
+            let pad = self.pad.poll();
             let mut guidance = self.shared.guidance.lock().unwrap();
             if pad.select || pad.east {
                 guidance.back();
@@ -123,7 +123,7 @@ impl FrontHost {
             }
         }
         self.next_frame = Instant::now();
-        pad
+        gamepad::Pad::default()
     }
 
     /// Prints how long frames actually took: the spread, and the worst.
@@ -252,8 +252,11 @@ impl Host for FrontHost {
         // Start presses the method's pause key, which is not a fixed key
         // either; on a fresh tape it is Space.
         let mut pad = self.pad.poll();
-        if pad.select {
-            self.shared.guidance.lock().unwrap().open();
+        {
+            let mut guidance = self.shared.guidance.lock().unwrap();
+            if pad.select && !guidance.picker_open() {
+                guidance.open();
+            }
         }
         if self.shared.guidance.lock().unwrap().picker_open() {
             pad = self.hold_for_picker();

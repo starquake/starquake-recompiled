@@ -18,9 +18,9 @@ use crate::room::{FORCE_FIELDS_LEN, Marker, RoomObjects, SPARKLE_TABLE_LEN};
 pub enum Scene {
     /// The picture the tape showed while it loaded.
     Loading,
-    /// The title screen and its menu.
+    /// The title screen and its menu, and a new game's intro.
     Menu,
-    /// A game: its intro, play, and the deaths along the way.
+    /// A game being played, with the deaths along the way.
     Play,
     /// The end of a game: the scores, entering initials, the high-score table.
     GameOver,

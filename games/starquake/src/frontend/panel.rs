@@ -25,7 +25,7 @@ const DIM: Rgb = [0x08, 0x09, 0x0c];
 const DIALOG: Rgb = [0x10, 0x12, 0x18];
 const SELECTED: Rgb = [0x1b, 0x20, 0x30];
 const ACCENT: Rgb = [0x8f, 0xb4, 0xff];
-const RADIO: Rgb = [0x4a, 0x51, 0x63];
+const ARROW: Rgb = [0x4a, 0x51, 0x63];
 const HINT: Rgb = [0x76, 0x7c, 0x8c];
 const HINT_KEY: Rgb = [0xa9, 0xaf, 0xbe];
 const SWITCH_ON: Rgb = [0x2f, 0x6f, 0x4f];
@@ -41,6 +41,8 @@ const DANGER: Rgb = [0xe0, 0x67, 0x6f];
 const DANGER_FILL: Rgb = [0x2a, 0x16, 0x18];
 const DANGER_TITLE: Rgb = [0xf3, 0xc6, 0xca];
 const DANGER_TEXT: Rgb = [0xe0, 0xa3, 0xa8];
+const TRAINING: Rgb = [0xf5, 0xb8, 0x4b];
+const PAUSED: Rgb = [0x5d, 0x63, 0x72];
 
 /// What each level adds, for the picker.
 const ADDS: [&str; 6] = [
@@ -51,8 +53,6 @@ const ADDS: [&str; 6] = [
     "Not built yet: an arrow along routes you know.",
     "Not built yet: the arrow routed through the whole map.",
 ];
-const TRAINING: Rgb = [0xf5, 0xb8, 0x4b];
-const PAUSED: Rgb = [0x5d, 0x63, 0x72];
 
 pub struct Panel {
     fonts: Fonts,
@@ -390,29 +390,25 @@ impl Panel {
 
         if let Some(choice) = guidance.asking() {
             canvas.shade(x, y, w, h, DIM, 150);
-            self.keep_changes(canvas, guidance, choice);
+            self.noted_with_score(canvas, guidance, choice);
         }
     }
 
-    /// "Keep changes?" over the picker: what changed, and Keep or Undo.
-    fn keep_changes(&mut self, canvas: &mut Canvas, guidance: &Guidance, choice: Choice) {
-        let (was_level, was_training) = guidance.opened();
-        let on_off = |on: bool| if on { "On" } else { "Off" };
+    /// "Noted with your score" over the picker: what the score note would
+    /// gain, and Use it or Undo.
+    fn noted_with_score(&mut self, canvas: &mut Canvas, guidance: &Guidance, choice: Choice) {
+        let record = guidance.record();
         let mut lines = Vec::new();
-        if guidance.level() != was_level {
+        if guidance.level() > record.highest {
             lines.push(format!(
-                "Guidance level: {was_level} \u{2192} {}",
+                "This game will show guidance up to level {}.",
                 guidance.level()
             ));
         }
-        if guidance.training() != was_training {
-            lines.push(format!(
-                "Training mode: {} \u{2192} {}",
-                on_off(was_training),
-                on_off(guidance.training())
-            ));
+        if guidance.training() && !record.training {
+            lines.push("This game will show that training mode was used.".to_string());
         }
-        let (w, h) = (360.0, 176.0 + 20.0 * lines.len() as f32);
+        let (w, h) = (400.0, 176.0 + 20.0 * lines.len() as f32);
         let x = (WINDOW_W - w) / 2.0;
         let y = (WINDOW_H - h) / 2.0;
         canvas.round_rect(x, y, w, h, 12.0, BUTTON_LINE);
@@ -423,7 +419,12 @@ impl Panel {
             y + 20.0,
             None,
             1.0,
-            &[span("Keep changes?", 19.0, Weight::SemiBold, BRIGHT)],
+            &[span(
+                "Noted with your score",
+                19.0,
+                Weight::SemiBold,
+                BRIGHT,
+            )],
         );
         let mut ly = y + 54.0;
         for line in &lines {
@@ -439,7 +440,7 @@ impl Panel {
         }
         let by = ly + 12.0;
         let bw = (w - 48.0 - 12.0) / 2.0;
-        for (i, (label, this)) in [("Keep", Choice::Keep), ("Undo", Choice::Undo)]
+        for (i, (label, this)) in [("Use it", Choice::Use), ("Undo", Choice::Undo)]
             .into_iter()
             .enumerate()
         {
@@ -527,7 +528,7 @@ impl Panel {
     ) {
         let colour = |on: bool| match (on, focused) {
             (true, true) => ACCENT,
-            (true, false) => RADIO,
+            (true, false) => ARROW,
             (false, _) => NOTCH,
         };
         let (l, r) = (x + 16.0, x + w - 16.0);
@@ -665,7 +666,7 @@ mod render_check {
                 Scene::Play,
             ),
             (
-                "picker-keep-changes",
+                "picker-noted-with-score",
                 {
                     let mut g = Guidance::default();
                     g.set_level(1);
