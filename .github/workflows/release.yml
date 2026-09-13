@@ -62,7 +62,7 @@ jobs:
           dir=starquake-${{ github.ref_name }}-${{ matrix.target }}
           mkdir "$dir"
           cp target/${{ matrix.target }}/release/starquake "$dir/"
-          cp README.md LICENSE-MIT LICENSE-APACHE assets/README.md "$dir/"
+          cp README.md LICENSE-MIT LICENSE-APACHE THIRD-PARTY.md assets/README.md "$dir/"
           tar czf "$dir.tar.gz" "$dir"
           echo "ASSET=$dir.tar.gz" >> "$GITHUB_ENV"
 
