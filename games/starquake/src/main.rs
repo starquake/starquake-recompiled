@@ -7,9 +7,50 @@
 //! Usage: `starquake [TAPE] [--headless FRAMES [SCREENSHOT_DIR]]`
 //!         `starquake [TAPE] --bench SECONDS`
 
+// Every Rust program links as a console application, which on Windows means
+// a command prompt opens behind the game window. A release build asks for
+// the windows subsystem instead so that it does not. Debug builds keep the
+// console, since that is where anyone debugging wants the output.
+//
+// The cost is that `eprintln!` reaches nobody when the program is started
+// from a file manager, so anything fatal goes through `fatal` below.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod frontend;
 
 use std::path::PathBuf;
+
+/// Reports a fatal startup problem somewhere it can actually be seen, and
+/// gives up.
+///
+/// On Windows a release build has no console, so `eprintln!` goes nowhere
+/// when the program is started by double-clicking it — which is exactly how
+/// somebody who has just unpacked the archive will start it, and exactly
+/// when they are most likely to have forgotten the tape. A message box is
+/// the only place that sentence can land. Everywhere else, stderr is right.
+fn fatal(message: &str) -> ! {
+    eprintln!("{message}");
+    #[cfg(all(windows, not(debug_assertions)))]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+        fn wide(s: &str) -> Vec<u16> {
+            s.encode_utf16().chain(std::iter::once(0)).collect()
+        }
+        let (text, title) = (wide(message), wide("Starquake"));
+        // SAFETY: both strings are NUL-terminated and outlive the call, and
+        // a null window handle is what MessageBoxW wants for an owner-less
+        // box.
+        unsafe {
+            MessageBoxW(
+                std::ptr::null_mut(),
+                text.as_ptr(),
+                title.as_ptr(),
+                MB_OK | MB_ICONERROR,
+            );
+        }
+    }
+    std::process::exit(1)
+}
 
 /// The default name of the tape, when none is given on the command line.
 const TAPE: &str = "starquake.tap";
@@ -73,16 +114,12 @@ fn main() {
         Some(given) => PathBuf::from(given),
         None => match find_tape() {
             Ok(found) => found,
-            Err(e) => {
-                eprintln!("{e}");
-                std::process::exit(1);
-            }
+            Err(e) => fatal(&e),
         },
     };
     if let Some(secs) = bench {
         if let Err(e) = frontend::bench(&path, secs) {
-            eprintln!("error: {e}");
-            std::process::exit(1);
+            fatal(&format!("error: {e}"));
         }
         return;
     }
@@ -91,7 +128,6 @@ fn main() {
         None => frontend::run(&path),
     };
     if let Err(e) = result {
-        eprintln!("error: {e}");
-        std::process::exit(1);
+        fatal(&format!("error: {e}"));
     }
 }
