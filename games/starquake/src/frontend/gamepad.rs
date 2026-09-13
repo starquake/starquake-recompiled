@@ -4,7 +4,8 @@
 //! cannot tell what moved them, so a gamepad drives them exactly as the
 //! hardware would. Pause is the odd one out — on a Spectrum it is a key, not
 //! a joystick button — so Start presses `P` for convenience. Select opens
-//! the guidance picker (#1), where the D-pad works it.
+//! the guidance picker (#1), where the D-pad works it, A confirms and B
+//! or Select cancels.
 //!
 //! How the pad is attached is not this code's business, or `gilrs`'s. A
 //! Bluetooth controller the operating system has paired is an ordinary
@@ -33,6 +34,8 @@ pub struct Pad {
     /// The bottom face button (A on an Xbox pad), which does the picker's
     /// highlighted action.
     pub south: bool,
+    /// The right face button (B on an Xbox pad), which cancels the picker.
+    pub east: bool,
 }
 
 pub struct Gamepad {
@@ -40,7 +43,7 @@ pub struct Gamepad {
     /// Whether Select, the four directions and the bottom face button were
     /// down at the last poll,
     /// to tell a press from a hold.
-    was: [bool; 6],
+    was: [bool; 7],
 }
 
 impl Gamepad {
@@ -48,13 +51,13 @@ impl Gamepad {
         match gilrs::Gilrs::new() {
             Ok(gilrs) => Gamepad {
                 gilrs: Some(gilrs),
-                was: [false; 6],
+                was: [false; 7],
             },
             Err(e) => {
                 eprintln!("no gamepad support: {e}");
                 Gamepad {
                     gilrs: None,
-                    was: [false; 6],
+                    was: [false; 7],
                 }
             }
         }
@@ -70,7 +73,7 @@ impl Gamepad {
         while gilrs.next_event().is_some() {}
 
         let (mut bits, mut start) = (0u8, false);
-        let mut now = [false; 6];
+        let mut now = [false; 7];
         for (_id, pad) in gilrs.gamepads() {
             use gilrs::{Axis, Button};
             let (x, y) = (pad.value(Axis::LeftStickX), pad.value(Axis::LeftStickY));
@@ -107,6 +110,7 @@ impl Gamepad {
             now[3] |= pad.is_pressed(Button::DPadLeft) || x < -DEADZONE;
             now[4] |= pad.is_pressed(Button::DPadRight) || x > DEADZONE;
             now[5] |= pad.is_pressed(Button::South);
+            now[6] |= pad.is_pressed(Button::East);
         }
         let pressed = |i: usize| now[i] && !self.was[i];
         let result = Pad {
@@ -118,6 +122,7 @@ impl Gamepad {
             left: pressed(3),
             right: pressed(4),
             south: pressed(5),
+            east: pressed(6),
         };
         self.was = now;
         result

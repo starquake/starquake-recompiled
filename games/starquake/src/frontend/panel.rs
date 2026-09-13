@@ -221,8 +221,9 @@ impl Panel {
         );
 
         let focus = guidance.focus();
-        let level = guidance.level();
-        let training = guidance.training();
+        // The picker shows what confirming would put into effect.
+        let level = guidance.draft_level();
+        let training = guidance.draft_training();
 
         // The guidance level: a number and a name, the notches, and what it adds.
         let (rx, rw) = (x + 12.0, w - 24.0);
@@ -371,22 +372,24 @@ impl Panel {
         for (keys, what) in [
             (&["\u{2191}", "\u{2193}"][..], "choose"),
             (&["\u{2190}", "\u{2192}"][..], "change"),
-            (&["Enter"][..], "do it"),
+            (&["Enter"][..], "confirm"),
         ] {
             for k in keys {
-                hx += self.key_cap(canvas, hx, foot + 16.0, k) + 4.0;
+                // Enter lights up once there is something to confirm.
+                let lit = *k == "Enter" && guidance.changed();
+                hx += self.key_cap(canvas, hx, foot + 16.0, k, lit) + 4.0;
             }
             let spans = [span(what, 12.0, Weight::Regular, HINT)];
             self.fonts
                 .text(Some(canvas), hx + 2.0, foot + 18.0, None, 1.0, &spans);
             hx += self.fonts.measure(&spans) + 18.0;
         }
-        let done = [span("done", 12.0, Weight::Regular, HINT)];
+        let done = [span("cancel", 12.0, Weight::Regular, HINT)];
         let kx = x + w - 28.0 - self.fonts.measure(&done);
         self.fonts
             .text(Some(canvas), kx, foot + 18.0, None, 1.0, &done);
         let kx = kx - self.key_width("Esc") - 6.0;
-        self.key_cap(canvas, kx, foot + 16.0, "Esc");
+        self.key_cap(canvas, kx, foot + 16.0, "Esc", false);
     }
 
     /// The box of one setting in the picker, outlined when highlighted, and
@@ -459,17 +462,22 @@ impl Panel {
     }
 
     /// A key name in a small outline at (`x`, `y`); returns its width.
-    fn key_cap(&mut self, canvas: &mut Canvas, x: f32, y: f32, key: &str) -> f32 {
+    fn key_cap(&mut self, canvas: &mut Canvas, x: f32, y: f32, key: &str, lit: bool) -> f32 {
         let w = self.key_width(key);
-        canvas.round_rect(x, y, w, 20.0, 4.0, BUTTON_LINE);
-        canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, 18.0, 3.0, DIALOG);
+        let (line, fill, text) = if lit {
+            (ACCENT, ACCENT, DIALOG)
+        } else {
+            (BUTTON_LINE, DIALOG, HINT_KEY)
+        };
+        canvas.round_rect(x, y, w, 20.0, 4.0, line);
+        canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, 18.0, 3.0, fill);
         self.fonts.text(
             Some(canvas),
             x + 6.0,
             y + 2.0,
             None,
             1.0,
-            &[span(key, 12.0, Weight::SemiBold, HINT_KEY)],
+            &[span(key, 12.0, Weight::SemiBold, text)],
         );
         w
     }
@@ -534,7 +542,7 @@ mod render_check {
         let out = std::path::PathBuf::from(out);
         let mut picker = Guidance::default();
         picker.set_level(3);
-        picker.toggle_picker();
+        picker.open();
         let mut level2 = Guidance::default();
         level2.set_level(2);
         let mut record = Guidance::default();
@@ -550,6 +558,8 @@ mod render_check {
                     let mut g = picker.clone();
                     g.focus_down();
                     g.change(true);
+                    g.focus_up();
+                    g.change(false);
                     g
                 },
                 Scene::Play,
@@ -561,7 +571,7 @@ mod render_check {
                     g.set_playing(true);
                     g.focus_down();
                     g.focus_down();
-                    g.activate();
+                    g.enter();
                     g
                 },
                 Scene::Play,

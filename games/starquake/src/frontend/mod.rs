@@ -88,8 +88,8 @@ const ABANDON_FRAMES: u32 = 50;
 
 impl FrontHost {
     /// Holds the game between frames while the guidance picker is open,
-    /// taking the gamepad's side of it: up and down choose a setting, left
-    /// and right change it, and Select closes it. No time
+    /// taking the gamepad's side of it: up and down choose a row, left and
+    /// right change a setting, A confirms, and B or Select cancels. No time
     /// passes for the game, so its pacing starts again from now. Returns the
     /// pad as it was when the picker closed.
     fn hold_for_picker(&mut self) -> gamepad::Pad {
@@ -100,8 +100,8 @@ impl FrontHost {
             std::thread::sleep(Duration::from_millis(20));
             pad = self.pad.poll();
             let mut guidance = self.shared.guidance.lock().unwrap();
-            if pad.select {
-                guidance.toggle_picker();
+            if pad.select || pad.east {
+                guidance.cancel();
             }
             if pad.up {
                 guidance.focus_up();
@@ -116,7 +116,7 @@ impl FrontHost {
                 guidance.change(true);
             }
             if pad.south {
-                guidance.activate();
+                guidance.enter();
                 if guidance.take(guidance::Action::Exit) {
                     self.shared.quit.store(true, Ordering::Relaxed);
                 }
@@ -253,7 +253,7 @@ impl Host for FrontHost {
         // either; on a fresh tape it is Space.
         let mut pad = self.pad.poll();
         if pad.select {
-            self.shared.guidance.lock().unwrap().toggle_picker();
+            self.shared.guidance.lock().unwrap().open();
         }
         if self.shared.guidance.lock().unwrap().picker_open() {
             pad = self.hold_for_picker();

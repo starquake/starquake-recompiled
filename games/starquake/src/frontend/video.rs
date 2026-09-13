@@ -292,21 +292,23 @@ impl App {
         }
     }
 
-    /// The keys the guidance picker takes: Esc opens and closes it, and while
+    /// The keys the guidance picker takes: Esc opens it and cancels it, Enter
+    /// confirms, and while
     /// it is open it has the keyboard to itself, so nothing typed into it
     /// reaches the game. Returns whether the key was the picker's.
     fn picker_key(&mut self, code: KeyCode) -> bool {
         let mut guidance = self.shared.guidance.lock().unwrap();
         let open = guidance.picker_open();
         match code {
-            KeyCode::Escape => guidance.toggle_picker(),
+            KeyCode::Escape if open => guidance.cancel(),
+            KeyCode::Escape => guidance.open(),
             _ if !open => return false,
             KeyCode::ArrowUp => guidance.focus_up(),
             KeyCode::ArrowDown => guidance.focus_down(),
             KeyCode::ArrowLeft => guidance.change(false),
             KeyCode::ArrowRight => guidance.change(true),
             KeyCode::Enter | KeyCode::NumpadEnter => {
-                guidance.activate();
+                guidance.enter();
                 if guidance.take(super::guidance::Action::Exit) {
                     // The window closes on the next turn of the event loop.
                     self.shared.quit.store(true, Ordering::Relaxed);
