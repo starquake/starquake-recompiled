@@ -1413,6 +1413,85 @@ fn room_tour_states(env: &Env, count: usize) -> Vec<Zx> {
     states
 }
 
+/// The map's openings (#2) against where BLOB actually goes.
+///
+/// From each state the rewrite plays on under random joystick input, and
+/// every time BLOB walks, falls, flies or takes a wall passage into the next
+/// room, the edge he left through must be shown open. The rewrite stands in for the original here:
+/// every frame of it is checked against the original elsewhere.
+///
+/// An opening he never uses proves nothing either way, so it is not a
+/// failure. Rooms whose shared edge disagrees (open on one side, closed on
+/// the other) are counted and reported, not failed: a one-way drop is real.
+fn check_map_openings(env: &Env, states: &[Zx]) -> bool {
+    use starquake::play::FrameEvent;
+    let Some(first) = states.first() else {
+        return report("map openings", &[], 0);
+    };
+    let openings = env.game(first).all_openings();
+    let mut failures = Vec::new();
+    let mut crossings = 0;
+    let mut r = Rng(0x3A9);
+    for (n, state) in states.iter().enumerate().flat_map(|s| [s; 4]) {
+        let mut g = env.game(state);
+        let mut input = input_of(state);
+        for frame in 0..2000 {
+            if frame % 40 == 0 {
+                input.kempston = r.byte() & 0x0F;
+            }
+            let from = g.room;
+            let event = g.play_frame(&input);
+            if !matches!(event, FrameEvent::Continue | FrameEvent::CoreRoom) {
+                break;
+            }
+            let o = openings[from as usize];
+            let (edge, open) = match g.room.wrapping_sub(from) {
+                1 => ("right", o.right),
+                0xFFFF => ("left", o.left),
+                16 => ("bottom", o.down),
+                0xFFF0 => ("top", o.up),
+                // Staying put, or a teleporter.
+                _ => continue,
+            };
+            crossings += 1;
+            if !open {
+                failures.push((
+                    format!("state {n} frame {frame}"),
+                    vec![format!(
+                        "left room {from} through its {edge} edge, shown closed"
+                    )],
+                ));
+            }
+            if event == FrameEvent::CoreRoom {
+                break;
+            }
+        }
+    }
+    let rooms = openings.len();
+    let disagree: Vec<usize> = (0..rooms)
+        .filter(|&room| {
+            let o = openings[room];
+            let right = room % 16 < 15 && o.right != openings[room + 1].left;
+            let down = room + 16 < rooms && o.down != openings[room + 16].up;
+            right || down
+        })
+        .collect();
+    let open: usize = openings
+        .iter()
+        .map(|o| {
+            [o.left, o.right, o.up, o.down]
+                .into_iter()
+                .filter(|&e| e)
+                .count()
+        })
+        .sum();
+    println!(
+        "  {open} of {} edges open; {crossings} crossings; rooms that disagree with a neighbour: {disagree:?}",
+        rooms * 4
+    );
+    report("map openings", &failures, crossings)
+}
+
 /// A whole main-loop iteration: the original runs with real interrupts
 /// from one loop top to the next; the rewrite runs one frame.
 fn check_loop(env: &Env, states: &[Zx]) -> bool {
@@ -2257,6 +2336,10 @@ fn main() {
     ok &= guarded("enemies (A01B)", || check_enemies(&env, &tour));
     ok &= guarded("BLOB (C5BD)", || check_blob(&env, &tour));
     ok &= guarded("main loop (A523)", || check_loop(&env, &tour));
+    ok &= guarded("map openings", || {
+        let both: Vec<Zx> = states.iter().chain(&tour).cloned().collect();
+        check_map_openings(&env, &both)
+    });
     if !ok {
         std::process::exit(1);
     }
