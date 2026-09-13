@@ -54,13 +54,12 @@ impl Headless {
 
 impl Host for Headless {
     fn frame(&mut self, game: &Game) -> (Input, u32) {
-        let busy: u32 = game.effects.iter().map(|&id| game.assets.beep(id).1).sum();
         for &id in &game.effects {
-            let d = game.assets.beep(id).1;
+            let (_, d) = starquake::sound::beep(&game.assets.ram, id, 0);
             self.tally[(id & 0x3F) as usize] += 1;
             self.lost[(id & 0x3F) as usize] += (d / FRAME_T) as u64;
         }
-        let frames = 1 + busy / FRAME_T;
+        let frames = game.frame_sound().frames;
         let before = self.frame;
         self.frame += frames as u64;
         if before / self.every != self.frame / self.every {

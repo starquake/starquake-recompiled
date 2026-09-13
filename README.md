@@ -49,16 +49,25 @@ covered:
 - Losing a life, the game-over screen, security doors, and the core room.
 - The music: every tune matches the original's timing to the T-state, which
   sets the pitch, the buzz and the tempo.
+- The sound effects and the tone under them, to the T-state wherever in the
+  frame they play: the ULA holds them up while it draws the picture, so the
+  same effect is lower in the middle of the screen than in the border.
 
 Rewritten but not checked against the original on their own: the intro and
 high-score screens, teleporter booths, the Cheops pyramid, and the ending
 screen. They are built out of the drawing, printing and scoring code the
 checks above do cover.
 
-Two things cannot match exactly: anything derived from how
+Three things cannot match exactly: anything derived from how
 long the player took (the frame counter seeds a room's random numbers, and
-the time is shown at the end), and screens whose loops run faster than 50 Hz
-in the original, which here take one step per frame.
+the time is shown at the end), screens whose loops run faster than 50 Hz
+in the original, which here take one step per frame, and the length of the
+silence at the start of each frame of play. The original is quiet while it
+does the frame's work and plays the tone after, so the gap is however long
+the work took; the rewrite does the same work without a clock and estimates
+it from what the frame did (collision tests, printing, cells drawn, enemies
+checked). In nine frames out of ten the tone starts within 0.8 ms of the
+original's.
 
 ## Layout
 

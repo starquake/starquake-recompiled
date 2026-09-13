@@ -5,7 +5,6 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use starquake::assets::Assets;
 
 const CPU_HZ: f64 = zx_core::timing::CPU_HZ as f64;
 const VOLUME: f32 = 0.25;
@@ -57,51 +56,18 @@ impl Beeper {
         }
     }
 
-    /// Plays blocking sound effects; returns how many T-states they took.
-    pub fn effects(&mut self, assets: &Assets, ids: &[u8]) -> u32 {
-        let mut total = 0;
-        for &id in ids {
-            let (edges, duration) = assets.beep(id);
-            let mut now = 0;
-            for &(t, level) in edges {
-                self.advance((t - now) as f64);
-                now = t;
-                self.level = level;
-            }
-            self.advance((duration - now) as f64);
-            self.level = false;
-            total += duration;
-        }
-        total
-    }
-
-    /// Plays a tune's speaker changes over `t` T-states.
-    pub fn music(&mut self, edges: &[(u32, bool)], t: u32) {
+    /// Plays a frame's speaker changes (see `Game::frame_sound`) over the
+    /// `t` T-states the frame lasted. The level before the first change is
+    /// whatever the speaker was left at.
+    pub fn play(&mut self, edges: &[(u32, bool)], t: u32) {
         let mut now = 0;
         for &(at, level) in edges {
             let at = at.min(t);
-            self.advance((at - now) as f64);
-            now = at;
+            self.advance(f64::from(at.saturating_sub(now)));
+            now = now.max(at);
             self.level = level;
         }
-        self.advance((t - now) as f64);
-    }
-
-    /// Plays the frame tone (or silence) for `t` T-states.
-    pub fn tone(&mut self, half_period: Option<u8>, t: u32) {
-        match half_period {
-            None => self.advance(t as f64),
-            Some(hp) => {
-                let half = starquake::sound::tone_half_period(hp);
-                let mut left = t;
-                while left > 0 {
-                    self.level = !self.level;
-                    let step = half.min(left);
-                    self.advance(step as f64);
-                    left -= step;
-                }
-            }
-        }
+        self.advance(f64::from(t - now));
     }
 
     /// The samples generated since the last [`Beeper::clear_samples`]. Kept

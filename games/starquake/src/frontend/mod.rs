@@ -127,14 +127,10 @@ impl Host for FrontHost {
         }
 
         self.frame_start = Some(Instant::now());
-        let busy = self.beeper.effects(&game.assets, &game.effects);
-        let frames = 1 + busy / starquake::sound::FRAME_T;
-        let rest = starquake::sound::FRAME_T - busy % starquake::sound::FRAME_T;
-        if game.music.is_empty() {
-            self.beeper.tone(game.tone, rest);
-        } else {
-            self.beeper.music(&game.music, rest);
-        }
+        let sound = game.frame_sound();
+        let frames = sound.frames;
+        self.beeper
+            .play(&sound.edges, frames * starquake::sound::FRAME_T);
 
         {
             let mut screen = self.shared.screen.lock().unwrap();

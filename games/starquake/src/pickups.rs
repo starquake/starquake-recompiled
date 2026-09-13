@@ -132,7 +132,7 @@ impl Game {
         let col = (col & 0xFC) | 1;
         for r in row..row + 3 {
             let assets = self.assets.clone();
-            self.printer.print(
+            self.work.characters += self.printer.print(
                 &mut self.display,
                 &assets.font,
                 &assets.udg,

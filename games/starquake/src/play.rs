@@ -49,6 +49,7 @@ impl Game {
     pub fn frame_with(&mut self, host: &mut dyn Host) {
         let tone = self.sound_tick();
         self.tone = tone;
+        self.play_work = true;
         self.sync(host);
         self.tone = tone;
         self.display_work();

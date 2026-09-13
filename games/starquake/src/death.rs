@@ -71,9 +71,10 @@ impl Game {
                     0,
                 ];
                 let assets = self.assets.clone();
-                self.printer
-                    .print(&mut self.display, &assets.font, &assets.udg, &text);
-                self.effects.push(0x0F);
+                self.work.characters +=
+                    self.printer
+                        .print(&mut self.display, &assets.font, &assets.udg, &text);
+                self.request_effect(0x0F);
             }
         }
 
@@ -92,7 +93,7 @@ impl Game {
         if self.status.lives == 0 {
             self.final_scoring();
         }
-        self.effects.push(0x13);
+        self.request_effect(0x13);
 
         // Four fragments fly apart, animated by the enemy code.
         let (bx, by) = (self.entities[0].x(), self.entities[0].y());

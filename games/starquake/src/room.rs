@@ -186,6 +186,7 @@ impl Game {
     /// bit 7 of `attr` set, only the brightness (for `0x80`/`0xC0`) or the
     /// colour is changed and nothing is recorded for restoring.
     pub fn xor_cell(&mut self, row: u8, col: u8, pixels: &[u8], attr: u8) {
+        self.work.cells += 1;
         let base = crate::display::cell_offset(row, col);
         for (line, &p) in pixels.iter().take(8).enumerate() {
             self.display.mem[base + (line << 8)] ^= p;

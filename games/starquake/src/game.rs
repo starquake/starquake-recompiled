@@ -70,6 +70,15 @@ pub struct Game {
     pub effects: Vec<u8>,
     /// Tone to play for the rest of this frame (see [`Game::sound_tick`]).
     pub tone: Option<u8>,
+    /// Whether this frame boundary is the play loop's. The original spends
+    /// the start of such a frame on the frame's work, in silence, before
+    /// the sound (see [`Game::frame_sound`]).
+    pub play_work: bool,
+    /// What the frame's work has done so far, which is how long it took the
+    /// original (see [`crate::sound::Work`]).
+    pub work: crate::sound::Work,
+    /// [`Game::work`] when the frame's first blocking effect was requested.
+    pub work_at_effect: Option<crate::sound::Work>,
     /// Speaker changes of a tune playing over this frame, as (T-states into
     /// the frame, level). Empty unless a tune is playing.
     pub music: Vec<(u32, bool)>,
@@ -212,6 +221,9 @@ impl Game {
             enemy_cursor: bytes(at::ENEMY_CURSOR, 2).try_into().unwrap(),
             effects: Vec::new(),
             tone: None,
+            play_work: false,
+            work: crate::sound::Work::default(),
+            work_at_effect: None,
             music: Vec::new(),
             input: Input::default(),
             core_slots: bytes(at::CORE_SLOTS, 9).try_into().unwrap(),

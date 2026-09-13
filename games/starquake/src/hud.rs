@@ -52,8 +52,9 @@ const BAR_FULL: u8 = b'(';
 impl Game {
     fn print(&mut self, text: &Text) {
         let assets = self.assets.clone();
-        self.printer
-            .print(&mut self.display, &assets.font, &assets.udg, &text.0);
+        self.work.characters +=
+            self.printer
+                .print(&mut self.display, &assets.font, &assets.udg, &text.0);
     }
 
     /// Draws the panel frame from tiles. Bright cells in it are not

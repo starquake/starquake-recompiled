@@ -15,7 +15,7 @@ beside the rewritten code and compares the result byte for byte.
   the no-frontend build, and then the differential suites. **Gate on the exit
   code, never on grepped output.**
 - `cargo run --release -p sq-verify -- all assets/starquake.tap assets/48.rom`
-  runs the 25 differential suites on their own.
+  runs the 28 differential suites on their own.
 - `cargo test -p zx-runtime --test fuse -- --nocapture` checks the interpreter
   against the Fuse Z80 corpus (1335 cases).
 - `cargo run --release --all-features -p starquake -- assets/starquake.tap`
@@ -28,7 +28,7 @@ beside the rewritten code and compares the result byte for byte.
 - **No game or ROM data is ever committed.** `assets/` is ignored except its
   README, and CI has a job that fails if anything slips through. This is what
   makes the project legal to publish; nothing is worth breaking it for.
-- **The differential suites are the contract.** All 25 must match. A change
+- **The differential suites are the contract.** All 28 must match. A change
   that moves one is a deliberate, called-out decision, never a check adjusted
   to make it pass. The suites have twice rejected a plausible improvement, and
   both times they were right.
