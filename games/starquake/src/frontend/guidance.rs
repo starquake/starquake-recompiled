@@ -104,6 +104,12 @@ impl Guidance {
         self.armed
     }
 
+    /// The level and training mode as they were when the picker opened,
+    /// which Undo goes back to.
+    pub fn opened(&self) -> (u8, bool) {
+        self.opened
+    }
+
     /// The question, if it is up, and the highlighted answer.
     pub fn asking(&self) -> Option<Choice> {
         self.asking

@@ -394,22 +394,71 @@ impl Panel {
         }
     }
 
-    /// "Noted with your score" over the picker: what the score note would
-    /// gain, and Use it or Undo.
+    /// The question over the picker when leaving it would add to the score
+    /// note: exactly what changed since it opened, what the score will say,
+    /// and buttons named for what they do.
     fn noted_with_score(&mut self, canvas: &mut Canvas, guidance: &Guidance, choice: Choice) {
+        let (was_level, was_training) = guidance.opened();
+        let (level, training) = (guidance.level(), guidance.training());
         let record = guidance.record();
-        let mut lines = Vec::new();
-        if guidance.level() > record.highest {
-            lines.push(format!(
-                "This game will show guidance up to level {}.",
-                guidance.level()
+        let on_off = |on: bool| if on { "on" } else { "off" };
+
+        let mut changes = Vec::new();
+        if level != was_level {
+            changes.push(format!(
+                "Guidance level {was_level} \u{2192} {level}  ({})",
+                LEVELS[level as usize]
             ));
         }
-        if guidance.training() && !record.training {
-            lines.push("This game will show that training mode was used.".to_string());
+        if training != was_training {
+            changes.push(format!(
+                "Training mode {} \u{2192} {}",
+                on_off(was_training),
+                on_off(training)
+            ));
         }
-        let (w, h) = (400.0, 176.0 + 20.0 * lines.len() as f32);
+        let mut shows = Vec::new();
+        if level > record.highest {
+            shows.push(format!("guidance up to level {level}"));
+        }
+        if training && !record.training {
+            shows.push("that training mode was used".to_string());
+        }
+        let later = match shows.len() {
+            1 if level > record.highest => "turn it down",
+            1 => "turn it off",
+            _ => "change them back",
+        };
+        let explanation = format!(
+            "This game's score will show {}. That stays, even if you {later} later.",
+            shows.join(" and ")
+        );
+        let (keep, undo) = match (level != was_level, training != was_training) {
+            (true, false) => (
+                format!("Keep level {level}"),
+                format!("Back to level {was_level}"),
+            ),
+            (false, true) => (
+                "Keep training on".to_string(),
+                "Turn training off".to_string(),
+            ),
+            _ => ("Keep both changes".to_string(), "Undo both".to_string()),
+        };
+
+        let w = 440.0;
         let x = (WINDOW_W - w) / 2.0;
+        let inner = w - 48.0;
+        // Measure the wrapped explanation before placing anything.
+        let (_, explanation_h) = self.fonts.text(
+            None,
+            0.0,
+            0.0,
+            Some(inner),
+            1.5,
+            &[span(&explanation, 13.0, Weight::Regular, HINT_KEY)],
+        );
+        let h =
+            58.0 + 22.0 * changes.len() as f32 + 10.0 + explanation_h + 20.0 + 40.0 + 20.0 + 44.0;
         let y = (WINDOW_H - h) / 2.0;
         canvas.round_rect(x, y, w, h, 12.0, BUTTON_LINE);
         canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0, 11.0, DIALOG);
@@ -420,27 +469,36 @@ impl Panel {
             None,
             1.0,
             &[span(
-                "Noted with your score",
+                "This will show on your score",
                 19.0,
                 Weight::SemiBold,
                 BRIGHT,
             )],
         );
-        let mut ly = y + 54.0;
-        for line in &lines {
+        let mut ly = y + 58.0;
+        for change in &changes {
             self.fonts.text(
                 Some(canvas),
                 x + 24.0,
                 ly,
                 None,
                 1.0,
-                &[span(line, 13.0, Weight::Regular, HINT_KEY)],
+                &[span(change, 14.0, Weight::SemiBold, TITLE)],
             );
-            ly += 20.0;
+            ly += 22.0;
         }
-        let by = ly + 12.0;
-        let bw = (w - 48.0 - 12.0) / 2.0;
-        for (i, (label, this)) in [("Use it", Choice::Use), ("Undo", Choice::Undo)]
+        ly += 10.0;
+        self.fonts.text(
+            Some(canvas),
+            x + 24.0,
+            ly,
+            Some(inner),
+            1.5,
+            &[span(&explanation, 13.0, Weight::Regular, HINT_KEY)],
+        );
+        let by = ly + explanation_h + 20.0;
+        let bw = (inner - 12.0) / 2.0;
+        for (i, (label, this)) in [(keep.as_str(), Choice::Use), (undo.as_str(), Choice::Undo)]
             .into_iter()
             .enumerate()
         {
@@ -454,7 +512,7 @@ impl Panel {
             }
             let spans = [span(
                 label,
-                15.0,
+                14.0,
                 Weight::SemiBold,
                 if chosen { DIALOG } else { VALUE_DIM },
             )];
@@ -462,7 +520,7 @@ impl Panel {
             self.fonts.text(
                 Some(canvas),
                 bx + (bw - tw) / 2.0,
-                by + 11.0,
+                by + 12.0,
                 None,
                 1.0,
                 &spans,
@@ -474,7 +532,7 @@ impl Panel {
         for (keys, what) in [
             (&["\u{2190}", "\u{2192}"][..], "choose"),
             (&["Enter"][..], "confirm"),
-            (&["Esc"][..], "back"),
+            (&["Esc"][..], "back to the picker"),
         ] {
             for k in keys {
                 hx += self.key_cap(canvas, hx, foot + 12.0, k) + 4.0;
@@ -674,6 +732,19 @@ mod render_check {
                     g.change(true);
                     g.change(true);
                     g.focus_down();
+                    g.change(true);
+                    g.back();
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                "picker-noted-level-only",
+                {
+                    let mut g = Guidance::default();
+                    g.set_level(1);
+                    g.open();
+                    g.change(true);
                     g.change(true);
                     g.back();
                     g
