@@ -5,8 +5,8 @@
 # the player's own copy of Starquake to run, and refuses to start without one.
 # It saves them installing Rust, and that is all it saves them. See assets/README.md.
 #
-# Linux and macOS only. CI does not build for Windows, so nothing here proves
-# it works, and an unproven binary is worse than none.
+# Linux, macOS and Windows — the same three CI builds and tests on. A target
+# is only shipped once something proves it works.
 
 name: Release
 
@@ -24,6 +24,11 @@ jobs:
   build:
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    # Every `run:` below is a bash script; Windows would otherwise use
+    # PowerShell.
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -34,6 +39,8 @@ jobs:
             target: aarch64-apple-darwin
           - os: macos-13
             target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v7
 
@@ -56,15 +63,27 @@ jobs:
       - name: Build
         run: cargo build --release --locked --all-features -p starquake --target ${{ matrix.target }}
 
-      # Named for the target, since three of these land in one release.
+      # Named for the target, since four of these land in one release. A
+      # tarball everywhere but Windows, where a zip is what Explorer opens
+      # without being asked twice.
       - name: Package
         run: |
           dir=starquake-${{ github.ref_name }}-${{ matrix.target }}
           mkdir "$dir"
-          cp target/${{ matrix.target }}/release/starquake "$dir/"
-          cp README.md LICENSE-MIT LICENSE-APACHE THIRD-PARTY.md assets/README.md "$dir/"
-          tar czf "$dir.tar.gz" "$dir"
-          echo "ASSET=$dir.tar.gz" >> "$GITHUB_ENV"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp target/${{ matrix.target }}/release/starquake.exe "$dir/"
+          else
+            cp target/${{ matrix.target }}/release/starquake "$dir/"
+          fi
+          cp README.md LICENSE-MIT LICENSE-APACHE THIRD-PARTY.md "$dir/"
+          cp assets/README.md "$dir/ASSETS.md"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            7z a -tzip "$dir.zip" "$dir" > /dev/null
+            echo "ASSET=$dir.zip" >> "$GITHUB_ENV"
+          else
+            tar czf "$dir.tar.gz" "$dir"
+            echo "ASSET=$dir.tar.gz" >> "$GITHUB_ENV"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -83,7 +102,9 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          files: "*.tar.gz"
+          files: |
+            *.tar.gz
+            *.zip
           # The player still needs their own tape, and saying so at the point
           # of download saves somebody a confusing first run.
           body: |
@@ -91,5 +112,5 @@ jobs:
 
             **You need your own copy of Starquake to play.** The program contains no part of the original game and reads its graphics, maps, text and sound from the tape at startup. See `assets/README.md` in the archive for where to get one legitimately.
 
-            Run it with: `./starquake path/to/starquake.tap`
+            Run it with `./starquake path/to/starquake.tap`, or `starquake.exe path\to\starquake.tap` on Windows.
           fail_on_unmatched_files: true

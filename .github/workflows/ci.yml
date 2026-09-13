@@ -38,11 +38,16 @@ jobs:
 
   build:
     name: build, test and lint (${{ matrix.os }})
+    # Every `run:` below is a bash script. Windows runners default to
+    # PowerShell, so say it once here rather than on each step.
+    defaults:
+      run:
+        shell: bash
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -98,10 +103,17 @@ jobs:
       # path that was already trustworthy.
       - name: Verify the Z80 test corpus
         run: |
+          # macOS ships `shasum`, Linux and git-bash ship `sha256sum`, and
+          # neither ships both. Ask for whichever is there.
+          if command -v sha256sum > /dev/null; then
+            check="sha256sum -c -"
+          else
+            check="shasum -a 256 -c -"
+          fi
           printf '%s  %s\n' \
             fec4e44dfa4fa889f976aa546a774d48c2a7366ab12312d449f79e85e68d77d7 assets/tests.in \
             207dc604db5d2a0a49ebd40e1bcb985a919e7a6e3dea1a52884ee05f9a1bf005 assets/tests.expected \
-            | shasum -a 256 -c -
+            | $check
 
       - name: Test
         run: cargo test --workspace --locked
