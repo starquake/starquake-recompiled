@@ -23,12 +23,22 @@ pub struct Record {
     pub training: bool,
 }
 
+/// The two settings in the picker, top to bottom.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Setting {
+    #[default]
+    Level,
+    Training,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Guidance {
     level: u8,
     training: bool,
     record: Record,
     picker: bool,
+    /// The setting the picker has highlighted.
+    focus: Setting,
     /// Bumped on every change, so a watcher can tell something changed.
     version: u64,
 }
@@ -54,6 +64,31 @@ impl Guidance {
         self.version
     }
 
+    pub fn focus(&self) -> Setting {
+        self.focus
+    }
+
+    /// Up and down in the picker: which setting is highlighted.
+    pub fn focus_up(&mut self) {
+        self.focus = Setting::Level;
+        self.version += 1;
+    }
+
+    pub fn focus_down(&mut self) {
+        self.focus = Setting::Training;
+        self.version += 1;
+    }
+
+    /// Left and right in the picker: the highlighted setting down or up a
+    /// step, taking effect at once.
+    pub fn change(&mut self, up: bool) {
+        match (self.focus, up) {
+            (Setting::Level, true) => self.level_up(),
+            (Setting::Level, false) => self.level_down(),
+            (Setting::Training, on) => self.set_training(on),
+        }
+    }
+
     pub fn set_level(&mut self, level: u8) {
         self.level = level.min(LEVELS.len() as u8 - 1);
         self.record.highest = self.record.highest.max(self.level);
@@ -68,9 +103,9 @@ impl Guidance {
         self.set_level(self.level.saturating_sub(1));
     }
 
-    pub fn toggle_training(&mut self) {
-        self.training = !self.training;
-        self.record.training |= self.training;
+    pub fn set_training(&mut self, on: bool) {
+        self.training = on;
+        self.record.training |= on;
         self.version += 1;
     }
 
@@ -110,8 +145,8 @@ mod tests {
         g.level_down();
         assert_eq!(g.level(), 1);
         assert_eq!(g.record().highest, 3);
-        g.toggle_training();
-        g.toggle_training();
+        g.set_training(true);
+        g.set_training(false);
         assert!(!g.training());
         assert!(g.record().training);
     }
@@ -128,12 +163,32 @@ mod tests {
     }
 
     #[test]
+    fn left_and_right_change_the_highlighted_setting() {
+        let mut g = Guidance::default();
+        assert_eq!(g.focus(), Setting::Level);
+        g.change(true);
+        g.change(true);
+        assert_eq!(g.level(), 2);
+        g.focus_down();
+        g.change(true);
+        assert!(g.training());
+        assert_eq!(g.level(), 2, "the level stays put");
+        g.change(true);
+        assert!(g.training(), "on stays on");
+        g.change(false);
+        assert!(!g.training());
+        g.focus_up();
+        g.change(false);
+        assert_eq!(g.level(), 1);
+    }
+
+    #[test]
     fn a_new_game_starts_its_record_from_what_is_in_use() {
         let mut g = Guidance::default();
         g.set_level(4);
-        g.toggle_training();
+        g.set_training(true);
         g.set_level(2);
-        g.toggle_training();
+        g.set_training(false);
         g.new_game();
         assert_eq!(g.level(), 2, "the chosen level is kept");
         assert_eq!(

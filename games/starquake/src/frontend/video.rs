@@ -302,9 +302,10 @@ impl App {
             KeyCode::F1 => guidance.toggle_picker(),
             _ if !open => return false,
             KeyCode::Escape => guidance.toggle_picker(),
-            KeyCode::ArrowUp => guidance.level_down(),
-            KeyCode::ArrowDown => guidance.level_up(),
-            KeyCode::KeyT => guidance.toggle_training(),
+            KeyCode::ArrowUp => guidance.focus_up(),
+            KeyCode::ArrowDown => guidance.focus_down(),
+            KeyCode::ArrowLeft => guidance.change(false),
+            KeyCode::ArrowRight => guidance.change(true),
             _ => {}
         }
         if guidance.picker_open() && !open {

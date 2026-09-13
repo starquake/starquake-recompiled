@@ -82,8 +82,8 @@ struct FrontHost {
 
 impl FrontHost {
     /// Holds the game between frames while the guidance picker is open,
-    /// taking the gamepad's side of it: up and down choose the level, the
-    /// top face button switches training mode, and Select closes it. No time
+    /// taking the gamepad's side of it: up and down choose a setting, left
+    /// and right change it, and Select closes it. No time
     /// passes for the game, so its pacing starts again from now. Returns the
     /// pad as it was when the picker closed.
     fn hold_for_picker(&mut self) -> gamepad::Pad {
@@ -98,13 +98,16 @@ impl FrontHost {
                 guidance.toggle_picker();
             }
             if pad.up {
-                guidance.level_down();
+                guidance.focus_up();
             }
             if pad.down {
-                guidance.level_up();
+                guidance.focus_down();
             }
-            if pad.north {
-                guidance.toggle_training();
+            if pad.left {
+                guidance.change(false);
+            }
+            if pad.right {
+                guidance.change(true);
             }
         }
         self.next_frame = Instant::now();

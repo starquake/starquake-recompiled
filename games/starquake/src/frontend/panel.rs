@@ -6,7 +6,7 @@
 
 use starquake::game::Scene;
 
-use super::guidance::{Guidance, LEVELS};
+use super::guidance::{Guidance, LEVELS, Setting};
 use super::text::{Canvas, Fonts, Rgb, Span, Weight};
 
 /// The window in logical pixels, and the picture's part of it.
@@ -23,17 +23,30 @@ const SOFT: Rgb = [0xaa, 0xb0, 0xbf];
 const BADGE_LINE: Rgb = [0x2b, 0x2f, 0x3a];
 const DIM: Rgb = [0x08, 0x09, 0x0c];
 const DIALOG: Rgb = [0x10, 0x12, 0x18];
-const DESCRIPTION: Rgb = [0x8b, 0x90, 0xa0];
 const SELECTED: Rgb = [0x1b, 0x20, 0x30];
-const SELECTED_LINE: Rgb = [0x33, 0x50, 0x7e];
 const ACCENT: Rgb = [0x8f, 0xb4, 0xff];
 const RADIO: Rgb = [0x4a, 0x51, 0x63];
 const HINT: Rgb = [0x76, 0x7c, 0x8c];
 const HINT_KEY: Rgb = [0xa9, 0xaf, 0xbe];
 const SWITCH_ON: Rgb = [0x2f, 0x6f, 0x4f];
 const SWITCH_OFF: Rgb = [0x2a, 0x2f, 0x3b];
-const KNOB_ON: Rgb = [0x8a, 0xe0, 0xac];
-const KNOB_OFF: Rgb = [0x72, 0x7a, 0x8c];
+const ON_TEXT: Rgb = [0xea, 0xff, 0xf2];
+const TITLE: Rgb = [0xf2, 0xf3, 0xf7];
+const VALUE_DIM: Rgb = [0xc9, 0xcd, 0xd8];
+const ACCENT_DIM: Rgb = [0x5e, 0x7f, 0xb8];
+const NOTCH: Rgb = [0x26, 0x2b, 0x37];
+const LABEL_FOCUSED: Rgb = [0xa9, 0xc5, 0xff];
+const BUTTON_LINE: Rgb = [0x3a, 0x3f, 0x4c];
+
+/// What each level adds, for the picker.
+const ADDS: [&str; 6] = [
+    "The original game, no help.",
+    "Not built yet: the codes of the teleporters you have seen.",
+    "Not built yet: a map of the rooms you have visited.",
+    "Not built yet: the missing core pieces, marked on the map.",
+    "Not built yet: an arrow along routes you know.",
+    "Not built yet: the arrow routed through the whole map.",
+];
 const TRAINING: Rgb = [0xf5, 0xb8, 0x4b];
 const PAUSED: Rgb = [0x5d, 0x63, 0x72];
 
@@ -163,159 +176,242 @@ impl Panel {
 
     fn picker(&mut self, canvas: &mut Canvas, guidance: &Guidance) {
         canvas.shade(0.0, 0.0, WINDOW_W, WINDOW_H, DIM, 184);
-        let (w, h) = (440.0, 420.0);
+        let (w, h) = (480.0, 416.0);
         let x = (WINDOW_W - w) / 2.0;
         let y = (WINDOW_H - h) / 2.0;
-        canvas.round_rect(x, y, w, h, 10.0, BADGE_LINE);
-        canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0, 9.0, DIALOG);
+        canvas.round_rect(x, y, w, h, 12.0, BADGE_LINE);
+        canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0, 11.0, DIALOG);
 
-        let inner = x + 22.0;
         self.fonts.text(
             Some(canvas),
-            inner,
-            y + 18.0,
+            x + 28.0,
+            y + 20.0,
             None,
             1.0,
             &[span("Guidance", 19.0, Weight::SemiBold, BRIGHT)],
         );
+        let paused = [span("The game is paused", 12.0, Weight::Regular, LABEL)];
+        let pw = self.fonts.measure(&paused);
         self.fonts.text(
             Some(canvas),
-            inner,
-            y + 46.0,
-            Some(w - 44.0),
-            1.45,
-            &[span(
-                "Each level adds to the ones before it. The highest level you use is noted with your score.",
-                13.0,
-                Weight::Regular,
-                DESCRIPTION,
-            )],
+            x + w - 28.0 - pw,
+            y + 27.0,
+            None,
+            1.0,
+            &paused,
         );
-        let mut row_y = y + 100.0;
-        canvas.round_rect(x + 1.0, row_y, w - 2.0, 1.0, 0.0, RULE);
-        row_y += 8.0;
-        for (i, name) in LEVELS.iter().enumerate() {
-            let selected = i as u8 == guidance.level();
-            let (rx, rw, rh) = (x + 8.0, w - 16.0, 36.0);
-            if selected {
-                canvas.round_rect(rx, row_y, rw, rh, 7.0, SELECTED_LINE);
-                canvas.round_rect(rx + 1.0, row_y + 1.0, rw - 2.0, rh - 2.0, 6.0, SELECTED);
-            }
-            let cx = rx + 14.0;
-            let cy = row_y + 10.0;
-            canvas.round_rect(
-                cx,
-                cy,
-                16.0,
-                16.0,
-                8.0,
-                if selected { ACCENT } else { RADIO },
-            );
-            canvas.round_rect(
-                cx + 2.0,
-                cy + 2.0,
-                12.0,
-                12.0,
-                6.0,
-                if selected { SELECTED } else { DIALOG },
-            );
-            if selected {
-                canvas.round_rect(cx + 4.0, cy + 4.0, 8.0, 8.0, 4.0, ACCENT);
-            }
-            let number = i.to_string();
-            self.fonts.text(
-                Some(canvas),
-                cx + 28.0,
-                row_y + 9.0,
-                None,
-                1.0,
-                &[span(&number, 14.0, Weight::SemiBold, BRIGHT)],
-            );
-            let colour = if selected { BRIGHT } else { SOFT };
-            self.fonts.text(
-                Some(canvas),
-                cx + 50.0,
-                row_y + 9.0,
-                None,
-                1.0,
-                &[span(name, 14.0, Weight::Regular, colour)],
-            );
-            row_y += rh;
-        }
-        row_y += 8.0;
-        canvas.round_rect(x + 1.0, row_y, w - 2.0, 1.0, 0.0, RULE);
 
+        let focus = guidance.focus();
+        let level = guidance.level();
         let training = guidance.training();
-        self.fonts.text(
-            Some(canvas),
-            inner,
-            row_y + 12.0,
-            None,
-            1.0,
-            &[span("Training mode", 14.0, Weight::SemiBold, BRIGHT)],
+
+        // The guidance level: a number and a name, the notches, and what it adds.
+        let (rx, rw) = (x + 12.0, w - 24.0);
+        let top = y + 56.0;
+        let focused = focus == Setting::Level;
+        self.setting_box(canvas, rx, top, rw, 184.0, focused, "GUIDANCE LEVEL");
+        self.arrows(canvas, rx, rw, top + 69.0, focused, level > 0, level < 5);
+        let value = if focused { TITLE } else { VALUE_DIM };
+        self.centred_in(
+            canvas,
+            rx,
+            rw,
+            top + 30.0,
+            &[span(&level.to_string(), 40.0, Weight::SemiBold, value)],
         );
+        self.centred_in(
+            canvas,
+            rx,
+            rw,
+            top + 80.0,
+            &[span(LEVELS[level as usize], 17.0, Weight::SemiBold, value)],
+        );
+        let (nx, nw, gap) = (rx + 16.0, rw - 32.0, 6.0);
+        let step = (nw - 4.0 * gap) / 5.0;
+        for i in 1..=5u8 {
+            let colour = match (i <= level, focused) {
+                (true, true) => ACCENT,
+                (true, false) => ACCENT_DIM,
+                (false, _) => NOTCH,
+            };
+            canvas.round_rect(
+                nx + f32::from(i - 1) * (step + gap),
+                top + 116.0,
+                step,
+                8.0,
+                3.0,
+                colour,
+            );
+        }
         self.fonts.text(
             Some(canvas),
-            inner,
-            row_y + 32.0,
+            nx,
+            top + 130.0,
             None,
             1.0,
+            &[span("less help", 11.0, Weight::Regular, PAUSED)],
+        );
+        let more = [span("more help", 11.0, Weight::Regular, PAUSED)];
+        let mw = self.fonts.measure(&more);
+        self.fonts
+            .text(Some(canvas), nx + nw - mw, top + 130.0, None, 1.0, &more);
+        self.centred_in(
+            canvas,
+            rx,
+            rw,
+            top + 152.0,
+            &[span(ADDS[level as usize], 13.0, Weight::Regular, HINT_KEY)],
+        );
+
+        // Training mode: off or on.
+        let top = y + 250.0;
+        let focused = focus == Setting::Training;
+        self.setting_box(canvas, rx, top, rw, 106.0, focused, "TRAINING MODE");
+        self.arrows(canvas, rx, rw, top + 50.0, focused, training, !training);
+        let mid = rx + rw / 2.0;
+        for (label, chosen, cx, fill, text) in [
+            ("Off", !training, mid - 29.0, SWITCH_OFF, BRIGHT),
+            ("On", training, mid + 29.0, SWITCH_ON, ON_TEXT),
+        ] {
+            let spans = [span(
+                label,
+                15.0,
+                Weight::SemiBold,
+                if chosen { text } else { PAUSED },
+            )];
+            let tw = self.fonts.measure(&spans);
+            if chosen {
+                canvas.round_rect(cx - tw / 2.0 - 14.0, top + 36.0, tw + 28.0, 28.0, 6.0, fill);
+            }
+            self.fonts
+                .text(Some(canvas), cx - tw / 2.0, top + 41.0, None, 1.0, &spans);
+        }
+        self.centred_in(
+            canvas,
+            rx,
+            rw,
+            top + 76.0,
             &[span(
                 "Not built yet: energy will stop draining.",
-                12.0,
+                13.0,
                 Weight::Regular,
-                DESCRIPTION,
+                HINT_KEY,
             )],
         );
-        let sx = x + w - 22.0 - 40.0;
-        canvas.round_rect(
-            sx,
-            row_y + 17.0,
-            40.0,
-            22.0,
-            11.0,
-            if training { SWITCH_ON } else { SWITCH_OFF },
-        );
-        let knob = if training { sx + 21.0 } else { sx + 3.0 };
-        canvas.round_rect(
-            knob,
-            row_y + 20.0,
-            16.0,
-            16.0,
-            8.0,
-            if training { KNOB_ON } else { KNOB_OFF },
-        );
-        row_y += 56.0;
-        canvas.round_rect(x + 1.0, row_y, w - 2.0, 1.0, 0.0, RULE);
 
-        let mut hx = inner;
-        for (key, what) in [
-            ("\u{2191}\u{2193}", " level"),
-            ("T", " training"),
-            ("F1", " or "),
-            ("Select", " close"),
+        // What the keys do.
+        let foot = y + 372.0;
+        canvas.round_rect(x + 1.0, foot, w - 2.0, 1.0, 0.0, RULE);
+        let mut hx = x + 28.0;
+        for (keys, what) in [
+            (["\u{2191}", "\u{2193}"], "choose"),
+            (["\u{2190}", "\u{2192}"], "change"),
         ] {
-            let spans = [
-                span(key, 12.0, Weight::SemiBold, HINT_KEY),
-                span(what, 12.0, Weight::Regular, HINT),
-            ];
+            for k in keys {
+                hx += self.key_cap(canvas, hx, foot + 16.0, k) + 4.0;
+            }
+            let spans = [span(what, 12.0, Weight::Regular, HINT)];
             self.fonts
-                .text(Some(canvas), hx, row_y + 13.0, None, 1.0, &spans);
-            hx += self.fonts.measure(&spans) + if what == " or " { 4.0 } else { 18.0 };
+                .text(Some(canvas), hx + 2.0, foot + 18.0, None, 1.0, &spans);
+            hx += self.fonts.measure(&spans) + 22.0;
         }
+        let done = [span("done", 12.0, Weight::Regular, HINT)];
+        let or = [span("or", 12.0, Weight::Regular, HINT)];
+        let mut kx = x + w - 28.0 - self.fonts.measure(&done);
+        self.fonts
+            .text(Some(canvas), kx, foot + 18.0, None, 1.0, &done);
+        kx -= self.key_width("Select") + 6.0;
+        self.key_cap(canvas, kx, foot + 16.0, "Select");
+        kx -= self.fonts.measure(&or) + 6.0;
+        self.fonts
+            .text(Some(canvas), kx, foot + 18.0, None, 1.0, &or);
+        kx -= self.key_width("F1") + 6.0;
+        self.key_cap(canvas, kx, foot + 16.0, "F1");
+    }
+
+    /// The box of one setting in the picker, outlined when highlighted, and
+    /// its label.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "a box, whether it is highlighted, and its label"
+    )]
+    fn setting_box(
+        &mut self,
+        canvas: &mut Canvas,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        focused: bool,
+        label: &str,
+    ) {
+        if focused {
+            canvas.round_rect(x, y, w, h, 10.0, ACCENT);
+            canvas.round_rect(x + 2.0, y + 2.0, w - 4.0, h - 4.0, 8.0, SELECTED);
+        }
+        let colour = if focused { LABEL_FOCUSED } else { LABEL };
+        self.spaced_colour(canvas, x + 16.0, y + 14.0, label, 12.0, colour);
+    }
+
+    /// The arrows either side of a setting, bright when they would do
+    /// something.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "where they go and which way they work"
+    )]
+    fn arrows(
+        &mut self,
+        canvas: &mut Canvas,
+        x: f32,
+        w: f32,
+        cy: f32,
+        focused: bool,
+        left: bool,
+        right: bool,
+    ) {
+        let colour = |on: bool| match (on, focused) {
+            (true, true) => ACCENT,
+            (true, false) => RADIO,
+            (false, _) => NOTCH,
+        };
+        let (l, r) = (x + 16.0, x + w - 16.0);
+        canvas.triangle(
+            [(l, cy), (l + 14.0, cy - 8.0), (l + 14.0, cy + 8.0)],
+            colour(left),
+        );
+        canvas.triangle(
+            [(r, cy), (r - 14.0, cy - 8.0), (r - 14.0, cy + 8.0)],
+            colour(right),
+        );
+    }
+
+    fn centred_in(&mut self, canvas: &mut Canvas, x: f32, w: f32, y: f32, spans: &[Span]) {
+        let tw = self.fonts.measure(spans);
+        self.fonts
+            .text(Some(canvas), x + (w - tw) / 2.0, y, None, 1.0, spans);
+    }
+
+    fn key_width(&mut self, key: &str) -> f32 {
+        self.fonts
+            .measure(&[span(key, 12.0, Weight::SemiBold, HINT_KEY)])
+            .max(8.0)
+            + 12.0
+    }
+
+    /// A key name in a small outline at (`x`, `y`); returns its width.
+    fn key_cap(&mut self, canvas: &mut Canvas, x: f32, y: f32, key: &str) -> f32 {
+        let w = self.key_width(key);
+        canvas.round_rect(x, y, w, 20.0, 4.0, BUTTON_LINE);
+        canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, 18.0, 3.0, DIALOG);
         self.fonts.text(
             Some(canvas),
-            24.0,
-            WINDOW_H - 30.0,
+            x + 6.0,
+            y + 2.0,
             None,
             1.0,
-            &[span(
-                "The game is paused while this is open.",
-                12.0,
-                Weight::Regular,
-                PAUSED,
-            )],
+            &[span(key, 12.0, Weight::SemiBold, HINT_KEY)],
         );
+        w
     }
 
     /// A small key name in an outline, right-aligned to `right`.
@@ -330,13 +426,26 @@ impl Panel {
     }
 
     /// A small label with its letters spread out.
-    fn spaced(&mut self, canvas: &mut Canvas, mut x: f32, y: f32, text: &str) {
+    fn spaced(&mut self, canvas: &mut Canvas, x: f32, y: f32, text: &str) {
+        self.spaced_colour(canvas, x, y, text, 11.0, LABEL);
+    }
+
+    #[allow(clippy::too_many_arguments, reason = "where, what, and how it looks")]
+    fn spaced_colour(
+        &mut self,
+        canvas: &mut Canvas,
+        mut x: f32,
+        y: f32,
+        text: &str,
+        size: f32,
+        colour: Rgb,
+    ) {
         let mut buf = [0u8; 4];
         for c in text.chars() {
-            let s = span(c.encode_utf8(&mut buf), 11.0, Weight::SemiBold, LABEL);
+            let s = span(c.encode_utf8(&mut buf), size, Weight::SemiBold, colour);
             self.fonts
                 .text(Some(canvas), x, y, None, 1.0, std::slice::from_ref(&s));
-            x += self.fonts.advance(c, 11.0, Weight::SemiBold) + 1.5;
+            x += self.fonts.advance(c, size, Weight::SemiBold) + size * 0.14;
         }
     }
 }
@@ -370,11 +479,21 @@ mod render_check {
         level2.set_level(2);
         let mut record = Guidance::default();
         record.set_level(3);
-        record.toggle_training();
+        record.set_training(true);
         let cases = [
             ("level0", Guidance::default(), Scene::Play),
             ("level2", level2, Scene::Play),
-            ("picker", picker, Scene::Play),
+            ("picker", picker.clone(), Scene::Play),
+            (
+                "picker-training",
+                {
+                    let mut g = picker;
+                    g.focus_down();
+                    g.change(true);
+                    g
+                },
+                Scene::Play,
+            ),
             ("score", record, Scene::GameOver),
         ];
         let mut panel = Panel::new();
