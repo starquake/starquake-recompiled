@@ -4,6 +4,7 @@ mod audio;
 mod gamepad;
 pub mod headless;
 mod input;
+pub mod tape;
 mod video;
 
 use std::path::Path;
@@ -266,7 +267,7 @@ type Started = (
 
 fn start(path: &Path) -> Result<Started, String> {
     // Reading checks the file is a supported version.
-    let (memory, loading_screen) = starquake::assets::read_game(path)?;
+    let (memory, loading_screen) = tape::read(path)?;
     let shared = Arc::new(Shared {
         screen: Mutex::new((vec![0; starquake::display::BITMAP_LEN + 768], 0, 0)),
         input: Mutex::new(Input::default()),

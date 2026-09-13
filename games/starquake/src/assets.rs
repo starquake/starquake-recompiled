@@ -26,7 +26,7 @@ pub fn read_game(path: &Path) -> Result<(Vec<u8>, Option<Vec<u8>>), String> {
     let bytes = std::fs::read(path).map_err(|e| {
         format!(
             "cannot read {}: {e}\nStarquake needs your own copy of the original game; \
-             see assets/README.md.",
+             see README.txt.",
             path.display()
         )
     })?;
@@ -52,6 +52,29 @@ pub fn read_game(path: &Path) -> Result<(Vec<u8>, Option<Vec<u8>>), String> {
         want(SNAPSHOT_SHA1)?;
         Ok((zx_core::snapshot::load_z80(&bytes)?.memory(), None))
     }
+}
+
+/// Whether `bytes` are the tape this version supports.
+#[must_use]
+pub fn is_supported_tape(bytes: &[u8]) -> bool {
+    sha1_hex(bytes) == TAPE_SHA1
+}
+
+/// Parses the supported tape from its bytes: the program's memory, and the
+/// loading screen.
+///
+/// # Errors
+///
+/// If `bytes` are not the supported tape, or do not parse as one.
+pub fn read_tape(bytes: &[u8]) -> Result<(Vec<u8>, Option<Vec<u8>>), String> {
+    if !is_supported_tape(bytes) {
+        return Err(format!(
+            "that tape has SHA-1 {}; this version supports only {TAPE_SHA1}",
+            sha1_hex(bytes)
+        ));
+    }
+    let tape = zx_core::tape::load_tap(bytes)?;
+    Ok((tape.memory(), tape.loading_screen))
 }
 
 /// Locations of the tables in the original program's memory.
