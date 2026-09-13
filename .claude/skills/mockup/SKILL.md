@@ -30,6 +30,13 @@ Pick whichever shows the design fastest and most faithfully:
   than in HTML, because the constraint *is* the design: 256×192, 32×24 colour
   cells, two colours per cell, and the game's own font. A mockup that ignores
   that is not a mockup of this game.
+
+  **Screenshots of the game are fine to commit**, original graphics and all
+  (the maintainer's call). The no-game-data invariant is about the files the
+  game is loaded from: tapes, snapshots, ROMs, and graphics, maps or text
+  extracted from them as files, which CI's guard job looks for. A picture of
+  the screen for a design review is not one of those. Keep to the frames the
+  design needs, not a gallery of the game.
 - **An HTML mockup** in the scratchpad, only for chrome that lives *outside*
   the Spectrum's screen — a host window, a map panel beside the picture, a
   settings sheet. Say which it is, so nobody reads a host-side sketch as
