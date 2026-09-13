@@ -13,15 +13,23 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
 use super::Shared;
+use super::overlay::Overlay;
+use super::panel::{self, Panel};
 use super::prompt::{self, Outcome, Prompt};
 use super::text::Canvas;
 use starquake::controls::Input;
 use starquake::display::{BITMAP_LEN, HEIGHT, WIDTH};
+use starquake::game::Scene;
 
 const BORDER: usize = 32;
 pub const FULL_W: usize = WIDTH + 2 * BORDER;
 pub const FULL_H: usize = HEIGHT + 2 * BORDER;
 const SCALE: f64 = 3.0;
+/// The guidance panel's width at the Spectrum's scale (#1). The window is
+/// the picture and the panel side by side, and a whole multiple of both, so
+/// the picture is scaled exactly as it was before the panel existed.
+const PANEL_W: usize = 136;
+const WINDOW_W: usize = FULL_W + PANEL_W;
 
 /// A palette colour as the opaque RGBA pixel `pixels` wants.
 fn rgba(c: u32) -> [u8; 4] {
@@ -43,6 +51,45 @@ pub fn draw(mem: &[u8], border: u8, frame: u64, out: &mut [u8]) {
     );
 }
 
+/// Draws the picture into the window's buffer, which has the panel's width
+/// beside it. The overlay covers the panel's part; it is filled here only so
+/// nothing stale shows before the overlay's first frame.
+fn draw_window(mem: &[u8], border: u8, frame: u64, out: &mut [u8]) {
+    let out = out.as_chunks_mut::<4>().0;
+    let edge = rgba(zx_core::screen::PALETTE[(border & 7) as usize]);
+    for row in out.as_chunks_mut::<WINDOW_W>().0 {
+        row[..FULL_W].fill(edge);
+        row[FULL_W..].fill([0, 0, 0, 0xFF]);
+    }
+    zx_core::screen::render(
+        mem,
+        &mem[BITMAP_LEN..],
+        (frame / 16) % 2 == 1,
+        out,
+        WINDOW_W,
+        BORDER * WINDOW_W + BORDER,
+        rgba,
+    );
+}
+
+/// A colour as the linear value `wgpu` wants for clearing an sRGB surface.
+fn clear_colour([r, g, b]: [u8; 3]) -> pixels::wgpu::Color {
+    let linear = |c: u8| {
+        let c = f64::from(c) / 255.0;
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    pixels::wgpu::Color {
+        r: linear(r),
+        g: linear(g),
+        b: linear(b),
+        a: 1.0,
+    }
+}
+
 /// Starts the game from a checked copy of it, returning the sound stream to
 /// hold.
 pub type Launcher =
@@ -58,6 +105,12 @@ struct App {
     stream: Option<cpal::Stream>,
     /// Device pixels per logical pixel, which the prompt draws at.
     scale: f64,
+    /// The panel and picker, laid over the game at the window's resolution.
+    overlay: Option<Overlay>,
+    panel: Panel,
+    /// What the overlay was last drawn from: the guidance's version, the
+    /// scene, and the size it was drawn at. Redrawn only when this changes.
+    drawn: Option<(u64, Scene, (u32, u32))>,
     window: Option<Arc<Window>>,
     pixels: Option<Pixels<'static>>,
     error: Option<String>,
@@ -77,10 +130,10 @@ impl ApplicationHandler for App {
         let attrs = Window::default_attributes()
             .with_title("Starquake")
             .with_inner_size(LogicalSize::new(
-                FULL_W as f64 * SCALE,
+                WINDOW_W as f64 * SCALE,
                 FULL_H as f64 * SCALE,
             ))
-            .with_min_inner_size(LogicalSize::new(FULL_W as f64, FULL_H as f64));
+            .with_min_inner_size(LogicalSize::new(WINDOW_W as f64, FULL_H as f64));
         let window = match event_loop.create_window(attrs) {
             Ok(w) => Arc::new(w),
             Err(e) => {
@@ -97,7 +150,15 @@ impl ApplicationHandler for App {
         self.scale = window.scale_factor();
         let (bw, bh) = self.buffer_size();
         match Pixels::new(bw, bh, surface) {
-            Ok(p) => self.pixels = Some(p),
+            Ok(mut p) => {
+                self.overlay = Some(Overlay::new(&p.context().device, p.render_texture_format()));
+                if self.prompt.is_some() {
+                    // The prompt is narrower than the window; its margins
+                    // should be its own colour, not black.
+                    p.clear_color(clear_colour(prompt::BACKGROUND));
+                }
+                self.pixels = Some(p);
+            }
             Err(e) => {
                 self.error = Some(e.to_string());
                 event_loop.exit();
@@ -121,6 +182,9 @@ impl ApplicationHandler for App {
                 if let PhysicalKey::Code(code) = event.physical_key
                     && !event.repeat
                 {
+                    if event.state == ElementState::Pressed && self.picker_key(code) {
+                        return;
+                    }
                     if event.state == ElementState::Pressed {
                         self.held.insert(code);
                     } else {
@@ -145,9 +209,30 @@ impl ApplicationHandler for App {
                 if let Some(p) = &mut self.pixels {
                     {
                         let screen = self.shared.screen.lock().unwrap();
-                        draw(&screen.0, screen.1, screen.2, p.frame_mut());
+                        draw_window(&screen.0, screen.1, screen.2, p.frame_mut());
                     }
-                    if let Err(e) = p.render() {
+                    let clip = p.context().scaling_renderer.clip_rect();
+                    let guidance = self.shared.guidance.lock().unwrap().clone();
+                    let scene = *self.shared.scene.lock().unwrap();
+                    let key = (guidance.version(), scene, (clip.2, clip.3));
+                    if self.drawn != Some(key)
+                        && let Some(overlay) = &mut self.overlay
+                    {
+                        let scale = clip.2 as f32 / panel::WINDOW_W;
+                        let mut canvas = overlay.canvas(clip.2, clip.3, scale);
+                        self.panel.draw(&mut canvas, &guidance, scene);
+                        self.drawn = Some(key);
+                    }
+                    let overlay = &mut self.overlay;
+                    let rendered = p.render_with(|encoder, target, context| {
+                        context.scaling_renderer.render(encoder, target);
+                        if let Some(overlay) = overlay {
+                            let clip = context.scaling_renderer.clip_rect();
+                            overlay.render(&context.device, &context.queue, encoder, target, clip);
+                        }
+                        Ok(())
+                    });
+                    if let Err(e) = rendered {
                         self.error = Some(e.to_string());
                         event_loop.exit();
                     }
@@ -175,7 +260,12 @@ impl ApplicationHandler for App {
         // occluded it stops blocking at all: that spun this thread at over
         // 20,000 repaints a second, burning a core the game needs.
         let latest = self.shared.screen.lock().unwrap().2;
-        if latest != self.shown {
+        let version = self.shared.guidance.lock().unwrap().version();
+        let scene = *self.shared.scene.lock().unwrap();
+        let overlay_stale = self
+            .drawn
+            .is_none_or(|(v, s, _)| v != version || s != scene);
+        if latest != self.shown || overlay_stale {
             self.shown = latest;
             if let Some(w) = &self.window {
                 w.request_redraw();
@@ -198,8 +288,36 @@ impl App {
                 (f64::from(prompt::HEIGHT) * self.scale).round() as u32,
             )
         } else {
-            (FULL_W as u32, FULL_H as u32)
+            (WINDOW_W as u32, FULL_H as u32)
         }
+    }
+
+    /// The keys the guidance picker takes: F1 opens and closes it, and while
+    /// it is open it has the keyboard to itself, so nothing typed into it
+    /// reaches the game. Returns whether the key was the picker's.
+    fn picker_key(&mut self, code: KeyCode) -> bool {
+        let mut guidance = self.shared.guidance.lock().unwrap();
+        let open = guidance.picker_open();
+        match code {
+            KeyCode::F1 => guidance.toggle_picker(),
+            _ if !open => return false,
+            KeyCode::Escape => guidance.toggle_picker(),
+            KeyCode::ArrowUp => guidance.level_down(),
+            KeyCode::ArrowDown => guidance.level_up(),
+            KeyCode::KeyT => guidance.toggle_training(),
+            _ => {}
+        }
+        if guidance.picker_open() && !open {
+            // Opening it: whatever was held is let go, as the game will not
+            // see the key-ups.
+            self.held.clear();
+            *self.shared.input.lock().unwrap() = Input::default();
+        }
+        drop(guidance);
+        if let Some(w) = &self.window {
+            w.request_redraw();
+        }
+        true
     }
 
     fn prompt_event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
@@ -286,6 +404,7 @@ impl App {
                         let (w, h) = self.buffer_size();
                         if let Some(p) = &mut self.pixels {
                             let _ = p.resize_buffer(w, h);
+                            p.clear_color(pixels::wgpu::Color::BLACK);
                         }
                         self.shown = u64::MAX;
                     }
@@ -308,6 +427,9 @@ pub fn run(shared: Arc<Shared>, prompt: Option<Prompt>, launch: Launcher) -> Res
         launch,
         stream: None,
         scale: 1.0,
+        overlay: None,
+        panel: Panel::new(),
+        drawn: None,
         window: None,
         pixels: None,
         error: None,

@@ -2,8 +2,11 @@
 
 mod audio;
 mod gamepad;
+mod guidance;
 pub mod headless;
 mod input;
+mod overlay;
+mod panel;
 mod prompt;
 pub mod tape;
 mod text;
@@ -18,6 +21,7 @@ use std::time::{Duration, Instant};
 use starquake::Game;
 use starquake::assets::Assets;
 use starquake::controls::Input;
+use starquake::game::Scene;
 use starquake::host::{FRAMES_PER_SECOND, Host};
 
 /// How long a Spectrum frame lasts, from the clock it is derived from
@@ -50,6 +54,10 @@ pub struct Shared {
     /// Set when the game thread stopped without being asked to, so the
     /// window can report it rather than sitting on a frozen picture.
     pub dead: AtomicBool,
+    /// The guidance level, training mode and the picker (#1).
+    pub guidance: Mutex<guidance::Guidance>,
+    /// Which part of the program the game is in, for the panel.
+    pub scene: Mutex<Scene>,
 }
 
 /// The game thread's side of the frontend.
@@ -68,9 +76,41 @@ struct FrontHost {
     wait: Vec<u32>,
     frame_start: Option<Instant>,
     bench: bool,
+    /// The scene last passed on to the window.
+    scene: Scene,
 }
 
 impl FrontHost {
+    /// Holds the game between frames while the guidance picker is open,
+    /// taking the gamepad's side of it: up and down choose the level, the
+    /// top face button switches training mode, and Select closes it. No time
+    /// passes for the game, so its pacing starts again from now. Returns the
+    /// pad as it was when the picker closed.
+    fn hold_for_picker(&mut self) -> gamepad::Pad {
+        let mut pad = gamepad::Pad::default();
+        while self.shared.guidance.lock().unwrap().picker_open()
+            && !self.shared.quit.load(Ordering::Relaxed)
+        {
+            std::thread::sleep(Duration::from_millis(20));
+            pad = self.pad.poll();
+            let mut guidance = self.shared.guidance.lock().unwrap();
+            if pad.select {
+                guidance.toggle_picker();
+            }
+            if pad.up {
+                guidance.level_down();
+            }
+            if pad.down {
+                guidance.level_up();
+            }
+            if pad.north {
+                guidance.toggle_training();
+            }
+        }
+        self.next_frame = Instant::now();
+        pad
+    }
+
     /// Prints how long frames actually took: the spread, and the worst.
     fn report(&mut self) {
         if self.times.is_empty() {
@@ -136,6 +176,13 @@ impl Host for FrontHost {
         }
 
         self.frame_start = Some(Instant::now());
+        if game.scene != self.scene {
+            if game.scene == Scene::Play {
+                self.shared.guidance.lock().unwrap().new_game();
+            }
+            self.scene = game.scene;
+            *self.shared.scene.lock().unwrap() = game.scene;
+        }
         let sound = game.frame_sound();
         let frames = sound.frames;
         self.beeper
@@ -186,10 +233,16 @@ impl Host for FrontHost {
         // chosen method reads, the Kempston port or the method's own keys.
         // Start presses the method's pause key, which is not a fixed key
         // either; on a fresh tape it is Space.
-        let (pad_bits, pad_pause) = self.pad.poll();
+        let mut pad = self.pad.poll();
+        if pad.select {
+            self.shared.guidance.lock().unwrap().toggle_picker();
+        }
+        if self.shared.guidance.lock().unwrap().picker_open() {
+            pad = self.hold_for_picker();
+        }
         let mut input = *self.shared.input.lock().unwrap();
-        game.controls.press(&mut input, pad_bits);
-        if pad_pause {
+        game.controls.press(&mut input, pad.bits);
+        if pad.start {
             game.controls.press_pause(&mut input);
         }
 
@@ -248,6 +301,7 @@ fn play_game(
         wait: Vec::new(),
         frame_start: None,
         bench: std::env::var_os("SQ_BENCH").is_some(),
+        scene: Scene::Loading,
     };
     // The frame counter runs throughout, which is what seeds each new game.
     game.run(&mut host);
@@ -261,6 +315,8 @@ fn new_shared() -> Arc<Shared> {
         input: Mutex::new(Input::default()),
         quit: AtomicBool::new(false),
         dead: AtomicBool::new(false),
+        guidance: Mutex::new(guidance::Guidance::default()),
+        scene: Mutex::new(Scene::Loading),
     })
 }
 
