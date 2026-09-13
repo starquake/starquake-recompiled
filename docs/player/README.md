@@ -35,6 +35,6 @@ keys, **0** starts the game and **Q** quits. Any key stops the tune.
 
 Starquake is copyright © 1985 Stephen Crow / Bubble Bus Software. This program is an independent reimplementation and is **not affiliated with, endorsed by, or approved by** the rights holders.
 
-The program is licensed under either the MIT licence (`LICENSE-MIT`) or the Apache 2.0 licence (`LICENSE-APACHE`), at your option. That licence covers only this reimplementation and grants no rights in Starquake itself. `THIRD-PARTY.md` lists the libraries built into the program and their licences. All three files come with the program.
+The program is licensed under either the [MIT](LICENSE-MIT) or the [Apache 2.0](LICENSE-APACHE) licence, at your option. That licence covers only this reimplementation and grants no rights in Starquake itself. [THIRD-PARTY.md](THIRD-PARTY.md) lists the libraries built into the program and their licences.
 
 @starquake started this project and steered it, and Claude, Anthropic's AI assistant, wrote it. The source code, and a fuller account of how it was made, are at <https://github.com/starquake/starquake-recompiled>.
