@@ -83,7 +83,7 @@ impl Game {
             self.flash_core_slot(index as u8, colour);
             let blank = self.assets.graphic_at(BLANK);
             self.draw_block2x2(&blank, 1, col, colour);
-            self.effects.push(3);
+            self.request_effect(3);
         }
 
         self.draw_core_grid(GRID.0, GRID.1);
@@ -104,7 +104,7 @@ impl Game {
         for _ in 0..10 {
             for v in (0..8u8).rev() {
                 self.xor_attributes(v);
-                self.effects.push(0x11);
+                self.request_effect(0x11);
             }
             // The original flashes while its interrupts keep running; a
             // frame here is what makes the flash visible.
@@ -158,7 +158,7 @@ impl Game {
             self.sparkle_core();
             self.sparkle_core();
             let id = (self.rng.lo() & 1) + 0x14;
-            self.effects.push(id);
+            self.request_effect(id);
         }
 
         let b = &mut self.entities[0].0;

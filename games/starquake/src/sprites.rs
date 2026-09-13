@@ -92,6 +92,7 @@ impl Game {
                 // extra frame count), always paints the cell, and leaves the
                 // mask one higher for the rest of the sprite.
                 self.frames = self.frames.wrapping_add(1);
+                self.work.interrupt_calls += 1;
                 mask += 1;
                 let a = &mut self.display.mem[BITMAP_LEN + base + 34];
                 *a = (*a & mask) | ink;

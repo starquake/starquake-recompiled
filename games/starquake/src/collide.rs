@@ -47,6 +47,11 @@ impl Game {
     /// the entity is aligned to the grid on that axis; otherwise nothing is
     /// blocked. Returns [`blocked`] flags.
     pub fn collide(&mut self, slot: usize, vertical: bool) -> u8 {
+        if vertical {
+            self.work.vertical_collisions += 1;
+        } else {
+            self.work.collisions += 1;
+        }
         let (x, y) = (self.entities[slot].x(), self.entities[slot].y());
         let at = attr_addr(x, y);
         self.collision = [0, at as u8, (at >> 8) as u8];

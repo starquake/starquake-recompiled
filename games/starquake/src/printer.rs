@@ -71,36 +71,38 @@ impl Printer {
         }
     }
 
-    pub fn print(&mut self, d: &mut Display, font: &Font, udg: &[[u8; 8]], text: &[u8]) {
-        for &b in text {
-            self.put(d, font, udg, b);
-        }
+    /// Prints `text`, and returns how many characters it drew.
+    pub fn print(&mut self, d: &mut Display, font: &Font, udg: &[[u8; 8]], text: &[u8]) -> u32 {
+        text.iter()
+            .map(|&b| u32::from(self.put(d, font, udg, b)))
+            .sum()
     }
 
     /// Prints one byte: a character, or one of the original's control
-    /// codes for colour, position and so on.
+    /// codes for colour, position and so on. Returns whether it drew a
+    /// character.
     ///
     /// # Panics
     ///
     /// On a control code the original does not define. Text comes from the
     /// game's own data, so this fires only if a text address is wrong.
-    pub fn put(&mut self, d: &mut Display, font: &Font, udg: &[[u8; 8]], b: u8) {
+    pub fn put(&mut self, d: &mut Display, font: &Font, udg: &[[u8; 8]], b: u8) -> bool {
         match self.pending {
             Pending::Operand(code) => {
                 self.pending = Pending::None;
                 self.control(code, b);
-                return;
+                return false;
             }
             Pending::AtRow => {
                 self.pending = Pending::AtCol(b);
-                return;
+                return false;
             }
             Pending::AtCol(row) => {
                 self.pending = Pending::None;
                 debug_assert!(row < 24 && b < 32, "AT {row},{b} is off screen");
                 self.row = row;
                 self.col = b;
-                return;
+                return false;
             }
             Pending::None => {}
         }
@@ -113,6 +115,7 @@ impl Printer {
             0x90..=0xA4 => self.glyph(d, &udg[(b - 0x90) as usize]),
             _ => panic!("unsupported print code {b:#04x}"),
         }
+        b >= 0x20
     }
 
     /// Moves the print position one place back.

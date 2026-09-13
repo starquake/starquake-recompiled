@@ -1565,41 +1565,369 @@ fn render(env: &Env, out: &str) {
     }
 }
 
+/// A machine in play, at the top of the main loop just after entering the
+/// first room: interrupts on, the stack where the tape's loader put it.
+fn play_machine(env: &Env) -> Zx {
+    let mut z = new_game_machine(env);
+    assert!(z.call_until(0xA426, Some(0xA523), 20_000_000));
+    z.t = 0;
+    z.int_pending = false;
+    z.halted = false;
+    z
+}
+
+/// Free memory above the ULA's reach, for a `CALL` that stops when it
+/// returns. The sound models count from a call in the game's own code, and a
+/// stub in the contended 16K would be held up where the game's is not.
+const SOUND_STUB: u16 = 0xFFF0;
+
+/// Runs `z` with real 50 Hz interrupts from its current `t` until execution
+/// reaches `stop`, recording when the speaker changes, in T-states from the
+/// start frame's boundary. Returns the changes and the T-state it stopped.
+fn speaker_run(z: &mut Zx, stop: u16) -> Option<(Vec<(u32, bool)>, u32)> {
+    const FRAME_T: u32 = starquake::sound::FRAME_T;
+    let f0 = z.frame;
+    let mut edges = Vec::new();
+    let mut level = z.ear;
+    // The watch sees the speaker before each instruction, so a change is
+    // stamped with the end of the `OUT` that made it. Except when the
+    // interrupt was taken straight after: then the stamp would carry the
+    // interrupt routine too, and the `OUT` (11 T-states, never contended at
+    // the boundary) ended at the previous stamp plus its own length.
+    let mut last = (f0, z.t);
+    let ok = z.run_until_any_with(&[stop], 100, |m| {
+        if m.ear != level {
+            level = m.ear;
+            let at = if m.frame == last.0 {
+                (m.frame - f0) as u32 * FRAME_T + m.t
+            } else {
+                (last.0 - f0) as u32 * FRAME_T + last.1 + 11
+            };
+            edges.push((at, level));
+        }
+        last = (m.frame, m.t);
+    });
+    ok.then(|| (edges, (z.frame - f0) as u32 * FRAME_T + z.t))
+}
+
+/// Speaker changes only: the model reports every `OUT`, and writing the
+/// level the speaker already has changes nothing.
+fn changes(edges: &[(u32, bool)], mut level: bool) -> Vec<(u32, bool)> {
+    let mut out = Vec::new();
+    for &(t, l) in edges {
+        if l != level {
+            level = l;
+            out.push((t, l));
+        }
+    }
+    out
+}
+
+fn first_difference(orig: &[(u32, bool)], new: &[(u32, bool)]) -> Option<String> {
+    let i = orig.iter().zip(new).position(|(a, b)| a != b);
+    match i {
+        Some(i) => Some(format!(
+            "change {i} of {}: original {:?}, rewrite {:?}",
+            orig.len(),
+            orig[i],
+            new[i]
+        )),
+        None if orig.len() != new.len() => Some(format!(
+            "original makes {} changes, rewrite {}",
+            orig.len(),
+            new.len()
+        )),
+        None => None,
+    }
+}
+
+/// Where in a frame the checks start the sound routines: the top of the
+/// frame, the first contended line, the middle of the picture where play
+/// puts the effects, the last lines, and just before the next interrupt.
+const SOUND_STARTS: [u32; 5] = [0, 14_300, 35_150, 57_000, 69_800];
+
+/// The original's run of blocking sound effect `id` from `start`.
+fn original_beep(base: &Zx, id: u8, start: u32) -> Option<(Vec<(u32, bool)>, u32)> {
+    let mut z = base.clone();
+    let stub = SOUND_STUB as usize;
+    z.mem[stub..stub + 3].copy_from_slice(&[0xCD, 0xC0, 0xD7]);
+    z.a = id;
+    z.pc = SOUND_STUB;
+    z.t = start;
+    z.ear = false;
+    speaker_run(&mut z, SOUND_STUB + 3)
+}
+
+/// The blocking sound effects (`D7C0`), started at points all through the
+/// frame: every speaker change and the length, to the T-state. The ULA holds
+/// the effect's stack work up while it draws, and an interrupt breaks into
+/// any effect that runs past a boundary, so where it starts changes both.
+fn check_beeps(env: &Env) -> bool {
+    let base = play_machine(env);
+    let mut failures = Vec::new();
+    let mut cases = 0;
+    for id in 0..starquake::assets::EFFECT_COUNT as u8 {
+        for start in SOUND_STARTS {
+            cases += 1;
+            let case = format!("effect {id:#04x} from {start}");
+            let Some((orig, orig_end)) = original_beep(&base, id, start) else {
+                failures.push((case, vec!["original did not finish".into()]));
+                continue;
+            };
+            let (edges, end) = starquake::sound::beep(&env.assets.ram, id, start);
+            let new = changes(&edges, false);
+            let mut d = Vec::new();
+            if let Some(diff) = first_difference(&orig, &new) {
+                d.push(diff);
+            }
+            if orig_end != end {
+                d.push(format!("ends at {end}, original {orig_end}"));
+            }
+            if !d.is_empty() {
+                failures.push((case, d));
+            }
+        }
+    }
+    report("sound effects (D7C0)", &failures, cases)
+}
+
+/// The frame tone (`A5BA`): the speaker changes from the start of the tone
+/// loop until it sees the next interrupt, for pitches across the range and
+/// starts all through the frame.
+fn check_tone(env: &Env) -> bool {
+    let base = play_machine(env);
+    let mut failures = Vec::new();
+    let mut cases = 0;
+    for half_period in [1u8, 9, 34, 0x7F, 0] {
+        for start in SOUND_STARTS {
+            cases += 1;
+            let case = format!("half period {half_period} from {start}");
+            let mut z = base.clone();
+            z.c = 0;
+            z.e = half_period;
+            z.d = z.mem[0x5C78];
+            z.push(SOUND_STUB);
+            z.pc = 0xA5BA;
+            z.t = start;
+            z.ear = false;
+            let Some((orig, _)) = speaker_run(&mut z, SOUND_STUB) else {
+                failures.push((case, vec!["original did not finish".into()]));
+                continue;
+            };
+            let new = changes(&starquake::sound::tone(half_period, start), false);
+            if let Some(diff) = first_difference(&orig, &new) {
+                failures.push((case, vec![diff]));
+            }
+        }
+    }
+    report("tone loop (A5BA)", &failures, cases)
+}
+
+/// Least squares: the intercept and one weight per column of `x`.
+fn least_squares(x: &[Vec<f64>], y: &[f64]) -> Option<Vec<f64>> {
+    let n = x.first()?.len() + 1;
+    let mut m = vec![vec![0.0; n + 1]; n];
+    for (row, &target) in x.iter().zip(y) {
+        let row: Vec<f64> = std::iter::once(1.0).chain(row.iter().copied()).collect();
+        for i in 0..n {
+            for j in 0..n {
+                m[i][j] += row[i] * row[j];
+            }
+            m[i][n] += row[i] * target;
+        }
+    }
+    for i in 0..n {
+        let pivot = (i..n).max_by(|&a, &b| m[a][i].abs().total_cmp(&m[b][i].abs()))?;
+        m.swap(i, pivot);
+        if m[i][i].abs() < 1e-9 {
+            return None;
+        }
+        let pivot_row = m[i].clone();
+        for (r, row) in m.iter_mut().enumerate() {
+            if r != i {
+                let f = row[i] / pivot_row[i];
+                for (cell, p) in row.iter_mut().zip(&pivot_row).skip(i) {
+                    *cell -= f * p;
+                }
+            }
+        }
+    }
+    Some((0..n).map(|i| m[i][n] / m[i][i]).collect())
+}
+
+/// The silence at the start of a frame of play: how long the original's
+/// work takes before its blocking effects and before its tone, against the
+/// rewrite's estimate from what the same frame did (`sound::Work`).
+///
+/// The two run in lockstep from the start of each frame's work, over play
+/// with the joystick moved at random, and the prices are fitted again from
+/// what the original took. The check fails if the rewrite's estimate is
+/// biased or too loose; the fitted figures are printed so the constants can
+/// be brought back in line.
+fn check_sound_work(env: &Env) -> bool {
+    use starquake::play::FrameEvent;
+    use starquake::sound::{FRAME_T, INTERRUPT_T, WORK_BEFORE_EFFECTS_T, WORK_T};
+    const ITERATIONS: usize = 3000;
+    let mut z = play_machine(env);
+    let mut r = Rng(0x50FD);
+    let mut tone_rows: Vec<([u32; 6], u32)> = Vec::new();
+    let mut effect_rows: Vec<([u32; 6], u32)> = Vec::new();
+    for i in 0..ITERATIONS {
+        if i % 6 == 0 {
+            z.kempston = r.byte() & 0x1F;
+        }
+        // Past the tone loop and the interrupt, to where the work starts.
+        if !z.run_until(0xDF70, 10) {
+            break;
+        }
+        let frame = z.frame;
+        let mut g = env.game(&z);
+        let room = g.room;
+        let input = input_of(&z);
+        g.display_work();
+        let event = g.play_logic(&input);
+
+        let (mut call, mut entered, mut effects_t) = (None, None, 0u32);
+        let at = |m: &Zx| (m.frame - frame) as u32 * FRAME_T + m.t;
+        let ok = z.run_until_any_with(&[0xA5BA, 0xA5DC], 10, |m| match m.pc {
+            0xD7C0 => {
+                call.get_or_insert(at(m) - 17);
+                entered = Some(at(m) - 17);
+            }
+            0xD838 => {
+                if let Some(e) = entered.take() {
+                    effects_t += at(m) + 10 - e;
+                }
+            }
+            _ => {}
+        });
+        // Deaths, pauses and room changes do other work altogether.
+        if !ok || !matches!(event, FrameEvent::Continue) || g.room != room {
+            continue;
+        }
+        if let (Some(call), Some(before)) = (call, g.work_at_effect) {
+            effect_rows.push((before.counts(), call));
+        }
+        if z.pc == 0xA5BA && (call.is_some() == !g.effects.is_empty()) {
+            let tone = at(&z);
+            let interrupts = INTERRUPT_T * (tone / FRAME_T);
+            tone_rows.push((g.work.counts(), tone - effects_t - interrupts));
+        }
+    }
+
+    let names = [
+        "collision",
+        "vertical collision",
+        "RST 38",
+        "character",
+        "cell",
+        "proximity check",
+    ];
+    let x: Vec<Vec<f64>> = tone_rows
+        .iter()
+        .map(|(c, _)| c.iter().map(|&n| f64::from(n)).collect())
+        .collect();
+    let y: Vec<f64> = tone_rows.iter().map(|&(_, t)| f64::from(t)).collect();
+    if let Some(fit) = least_squares(&x, &y) {
+        let prices: Vec<String> = names
+            .iter()
+            .zip(&fit[1..])
+            .map(|(n, p)| format!("{n} {p:.0}"))
+            .collect();
+        let mut residual: Vec<f64> = x
+            .iter()
+            .zip(&y)
+            .map(|(row, t)| {
+                (t - fit[0] - row.iter().zip(&fit[1..]).map(|(n, p)| n * p).sum::<f64>()).abs()
+            })
+            .collect();
+        residual.sort_by(f64::total_cmp);
+        println!(
+            "  sound work fitted over {} frames: base {:.0}; {}; 90% within {:.0}",
+            tone_rows.len(),
+            fit[0],
+            prices.join(", "),
+            residual[residual.len() * 9 / 10]
+        );
+    }
+    let price = |c: &[u32; 6]| {
+        let work = starquake::sound::Work {
+            collisions: c[0],
+            vertical_collisions: c[1],
+            interrupt_calls: c[2],
+            characters: c[3],
+            cells: c[4],
+            proximity_checks: c[5],
+        };
+        work.t()
+    };
+    let mut before: Vec<i64> = effect_rows
+        .iter()
+        .map(|(c, t)| i64::from(*t) - i64::from(price(c)))
+        .collect();
+    before.sort_unstable();
+    if let Some(m) = before.get(before.len() / 2) {
+        println!(
+            "  sound work before effects: base median {m} over {} frames",
+            before.len()
+        );
+    }
+
+    let mut failures = Vec::new();
+    let mut cases = 0;
+    for (name, rows, base, max_p90) in [
+        ("tone start", &tone_rows, WORK_T, 3_500u32),
+        ("effects start", &effect_rows, WORK_BEFORE_EFFECTS_T, 3_500),
+    ] {
+        cases += 1;
+        let mut errors: Vec<i64> = rows
+            .iter()
+            .map(|(c, t)| i64::from(*t) - i64::from(base + price(c)))
+            .collect();
+        if errors.is_empty() {
+            failures.push((name.to_string(), vec!["no frames measured".into()]));
+            continue;
+        }
+        errors.sort_unstable();
+        let median = errors[errors.len() / 2];
+        let mut abs: Vec<u32> = errors.iter().map(|e| e.unsigned_abs() as u32).collect();
+        abs.sort_unstable();
+        let p90 = abs[abs.len() * 9 / 10];
+        println!(
+            "  sound work {name}: rewrite off by median {median}, 90% within {p90} ({} frames)",
+            errors.len()
+        );
+        if median.abs() > 400 || p90 > max_p90 {
+            failures.push((
+                name.to_string(),
+                vec![format!("median error {median}, 90th percentile {p90}")],
+            ));
+        }
+    }
+    report("sound work (A523)", &failures, cases)
+}
+
 /// The blocking sound effects: how long each one takes in the original and
-/// in the rewrite. The frontend turns that length into whole frames, during
-/// which the picture does not change, so an effect that comes out too long
-/// shows up as a stall.
+/// in the rewrite, from the top of a frame. The frontend turns that length
+/// into whole frames, during which the picture does not change, so an effect
+/// that comes out too long shows up as a stall.
 fn effects(env: &Env) {
-    const STUB: u16 = 0x5B20;
-    // `beep` counts the CALL into the routine itself, so only the `ld a,n`
-    // and the stub's own `ret` are outside what it measures.
-    const STUB_T: u32 = 7 + 10;
+    let base = play_machine(env);
     println!(
         "{:>3}  {:>9}  {:>9}  {:>6}  {:>6}  ",
         "id", "orig", "new", "frames", "edges"
     );
-    // Only the ids the game can ask for: past the table the parameters are
-    // whatever happens to follow it, and the effect never ends.
-    for id in 0..0x16u8 {
-        let mut z = env.machine();
-        let code = [0x3E, id, 0xCD, 0xC0, 0xD7, 0xC9];
-        for (i, b) in code.iter().enumerate() {
-            z.mem[STUB as usize + i] = *b;
-        }
-        z.t = 0;
-        let ok = z.call(STUB, 500_000_000);
-        let orig = z.t.saturating_sub(STUB_T);
-        let (edges, total) = starquake::sound::beep(&env.assets.ram, id);
+    for id in 0..starquake::assets::EFFECT_COUNT as u8 {
+        let orig = original_beep(&base, id, 0);
+        let (edges, total) = starquake::sound::beep(&env.assets.ram, id, 0);
         let frames = total as f64 / starquake::sound::FRAME_T as f64;
-        let mark = if !ok {
-            "original did not finish".to_string()
-        } else if orig != total {
-            format!("MISMATCH by {}", total as i64 - orig as i64)
-        } else {
-            String::new()
+        let (orig_t, mark) = match orig {
+            None => (0, "original did not finish".to_string()),
+            Some((_, t)) if t != total => (t, format!("MISMATCH by {}", total as i64 - t as i64)),
+            Some((_, t)) => (t, String::new()),
         };
         println!(
-            "{id:>3}  {orig:>9}  {total:>9}  {frames:>6.2}  {:>6}  {mark}",
+            "{id:>3}  {orig_t:>9}  {total:>9}  {frames:>6.2}  {:>6}  {mark}",
             edges.len()
         );
     }
@@ -1826,6 +2154,10 @@ fn main() {
     let assets = Rc::new(Assets::from_memory(&snap.memory()));
     let env = Env { snap, rom, assets };
 
+    if args.first().map(String::as_str) == Some("sound") {
+        let ok = check_beeps(&env) & check_tone(&env) & check_sound_work(&env);
+        std::process::exit(i32::from(!ok));
+    }
     if args.first().map(String::as_str) == Some("effects") {
         effects(&env);
         return;
@@ -1879,6 +2211,9 @@ fn main() {
     ok &= guarded("screens", || check_screens(&env));
     ok &= guarded("core room (A6C1)", || check_core_room(&env));
     ok &= guarded("music (D9DE)", || check_music(&env));
+    ok &= guarded("sound effects (D7C0)", || check_beeps(&env));
+    ok &= guarded("tone loop (A5BA)", || check_tone(&env));
+    ok &= guarded("sound work (A523)", || check_sound_work(&env));
 
     let states = guarded_states("gameplay states", || gameplay_states(&env, 150, 7));
     println!("gameplay states: {}", states.len());

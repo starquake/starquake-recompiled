@@ -97,7 +97,7 @@ impl Game {
 
     fn footstep(&mut self) {
         self.footstep_sound ^= 1;
-        self.effects.push(self.footstep_sound);
+        self.request_effect(self.footstep_sound);
     }
 
     /// Advances walking animation after a step in `right` or left direction.
@@ -480,7 +480,7 @@ impl Game {
         };
         let i = BONUS_EFFECTS + (kind.wrapping_sub(0x11) as usize) * 2;
         let (field, amount) = (self.ram_byte(i), self.ram_byte(i + 1));
-        self.effects.push(field);
+        self.request_effect(field);
         let target = match field {
             0 => &mut self.status.lives,
             n => &mut self.status.bars[n as usize - 1],
@@ -526,7 +526,7 @@ impl Game {
         if s.outgoing.1 != 0 && self.pickups_in_room >= 4 {
             return;
         }
-        self.effects.push(0x0C);
+        self.request_effect(0x0C);
         let s = &mut self.status;
         s.outgoing = s.inventory[3];
         s.inventory = [s.incoming, s.inventory[0], s.inventory[1], s.inventory[2]];
@@ -662,7 +662,7 @@ impl Game {
                     if *entry & 0x7F != 0 {
                         *entry &= 0x80;
                         self.blank_teleport_pad();
-                        self.effects.push(8);
+                        self.request_effect(8);
                     }
                 }
                 Ok(false)
@@ -686,13 +686,13 @@ impl Game {
                 let mut col = m.x.rotate_right(3).wrapping_sub(1) & 0x1F;
                 let row = 0xBFu8.wrapping_sub(m.y).rotate_right(3).wrapping_add(2) & 0x1F;
                 let assets = self.assets.clone();
-                self.printer.print(
+                self.work.characters += self.printer.print(
                     &mut self.display,
                     &assets.font,
                     &assets.udg,
                     &[0x16, row, col, 0x13, 1, 0x10, 7, b' ', b' ', b' ', b' '],
                 );
-                self.effects.push(0x10);
+                self.request_effect(0x10);
                 for _ in 0..2 {
                     let Some(k) = (0..12).find(|k| self.platforms[k * 4 + 1] == 0) else {
                         return Ok(false);
@@ -712,7 +712,7 @@ impl Game {
                 } else {
                     self.room.wrapping_sub(1)
                 };
-                self.effects.push(4);
+                self.request_effect(4);
                 Err(Outcome::NewRoom(5))
             }
             k if k >= 0x14 => {

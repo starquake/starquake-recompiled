@@ -169,7 +169,7 @@ impl Game {
                             let method = key - b'0';
                             if self.control_method != method {
                                 self.control_method = method;
-                                self.effects.push(0x0C);
+                                self.request_effect(0x0C);
                             }
                         }
                         _ => {}
@@ -277,7 +277,7 @@ impl Game {
             };
             self.print_bytes(&[name]);
             table[slot] = 0x90 + index;
-            self.effects.push(1);
+            self.request_effect(1);
             self.draw_key_table(table);
             return name;
         }

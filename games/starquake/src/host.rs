@@ -9,11 +9,11 @@ use crate::controls::Input;
 use crate::game::Game;
 
 pub trait Host {
-    /// A frame boundary. Present `game.display`; play `game.effects` (the
-    /// blocking sound effects requested since the last boundary) followed by
-    /// `game.tone` for the rest of the frame; return the input for the next
+    /// A frame boundary. Present `game.display`; play the frame's sound as
+    /// [`Game::frame_sound`] lays it out (the blocking effects requested
+    /// since the last boundary, and the tone); return the input for the next
     /// frame and how many 50 Hz frames passed (more than one if the sound
-    /// effects overran).
+    /// overran).
     fn frame(&mut self, game: &Game) -> (Input, u32);
 }
 
@@ -26,8 +26,7 @@ pub struct NullHost {
 
 impl Host for NullHost {
     fn frame(&mut self, game: &Game) -> (Input, u32) {
-        let busy: u32 = game.effects.iter().map(|&id| game.assets.beep(id).1).sum();
-        let frames = 1 + busy / crate::sound::FRAME_T;
+        let frames = game.frame_sound().frames;
         self.frames += frames as u64;
         (self.input, frames)
     }
@@ -73,6 +72,9 @@ impl Game {
         self.effects.clear();
         self.music.clear();
         self.tone = None;
+        self.play_work = false;
+        self.work = crate::sound::Work::default();
+        self.work_at_effect = None;
         self.input = input;
         self.frames = self.frames.wrapping_add(frames) & 0xFF_FFFF;
     }

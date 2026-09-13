@@ -184,7 +184,7 @@ impl Game {
             let k = self.ask_key(host, |k| k >= 0x20);
             *slot = k;
             self.print_bytes(&[k, b' ']);
-            self.effects.push(7);
+            self.request_effect(7);
         }
         let last = (HEROES - 1) * ENTRY;
         self.high_scores[last..last + 3].copy_from_slice(&initials);

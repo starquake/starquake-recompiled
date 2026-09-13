@@ -68,7 +68,7 @@ impl Game {
         self.status.pending[4] = hi.wrapping_sub(0xAE).rotate_left(1);
         self.add_and_print_score();
         self.reset_shot();
-        self.effects.push(0x12);
+        self.request_effect(0x12);
         self.sound[1] = 0x0B;
         let e = &mut self.entities[slot].0;
         e[GRAPHIC..GRAPHIC + 2].copy_from_slice(&EXPLODE_GRAPHIC.to_le_bytes());
@@ -79,6 +79,7 @@ impl Game {
 
     /// Returns a death reason if the enemy in `slot` kills BLOB.
     fn enemy_touches_blob(&mut self, slot: usize) -> Option<u8> {
+        self.work.proximity_checks += 1;
         let e = self.entities[slot];
         let b = self.entities[0];
         if distance(e.x(), b.x()) >= 14 || distance(e.y(), b.y()) >= 11 {

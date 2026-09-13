@@ -42,7 +42,7 @@ impl Game {
         } else {
             &assets.udg
         };
-        self.printer.print(
+        self.work.characters += self.printer.print(
             &mut self.display,
             &assets.font,
             udg,
@@ -57,7 +57,8 @@ impl Game {
         } else {
             &assets.udg
         };
-        self.printer
+        self.work.characters += self
+            .printer
             .print(&mut self.display, &assets.font, udg, bytes);
     }
 
@@ -126,7 +127,7 @@ impl Game {
                 let k = (self.rng.lo() & 0x1F) % count;
                 let blank = self.assets.graphic_at(BLANK);
                 self.draw_block2x2(&blank, row, col.wrapping_add(k * 4), self.screen_ink);
-                self.effects.push((self.rng.hi() & 3) + 0x0C);
+                self.request_effect((self.rng.hi() & 3) + 0x0C);
             }
             self.draw_code();
             self.draw_code();
@@ -162,7 +163,7 @@ impl Game {
                     ink = (ink ^ 7) | 2;
                     self.draw_block2x2(&blank, 1, slot_col, ink);
                     self.draw_block2x2(&blank, row, item_col, ink);
-                    self.effects.push(3);
+                    self.request_effect(3);
                 }
                 self.code[item * 2 + 1] = 7;
             }
@@ -179,7 +180,7 @@ impl Game {
         for _ in 0..times {
             self.flash_ink();
             self.print_text(text);
-            self.effects.push(0x0F);
+            self.request_effect(0x0F);
         }
         granted
     }
@@ -197,9 +198,9 @@ impl Game {
         self.print_text(at::SECURITY_TEXT);
         self.draw_tile(0x25, 0x0A, 0x0C);
         self.draw_tile(0x26, 0x0A, 0x10);
-        self.effects.push(8);
+        self.request_effect(8);
         if self.code_check(host, 3, 0x11, 0x0B) {
-            self.effects.push(0x0A);
+            self.request_effect(0x0A);
             let b = &mut self.entities[0].0;
             b[field::X] = if b[crate::blob::b::INPUT] & 1 != 0 {
                 b[field::X].wrapping_add(0x30)
@@ -234,7 +235,7 @@ impl Game {
         self.display.clear_room_area();
         self.pyramid_title();
         self.print_text(at::CHEOPS_KEY_CODE);
-        self.effects.push(0x0B);
+        self.request_effect(0x0B);
         if !self.code_check(host, 2, 0x0F, 0x0D) {
             return self.leave_screen();
         }
@@ -270,7 +271,7 @@ impl Game {
         }
         let choice = self.wait_key(host, |k| (b'1'..=b'5').contains(&k)) - b'1';
         for _ in 0..35 {
-            self.effects.push(0x10);
+            self.request_effect(0x10);
             self.draw_offer(choice);
         }
         self.status.inventory[slot].0 = self.offers[choice as usize];
@@ -308,13 +309,13 @@ impl Game {
         self.print_text(at::TELEPORT_ENTER_CODE);
         self.random_ink();
         self.print_text(at::TELEPORT_DASHES);
-        self.effects.push(7);
+        self.request_effect(7);
         self.random_ink();
         for i in 0..5 {
             let k = self.ask_key(host, |k| k >= 0x0A);
             self.typed_code[i] = k;
             self.print_bytes(&[k, b' ']);
-            self.effects.push(0x11);
+            self.request_effect(0x11);
         }
         let ram = self.assets.clone();
         let ram = &ram.ram;
@@ -325,16 +326,16 @@ impl Game {
                 for _ in 0..20 {
                     self.flash_ink();
                     self.print_text(at::TELEPORTING);
-                    self.effects.push(0x10);
+                    self.request_effect(0x10);
                 }
-                self.effects.push(9);
+                self.request_effect(9);
                 return reason::TELEPORT;
             }
         }
         for _ in 0..40 {
             self.flash_ink();
             self.print_text(at::NOT_RECOGNISED);
-            self.effects.push(0x0F);
+            self.request_effect(0x0F);
         }
         self.leave_screen()
     }

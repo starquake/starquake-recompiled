@@ -166,6 +166,16 @@ and force-field deaths → enemies (`A01B`).
   Tone half-period = 35·e + 37 T-states.
 - Blocking effects `D7C0`, table `D839` (5 bytes: start pitch, end pitch,
   step, xor mask, count|flags). They stall the game while playing.
+- Tone loop `A5BA`: toggle, then count E down, polling `FRAMES` (`5C78`)
+  each time round and returning when it changes. That poll is in contended
+  memory, so the half period is longer while the picture is drawn than in
+  the border.
+- The effects' delay loop is `push ix` / `pop ix` / `dec d` / `jr nz`, on
+  the stack at `5Dxx` (contended), so an effect's pitch depends on where in
+  the frame it plays. An interrupt breaks into one that crosses a boundary
+  (the ROM routine costs 895 T with no keys held).
+- In play, the frame is silent until the work is done: the tone loop
+  starts between about 40,000 and 54,000 T in, depending on the work.
 
 ## New game (`629D`, verified)
 
