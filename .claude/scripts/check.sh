@@ -33,6 +33,20 @@ else
   echo "!!! cargo-deny not installed; the dependency policy was NOT checked."
 fi
 
+# The attributions shipped with a binary. Same story: an install away, and
+# worth saying loudly when it did not run.
+if command -v cargo-about > /dev/null; then
+  echo "=== third-party attributions"
+  cargo about generate --all-features about.hbs -o "${TMPDIR:-/tmp}/THIRD-PARTY.md" 2> /dev/null
+  if diff -q THIRD-PARTY.md "${TMPDIR:-/tmp}/THIRD-PARTY.md" > /dev/null; then
+    echo "THIRD-PARTY.md is current"
+  else
+    failed+=("THIRD-PARTY.md is stale: cargo about generate --all-features about.hbs -o THIRD-PARTY.md")
+  fi
+else
+  echo "!!! cargo-about not installed; THIRD-PARTY.md was NOT checked."
+fi
+
 # The differential suites: the rewrite against the original, byte for byte.
 # Without the game and the ROM they cannot run, and that is worth saying
 # loudly rather than passing quietly — a silent skip is how a gate rots.

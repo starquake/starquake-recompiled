@@ -144,6 +144,28 @@ jobs:
         with:
           command: check
 
+      # THIRD-PARTY.md is committed so it can be reviewed in a diff and read
+      # by anyone browsing the repository. That only works if it cannot go
+      # quietly stale, which is what this is for: the failure mode of an
+      # attribution file is forgetting it, not getting it wrong.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.1"
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-about
+        run: cargo install cargo-about --locked --features cli
+
+      - name: Third-party attributions are current
+        run: |
+          cargo about generate --all-features about.hbs -o /tmp/THIRD-PARTY.md
+          if ! diff -u THIRD-PARTY.md /tmp/THIRD-PARTY.md; then
+            echo "::error::THIRD-PARTY.md is stale. Regenerate it:"
+            echo "::error::  cargo about generate --all-features about.hbs -o THIRD-PARTY.md"
+            exit 1
+          fi
+
   # sq-verify is deliberately absent: it needs the player's own copy of the
   # game and the Spectrum ROM, which are never committed and should not be
   # uploaded to GitHub. (The Z80 conformance test does run here: its corpus
