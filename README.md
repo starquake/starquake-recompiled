@@ -108,6 +108,11 @@ the rewritten code from the same starting state (thousands of states, from
 real play and from a tour of the map), then compares the resulting screen
 and game state byte for byte.
 
+One check is different, because what it checks is not in the original: *map
+openings* plays the rewrite on from the same states under random joystick
+input and checks that every edge BLOB leaves a room through is one the
+guidance map (#2) shows open.
+
 ### What the reference interpreter rests on
 
 Those checks only prove the rewrite matches our interpreter, and the rewrite
