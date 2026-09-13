@@ -177,19 +177,15 @@ impl Host for FrontHost {
             // give up the lost time rather than trying to catch it back.
             self.next_frame = now;
         }
-        // A gamepad drives the same five bits the Kempston port has; Start
-        // presses P, which is where the game's pause key lives.
+        // A gamepad works in every control method: it presses whatever the
+        // chosen method reads, the Kempston port or the method's own keys.
+        // Start presses the method's pause key, which is not a fixed key
+        // either; on a fresh tape it is Space.
         let (pad_bits, pad_pause) = self.pad.poll();
         let mut input = *self.shared.input.lock().unwrap();
-        input.kempston |= pad_bits;
+        game.controls.press(&mut input, pad_bits);
         if pad_pause {
-            // Not a fixed key: the pause key depends on the control method,
-            // and Kempston keeps whatever the last keyboard method left,
-            // which on a fresh tape is Space rather than P.
-            let (port, bit) = game.controls.pause;
-            if let Some(row) = (0..8).find(|r| port & (1 << r) == 0) {
-                input.keys[row] &= !(1 << bit);
-            }
+            game.controls.press_pause(&mut input);
         }
 
         let now = Instant::now();
