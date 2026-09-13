@@ -197,6 +197,11 @@ impl Host for FrontHost {
             self.scene = game.scene;
             *self.shared.scene.lock().unwrap() = game.scene;
         }
+        self.shared
+            .guidance
+            .lock()
+            .unwrap()
+            .set_teleporters(&game.teleporters_seen);
         let sound = game.frame_sound();
         let frames = sound.frames;
         self.beeper

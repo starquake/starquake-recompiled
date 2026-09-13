@@ -42,12 +42,14 @@ const DANGER_FILL: Rgb = [0x2a, 0x16, 0x18];
 const DANGER_TITLE: Rgb = [0xf3, 0xc6, 0xca];
 const DANGER_TEXT: Rgb = [0xe0, 0xa3, 0xa8];
 const TRAINING: Rgb = [0xf5, 0xb8, 0x4b];
+const CODE: Rgb = [0x7f, 0xd1, 0xc7];
+const CODE_FILL: Rgb = [0x14, 0x25, 0x2a];
 const PAUSED: Rgb = [0x5d, 0x63, 0x72];
 
 /// What each level adds, for the picker.
 const ADDS: [&str; 6] = [
     "The original game, no help.",
-    "Not built yet: the codes of the teleporters you have seen.",
+    "The codes of the teleporters you have seen.",
     "Not built yet: a map of the rooms you have visited.",
     "Not built yet: the missing core pieces, marked on the map.",
     "Not built yet: an arrow along routes you know.",
@@ -92,13 +94,13 @@ impl Panel {
                 &[span(&title, 19.0, Weight::SemiBold, BRIGHT)],
             );
             self.badge(canvas, WINDOW_W - 24.0, 28.0, "Esc");
-            let (first, second) = if level == 0 {
-                ("No guidance.", "Press Esc or Select to choose a level.")
-            } else {
-                (
+            let (first, second) = match level {
+                0 => ("No guidance.", "Press Esc or Select to choose a level."),
+                1 => ("The map appears at level 2.", ""),
+                _ => (
                     "This level is not built yet.",
                     "It will show here when it is.",
-                )
+                ),
             };
             for (i, line) in [first, second].into_iter().enumerate() {
                 let spans = [span(line, 14.0, Weight::Regular, QUIET)];
@@ -112,10 +114,76 @@ impl Panel {
                     &spans,
                 );
             }
+            if level >= 1 {
+                self.teleporters(canvas, left, width - 48.0, guidance.teleporters());
+            }
         }
 
         if guidance.picker_open() {
             self.picker(canvas, guidance);
+        }
+    }
+
+    /// Level 1 (#50): the codes of the teleporters seen this game, along the
+    /// bottom of the panel, in the order they were seen.
+    fn teleporters(&mut self, canvas: &mut Canvas, left: f32, width: f32, codes: &[[u8; 5]]) {
+        let (chip_h, gap) = (26.0, 8.0);
+        // Lay the chips out in rows first, so the block can sit on the
+        // panel's bottom edge however many rows there are.
+        let mut rows: Vec<Vec<(String, f32)>> = vec![Vec::new()];
+        let mut used = 0.0;
+        for code in codes {
+            let text = String::from_utf8_lossy(code).into_owned();
+            let w = self
+                .fonts
+                .measure(&[span(&text, 14.0, Weight::SemiBold, CODE)])
+                + 16.0;
+            if used + w > width && !rows[rows.len() - 1].is_empty() {
+                rows.push(Vec::new());
+                used = 0.0;
+            }
+            used += w + gap;
+            rows.last_mut().unwrap().push((text, w));
+        }
+        let lines = if codes.is_empty() {
+            1.0
+        } else {
+            rows.len() as f32
+        };
+        let top = WINDOW_H - 24.0 - lines * (chip_h + gap) + gap - 22.0;
+        self.spaced(canvas, left, top, "TELEPORTERS SEEN");
+        if codes.is_empty() {
+            self.fonts.text(
+                Some(canvas),
+                left,
+                top + 24.0,
+                Some(width),
+                1.0,
+                &[span(
+                    "None yet: a code shows once you enter its booth.",
+                    13.0,
+                    Weight::Regular,
+                    QUIET,
+                )],
+            );
+            return;
+        }
+        let mut y = top + 22.0;
+        for row in rows {
+            let mut x = left;
+            for (text, w) in row {
+                canvas.round_rect(x, y, w, chip_h, 4.0, CODE_FILL);
+                self.fonts.text(
+                    Some(canvas),
+                    x + 8.0,
+                    y + 5.0,
+                    None,
+                    1.0,
+                    &[span(&text, 14.0, Weight::SemiBold, CODE)],
+                );
+                x += w + gap;
+            }
+            y += chip_h + gap;
         }
     }
 
@@ -729,6 +797,28 @@ mod render_check {
         let cases = [
             ("level0", Guidance::default(), Scene::Play),
             ("level2", level2, Scene::Play),
+            (
+                "level1-codes",
+                {
+                    let mut g = Guidance::default();
+                    g.set_level(1);
+                    // Made-up codes: the real ones are the original's text.
+                    g.set_teleporters(&[
+                        *b"ABCDE", *b"FGHIJ", *b"KLMNO", *b"PQRST", *b"UVWXY", *b"ZABCD",
+                    ]);
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                "level1-none",
+                {
+                    let mut g = Guidance::default();
+                    g.set_level(1);
+                    g
+                },
+                Scene::Play,
+            ),
             ("picker", picker.clone(), Scene::Play),
             (
                 "picker-training",
