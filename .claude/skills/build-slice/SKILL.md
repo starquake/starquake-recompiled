@@ -126,12 +126,22 @@ gh api repos/starquake/starquake-recompiled/pulls/<n>/comments \
 
 | reply starts with | Claude |
 |---|---|
-| `fix` | fixes it as recommended (or as the reply amends), pushes, and replies with the commit |
+| `fix` | fixes it as recommended (or as the reply amends), pushes, replies with the commit, and resolves the thread |
 | `skip` | leaves it, replies to acknowledge, and resolves the thread |
 | `ticket` | files it as a Backlog issue, replies with the link, and resolves the thread |
 
 Any other reply is a question or an extra comment: answer it in the thread,
-and act on it only when it asks for a change. Replies arrive through the board
+and act on it only when it asks for a change. Resolve a thread once it is
+acted on and nothing is left to answer; **the ruleset blocks merging while any
+conversation is unresolved**, so a thread left open holds the PR. Resolving
+takes the thread's node id:
+
+```bash
+gh api graphql -f query='{ repository(owner:"starquake", name:"starquake-recompiled") {
+  pullRequest(number:<n>) { reviewThreads(first:50) { nodes { id isResolved
+    comments(first:1) { nodes { databaseId } } } } } } }'
+gh api graphql -f query='mutation { resolveReviewThread(input:{threadId:"<id>"}) { thread { isResolved } } }'
+``` Replies arrive through the board
 monitor, which watches PR review comments. A finding with no line to anchor
 to (something missing) goes on the file's first changed line, saying so.
 

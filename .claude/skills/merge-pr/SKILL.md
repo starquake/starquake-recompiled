@@ -38,6 +38,18 @@ gh pr checks <n>
 Every check must pass, and it must belong to the PR's current head commit.
 Never merge red or pending CI.
 
+## Step 2b: every conversation resolved
+
+The ruleset refuses to merge while a review conversation is unresolved (#74).
+A thread still open is a finding or a comment not yet acted on: act on it
+first (`build-slice`, *Review the whole diff*), or ask the maintainer.
+
+```bash
+gh api graphql -f query='{ repository(owner:"starquake", name:"starquake-recompiled") {
+  pullRequest(number:<n>) { reviewThreads(first:50) { nodes { isResolved path line } } } } }' \
+  --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)]'
+```
+
 ## Step 3: the title still describes the diff
 
 The squash commit takes the PR title as its subject, permanently:
