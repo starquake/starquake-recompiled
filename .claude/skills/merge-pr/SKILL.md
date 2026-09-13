@@ -80,6 +80,16 @@ checked. The repo deletes merged branches automatically. Then:
 - Otherwise the board's `Item closed → Done` workflow moves the card. Check
   that it did (`board.sh get <issue>`); if it didn't, move it and report that
   the workflow is off.
+- **Wait for `main`'s own CI and read it.** A green PR does not mean a green
+  `main`: the ruleset does not require a branch to be up to date before
+  merging, so the checks passed against an older base. If `main` is red, fixing
+  it comes before anything else and does not need asking about.
+
+  ```bash
+  until [ "$(gh run list -R "$R" --branch main --workflow CI --limit 1 --json status -q '.[0].status')" = "completed" ]; do sleep 30; done
+  gh run list -R "$R" --branch main --workflow CI --limit 1 --json conclusion,headSha
+  ```
+
 - **Run the differential suites on the merged `main`** if the merge touched
   the game or the interpreter. CI cannot run them, so a merge is the last
   point anything checks.

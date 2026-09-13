@@ -86,15 +86,46 @@ found and let the maintainer confirm the shape first.
 
 ## The pass
 
+**A red `main` comes before all of it.** After any merge, yours or the
+maintainer's, confirm `main` still builds:
+
+```bash
+gh run list -R "$R" --branch main --workflow CI --limit 1 --json conclusion,headSha
+```
+
+Two pull requests can each be green and still break `main` together, because
+the ruleset does not require a branch to be up to date before merging: a PR's
+checks passed against the base as it was when they ran, not as it is at merge.
+Nothing else notices this.
+
+**Fixing a red `main` is authorised work, not a question.** The change that
+broke it is known, the fix is not a design decision, and every branch cut
+while it is red inherits the breakage. Fix it, say what it was, and carry on.
+
 **Standing authorised work goes first.** Read every work lane (`Build`, then
 `Plan`, then `Spec`) and work from there. A spec waiting to be written is
 standing work exactly as a build is. Work does not earn priority by being new;
 the only pre-emptions are a red `main`, a PR carrying `ready to merge`, and a
 direct maintainer request, and they are named as exceptions.
 
+0. **Reconcile before anything else.** Never trust what you remember, or what
+   a summary says, about whether a pull request is still open. The maintainer
+   merges, and a pass that assumes otherwise works on a branch that has
+   already landed.
+
+   ```bash
+   gh pr list -R "$R" --state merged --limit 10 --json number,title,mergedAt,mergeCommit
+   git fetch origin --quiet && git log --oneline -5 origin/main
+   ```
+
+   For anything merged since the last pass: check `main` is still good (below),
+   close out its ticket and card, and rebase any open branch that was cut
+   before it.
+
 1. **Enumerate.** `gh issue list --state open`, `gh pr list --state open`, and
    a recently-closed sweep for comments that landed after close. Drop anything
-   labelled `hold`.
+   labelled `hold`. **Re-read state from the API**, not from memory: a PR that
+   was open last turn may not be now.
 
    **Read the comments, not just the states.** For every ticket at a gate,
    fetch its comments and look for the maintainer's answer block or go signal
@@ -248,6 +279,7 @@ real miss on mediumrogue.
 | `hold` added / lifted | an override that stops or releases work |
 | board Status transitions | a move to `Build` authorises a build |
 | `main` going red | pre-empts everything |
+| `main`'s head moving | something merged, and nobody is going to say so |
 | standing work lanes (level-triggered) | authorised work that is merely waiting |
 
 ```bash
@@ -268,10 +300,14 @@ snap_label(){ gh pr list -R $R --state open --label "$1" --json number -q '.[].n
 snap_hold(){ gh issue list -R $R --state open --label hold --json number -q '.[].number' 2>/dev/null | sort; }
 snap_main(){ gh run list -R $R --branch main --workflow CI --limit 1 \
   --json conclusion -q '.[0].conclusion // "none"' 2>/dev/null || echo none; }
+# `main` moving means something merged, which is the signal a pass most often
+# used to get by being told.
+snap_head(){ gh api repos/$R/commits/main --jq '.sha' 2>/dev/null; }
 
 # Guard the initialisation too: a failed first call would start from a lie.
 until prev_s=$(snap_board) && [ -n "$prev_s" ]; do sleep 30; done
-prev_l=$(snap_label "ready to merge"); prev_h=$(snap_hold); prev_main=$(snap_main); ticks=0
+prev_l=$(snap_label "ready to merge"); prev_h=$(snap_hold); prev_main=$(snap_main)
+prev_head=$(snap_head); ticks=0
 while true; do
   sleep 60
   now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -296,6 +332,12 @@ while true; do
   cur=$(snap_main)
   [ "$cur" != "$prev_main" ] && [ "$cur" = "failure" ] && echo "MAIN IS RED: CI failed on main"
   prev_main=$cur
+
+  # An empty result is an outage, not an empty branch, so only act on a real sha.
+  if cur=$(snap_head) && [ -n "$cur" ]; then
+    [ "$cur" != "$prev_head" ] && echo "MAIN MOVED to ${cur:0:8}: something merged, reconcile and check it builds"
+    prev_head=$cur
+  fi
 
   # Board Status, every transition. Moves board.sh made are consumed and skipped.
   if ! cur_s=$(snap_board) || { [ -z "$cur_s" ] && [ -n "$prev_s" ]; }; then since=$now; continue; fi
