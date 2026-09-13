@@ -10,7 +10,7 @@ publish.workspace = true
 default = ["frontend"]
 # The playable program (window, input, sound). The library alone has no
 # platform dependencies.
-frontend = ["dep:pixels", "dep:winit", "dep:cpal", "dep:gilrs"]
+frontend = ["dep:pixels", "dep:winit", "dep:cpal", "dep:gilrs", "dep:windows-sys"]
 
 [dependencies]
 # Only the snapshot loader and SHA-1; no emulation.
@@ -19,6 +19,11 @@ pixels = { version = "0.17", optional = true }
 winit = { version = "0.30", optional = true }
 cpal = { version = "0.18", optional = true }
 gilrs = { version = "0.11", optional = true }
+
+# Only for putting a fatal startup error in a message box, since a Windows
+# build has no console to print it to. Nothing else uses it.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging"], optional = true }
 
 [[bin]]
 name = "starquake"
