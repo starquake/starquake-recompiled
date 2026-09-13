@@ -603,7 +603,9 @@ impl Panel {
     /// A row of key hints: each group's keys, then what they do. A `/`
     /// between two keys is drawn as text, for a keyboard key and the
     /// controller button that does the same; a key written `(A)` is a
-    /// controller's face button, drawn round like one.
+    /// controller's face button, drawn round like one. Arrows are drawn bare:
+    /// they mean the arrow keys and the D-pad alike, and an outline would
+    /// make them read as keys only.
     fn hints(&mut self, canvas: &mut Canvas, mut x: f32, y: f32, groups: &[(&[&str], &str)]) {
         for (keys, what) in groups {
             for key in *keys {
@@ -611,6 +613,10 @@ impl Panel {
                     let slash = [span("/", 12.0, Weight::Regular, HINT)];
                     self.fonts.text(Some(canvas), x, y + 2.0, None, 1.0, &slash);
                     x += self.fonts.measure(&slash) + 4.0;
+                } else if matches!(*key, "\u{2190}" | "\u{2191}" | "\u{2192}" | "\u{2193}") {
+                    let arrow = [span(key, 14.0, Weight::SemiBold, HINT_KEY)];
+                    self.fonts.text(Some(canvas), x, y + 1.0, None, 1.0, &arrow);
+                    x += self.fonts.measure(&arrow) + 3.0;
                 } else if let Some(button) = key.strip_prefix('(').and_then(|k| k.strip_suffix(')'))
                 {
                     x += self.pad_button(canvas, x, y, button) + 4.0;
