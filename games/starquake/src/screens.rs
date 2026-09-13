@@ -303,8 +303,11 @@ impl Game {
         self.print_text(at::TELEPORT_ENTERED);
         self.draw_tile(0x24, 0x09, 0x17);
         let name = self.teleporter_name(self.room);
-        if !self.teleporters_seen.contains(&name) {
-            self.teleporters_seen.push(name);
+        if !self.teleporters_seen.iter().any(|t| t.code == name) {
+            self.teleporters_seen.push(crate::game::SeenTeleporter {
+                room: self.room,
+                code: name,
+            });
         }
         self.random_ink();
         self.print_bytes(&name);

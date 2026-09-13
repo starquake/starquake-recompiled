@@ -197,11 +197,22 @@ impl Host for FrontHost {
             self.scene = game.scene;
             *self.shared.scene.lock().unwrap() = game.scene;
         }
-        self.shared
-            .guidance
-            .lock()
-            .unwrap()
-            .set_teleporters(&game.teleporters_seen);
+        // Every room's openings, for the map: the same every game, so found
+        // once, on the first frame. It takes about a millisecond.
+        if !self.shared.guidance.lock().unwrap().has_openings() {
+            let openings = game.all_openings();
+            self.shared.guidance.lock().unwrap().set_openings(openings);
+        }
+        {
+            let mut guidance = self.shared.guidance.lock().unwrap();
+            guidance.set_teleporters(&game.teleporters_seen);
+            if game.scene == Scene::Play {
+                guidance.set_room(Some(game.room));
+                guidance.set_unvisited(&game.unvisited_rooms);
+            } else {
+                guidance.set_room(None);
+            }
+        }
         let sound = game.frame_sound();
         let frames = sound.frames;
         self.beeper

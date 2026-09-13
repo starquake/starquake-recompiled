@@ -26,6 +26,14 @@ pub enum Scene {
     GameOver,
 }
 
+/// A teleporter whose booth has been entered: the room it is in and its
+/// code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SeenTeleporter {
+    pub room: u16,
+    pub code: [u8; 5],
+}
+
 #[derive(Clone)]
 pub struct Game {
     pub assets: Rc<Assets>,
@@ -83,10 +91,11 @@ pub struct Game {
     pub effects: Vec<u8>,
     /// Tone to play for the rest of this frame (see [`Game::sound_tick`]).
     pub tone: Option<u8>,
-    /// The codes of the teleporters whose booths have been entered this game,
-    /// in the order they were seen, for a frontend that shows them (#50).
-    /// Not part of the original's state: nothing in the game reads it.
-    pub teleporters_seen: Vec<[u8; 5]>,
+    /// The teleporters whose booths have been entered this game, in the
+    /// order they were seen, for a frontend that shows their codes (#50)
+    /// and where they are (#2). Not part of the original's state: nothing
+    /// in the game reads it.
+    pub teleporters_seen: Vec<SeenTeleporter>,
     /// Which part of the program is running, for a frontend that shows
     /// something beside it. Not part of the original's state: nothing in
     /// the game reads it.
