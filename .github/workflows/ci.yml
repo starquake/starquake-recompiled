@@ -178,6 +178,44 @@ jobs:
             exit 1
           fi
 
+  # The Intel Mac binary is only built by the release, cross-compiled on
+  # Apple silicon since GitHub has no Intel macOS runners left. Building it
+  # here as well means a change that breaks only that target shows up on its
+  # pull request rather than when a version is tagged. The tests already run
+  # natively on the other three, so this builds and checks that it starts.
+  intel-mac:
+    name: build for Intel Mac
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.1"
+          targets: x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release --locked --all-features -p starquake --target x86_64-apple-darwin
+
+      # The same check as the release's: from an empty folder it must say it
+      # found no tape and exit 1, which runs the x86_64 binary under Rosetta.
+      - name: Smoke test
+        run: |
+          bin="$PWD/target/x86_64-apple-darwin/release/starquake"
+          empty=$(mktemp -d)
+          cd "$empty"
+          set +e
+          out=$(HOME="$empty" XDG_DATA_HOME="$empty" "$bin" 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          [ "$code" -eq 1 ] && grep -q "no copy of Starquake found" <<< "$out"
+
   # sq-verify is deliberately absent: it needs the player's own copy of the
   # game and the Spectrum ROM, which are never committed and should not be
   # uploaded to GitHub. (The Z80 conformance test does run here: its corpus
