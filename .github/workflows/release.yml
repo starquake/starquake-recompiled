@@ -116,7 +116,7 @@ jobs:
           body: |
             Built from `${{ github.ref_name }}`.
 
-            **You need your own copy of Starquake to play.** This program contains no part of the original game. It reads the graphics, maps, text and sound from your tape when it starts. The README in the archive says where to get one legitimately.
+            **You need your own copy of Starquake to play.** This program contains no part of the original game. It reads the graphics, maps, text and sound from your tape when it starts. README.txt in the archive says where to get one legitimately.
 
             Put `starquake.tap` in the same folder as the program and run it. You can also give the tape on the command line: `./starquake path/to/starquake.tap`, or `starquake.exe path\to\starquake.tap` on Windows.
 
@@ -124,5 +124,5 @@ jobs:
 
             **Gamepads** work in every control method, over USB or Bluetooth. Some controllers need the right mode: an 8BitDo in Switch mode is detected but sends no input.
 
-            `THIRD-PARTY.md` in the archive lists the libraries built into the program and their licences.
+            `THIRD-PARTY.txt` in the archive lists the libraries built into the program and their licences.
           fail_on_unmatched_files: true
