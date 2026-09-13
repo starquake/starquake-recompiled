@@ -24,6 +24,7 @@ run "clippy"       cargo clippy --workspace --all-targets --all-features --locke
 RUSTDOCFLAGS="-D warnings" run "doc" cargo doc --workspace --no-deps --locked
 # The game library is meant to have no platform dependencies at all.
 run "no-frontend"  cargo build -p starquake --no-default-features --locked
+run "release docs"   python3 release/docs.py "${TMPDIR:-/tmp}/release-docs"
 # What the dependency tree is allowed to contain. Skipped rather than failed
 # when the tool is absent, since it is the one check here that needs an
 # install: `cargo install cargo-deny --locked`.

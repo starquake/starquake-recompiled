@@ -9,7 +9,7 @@ them.
 
 It says nothing about the game itself. Starquake is Stephen Crow's, this
 project contains no part of it, and the program reads everything it needs
-from the player's own copy at startup — see `assets/README.md`.
+from the player's own copy when it starts. The README says where to get one.
 
 - Apache License 2.0: 139 crates
 - MIT License: 46 crates

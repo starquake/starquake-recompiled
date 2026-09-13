@@ -35,6 +35,7 @@ place for application data, then in the working directory. That middle one is
 `%APPDATA%\starquake-recompiled\` on Windows. If it finds nothing it names
 every place it tried.
 
+<!-- release:controls -->
 | Key | Action |
 |-----|--------|
 | Arrow keys | Move. They drive the Kempston joystick and press `5` `6` `7` `8`, which are the Spectrum's own cursor keys, so they work in the Kempston, cursor and UDK methods alike |
@@ -47,6 +48,7 @@ every place it tried.
 
 At the title screen, **1**–**5** choose how to play, **6** defines your own
 keys, **0** starts the game and **Q** quits. Any key stops the tune.
+<!-- /release:controls -->
 
 ## Status
 
@@ -90,6 +92,7 @@ in the original, which here take one step per frame.
 | `crates/zx-core` | Z80 decoder, `.z80` loader, PNG writer. |
 | `crates/zx-recomp` | Tracing and disassembly-listing tool used for reverse engineering (development only). |
 | `docs/re` | Reverse-engineering notes. |
+| `release` | What a release archive carries besides the program: the README for players, and the script that builds it. |
 
 ## Verification
 
