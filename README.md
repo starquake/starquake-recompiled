@@ -41,7 +41,7 @@ every place it tried.
 | Up | Pick up / swap items; with the hover platform, rise |
 | Down | Build a platform |
 | Alt, `.` or `,` | Fire (Kempston) |
-| Gamepad | Drives the Kempston joystick: d-pad or left stick to move, any face or shoulder button to fire, Start to pause. USB or Bluetooth alike, since a paired controller is an ordinary gamepad to the operating system and nothing here looks at how it is connected |
+| Gamepad | D-pad or left stick to move, any face or shoulder button to fire, Start to pause. Works whichever control method is chosen, because it presses what that method reads. USB or Bluetooth alike, since a paired controller is an ordinary gamepad to the operating system. Some controllers need the right mode: an 8BitDo in Switch mode is detected but sends no input, so try one of its other modes |
 | P | Pause |
 | A S D F G together | Abandon the game |
 

@@ -1327,6 +1327,34 @@ fn check_security_doors(env: &Env) -> bool {
 
 /// New-game setup (`629D` up to the intro at `666D`) for every control
 /// method and a range of frame counts (the seed).
+/// A gamepad reaches the game in every control method. For each method,
+/// every combination of directions and fire pressed through
+/// `Controls::press` has to read back as the same bits.
+///
+/// Not a comparison with the original, but it needs the real method tables,
+/// which only the tape has, so it runs here rather than as a unit test.
+fn check_gamepad_methods(env: &Env) -> bool {
+    let mut failures = Vec::new();
+    let mut cases = 0;
+    for method in 1..=5u8 {
+        let mut game = env.game(&env.machine());
+        game.new_game(method);
+        for bits in 0..0x20u8 {
+            cases += 1;
+            let mut input = starquake::controls::Input::default();
+            game.controls.press(&mut input, bits);
+            let got = game.controls.read(&input);
+            if got != bits {
+                failures.push((
+                    format!("method {method}, bits {bits:#04x}"),
+                    vec![format!("read back {got:#04x}")],
+                ));
+            }
+        }
+    }
+    report("gamepad in every control method", &failures, cases)
+}
+
 fn check_new_game(env: &Env) -> bool {
     let mut failures = Vec::new();
     let mut cases = 0;
@@ -1844,6 +1872,9 @@ fn main() {
         check_room_entry(&env)
     });
     ok &= guarded("new game (629D)", || check_new_game(&env));
+    ok &= guarded("gamepad in every control method", || {
+        check_gamepad_methods(&env)
+    });
     ok &= guarded("menu (5E81)", || check_menu(&env));
     ok &= guarded("screens", || check_screens(&env));
     ok &= guarded("core room (A6C1)", || check_core_room(&env));

@@ -20,6 +20,14 @@ impl Default for Input {
 }
 
 impl Input {
+    /// Holds down the key at `port`, the high address byte that selects its
+    /// half-row, and `bit`.
+    pub fn press_key(&mut self, (port, bit): (u8, u8)) {
+        if let Some(row) = (0..8).find(|r| port & (1 << r) == 0) {
+            self.keys[row] &= !(1 << bit);
+        }
+    }
+
     /// Keyboard bits for port `0xFE` with high address byte `hi`: rows
     /// whose address line is low are combined.
     pub fn keyboard(&self, hi: u8) -> u8 {
@@ -141,6 +149,30 @@ impl Controls {
         self.pause = key_position(ram, pause).expect("known key name");
     }
 
+    /// Makes [`read`](Self::read) see `bits`, whatever the control method.
+    ///
+    /// For a device the method was not written for, such as a gamepad when a
+    /// keyboard method is chosen. The Kempston byte is set in every method,
+    /// and in a keyboard method the keys that make up `bits` are held down
+    /// too. That works because every method uses the Kempston bit layout for
+    /// its key values, and only the keys themselves differ.
+    pub fn press(&self, input: &mut Input, bits: u8) {
+        input.kempston |= bits;
+        if self.kempston {
+            return;
+        }
+        for &(port, bit, value) in &self.keys {
+            if value != 0 && bits & value == value {
+                input.press_key((port, bit));
+            }
+        }
+    }
+
+    /// Holds down the current method's pause key.
+    pub fn press_pause(&self, input: &mut Input) {
+        input.press_key(self.pause);
+    }
+
     pub fn pause_pressed(&self, input: &Input) -> bool {
         input.keyboard(self.pause.0) & (1 << self.pause.1) == 0
     }
@@ -195,5 +227,59 @@ impl crate::game::Game {
     pub fn ask_key(&mut self, host: &mut dyn crate::host::Host, accept: impl Fn(u8) -> bool) -> u8 {
         self.wait_keys_released(host);
         self.wait_key(host, accept)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Controls in the shape every method has: Kempston values on five
+    /// distinct keys. The positions are made up, spread over several rows.
+    fn keyboard() -> Controls {
+        Controls {
+            kempston: false,
+            initial: 0,
+            keys: [
+                (0xFB, 0, 0x02),
+                (0xFD, 2, 0x04),
+                (0xFD, 3, 0x08),
+                (0xDF, 1, 0x01),
+                (0x7F, 4, 0x10),
+            ],
+            pause: (0x7F, 0),
+        }
+    }
+
+    #[test]
+    fn a_keyboard_method_reads_back_what_was_pressed() {
+        let c = keyboard();
+        for bits in 0..0x20 {
+            let mut input = Input::default();
+            c.press(&mut input, bits);
+            assert_eq!(c.read(&input), bits, "bits {bits:#04x}");
+        }
+    }
+
+    #[test]
+    fn kempston_reads_back_what_was_pressed() {
+        let c = Controls {
+            kempston: true,
+            ..keyboard()
+        };
+        for bits in 0..0x20 {
+            let mut input = Input::default();
+            c.press(&mut input, bits);
+            assert_eq!(c.read(&input), bits, "bits {bits:#04x}");
+        }
+    }
+
+    #[test]
+    fn pause_is_the_methods_own_key() {
+        let c = keyboard();
+        let mut input = Input::default();
+        assert!(!c.pause_pressed(&input));
+        c.press_pause(&mut input);
+        assert!(c.pause_pressed(&input));
     }
 }
