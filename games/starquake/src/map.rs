@@ -1,12 +1,13 @@
-//! The planet as a map: which edges of each room can be left through, and
-//! where a room is divided inside, for the guidance map (#2).
+//! The planet as a map, for the guidance panel: which edges of each room can
+//! be left through and where a room is divided inside (#2), and which rooms
+//! hold the core pieces still needed (#3).
 //!
 //! Walking off a room's left or right edge moves one room along, and off its
 //! top or bottom sixteen (`Game::room_exit`), so the 512 rooms are a grid 16
 //! wide and 32 tall and a room's number is its place on it.
 //!
-//! Nothing here changes the game. Each room is built into a copy of it and
-//! its cells read back.
+//! Nothing here changes the game. To find the openings, each room is built
+//! into a copy of it and its cells read back.
 
 use crate::game::Game;
 use crate::pickups::{Item, RoomSet};
@@ -208,9 +209,7 @@ impl Game {
         };
         openings
     }
-}
 
-impl Game {
     /// The rooms holding a core piece the core still needs, for the guidance
     /// map (#3).
     pub fn missing_piece_rooms(&self) -> RoomSet {

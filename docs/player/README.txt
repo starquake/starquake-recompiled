@@ -95,8 +95,8 @@ game's score, so the menu asks before keeping such a change. So far:
            not meet, and a dashed one is a security door. A way on
            can still need a lift.
   Level 3  The rooms holding a core piece the core still needs, marked
-           in pink on the map, the ones you have not reached too. There
-           are usually two of each piece; either will do.
+           in pink on the map, including rooms you have not reached.
+           There are usually two of each piece; either will do.
 
 Levels 4 and 5 and training mode are still to come.
 
