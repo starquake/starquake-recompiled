@@ -126,3 +126,7 @@ jobs:
 
             `THIRD-PARTY.txt` in the archive lists the libraries built into the program and their licences.
           fail_on_unmatched_files: true
+          # A tag with a suffix, like v0.1.0-rc.1, is something to try before
+          # the real one, so it is published as a pre-release and never
+          # becomes the latest release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
