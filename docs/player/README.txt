@@ -13,8 +13,9 @@ This program contains no code or data from the original game. It reads
 every graphic, map, piece of text and sound from your own copy of
 Starquake, a .tap tape, when it starts, and it will not run without one.
 
-World of Spectrum archives Spectrum software with the permission of its
-copyright holders. A dump of a tape you own works just as well.
+World of Spectrum keeps Spectrum software available and removes titles
+whose rights holders object. It lists Starquake as available. A dump of
+a tape you own works just as well.
 
   https://worldofspectrum.net/
 

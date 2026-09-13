@@ -17,10 +17,15 @@ them unless you are working on the code.
 
 ## Where to get them
 
-**The game.** [World of Spectrum](https://worldofspectrum.net/) archives
-Spectrum software under a permissions system, asking copyright holders for
-permission to distribute and honouring their wishes. If you already own the
-game on tape, a dump of your own copy works just as well.
+**The game.** [World of Spectrum](https://worldofspectrum.net/) and
+[Spectrum Computing](https://spectrumcomputing.co.uk/) keep Spectrum software
+available and remove titles whose rights holders object. Both list Starquake
+as available, which means nobody has objected, not that its rights holders
+gave permission: World of Spectrum's own
+[permissions page](https://worldofspectrum.net/permits/) says only a minority
+of software houses ever did, and whether Bubble Bus or Stephen Crow were among
+them is not known here. If you already own the game on tape, a dump of your
+own copy works just as well.
 
 **The ROM.** Amstrad bought Sinclair's computer business in 1986 and gave
 permission for the Spectrum ROMs to be redistributed with emulators, so long
