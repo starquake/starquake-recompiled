@@ -195,7 +195,7 @@ impl Panel {
             }
         };
         let actions_h: f32 = actions.iter().map(|&r| action_h(r) + 4.0).sum::<f32>() - 4.0;
-        let (w, h) = (480.0, 372.0 + 8.0 + actions_h + 12.0 + 52.0);
+        let (w, h) = (520.0, 372.0 + 8.0 + actions_h + 12.0 + 52.0);
         let x = (WINDOW_W - w) / 2.0;
         let y = (WINDOW_H - h) / 2.0;
         canvas.round_rect(x, y, w, h, 12.0, BADGE_LINE);
@@ -324,8 +324,8 @@ impl Panel {
         for &row in &actions {
             let rh = action_h(row);
             let (label, again) = match row {
-                Setting::EndGame => ("End this game", "Press Enter again to end it"),
-                _ => ("Exit Starquake", "Press Enter again to exit"),
+                Setting::EndGame => ("End this game", "Press Enter or A again to end it"),
+                _ => ("Exit Starquake", "Press Enter or A again to exit"),
             };
             let armed = guidance.armed() == Some(row);
             let focused = guidance.focus() == row;
@@ -367,26 +367,17 @@ impl Panel {
         // What the keys do.
         let foot = y + h - 52.0;
         canvas.round_rect(x + 1.0, foot, w - 2.0, 1.0, 0.0, RULE);
-        let mut hx = x + 28.0;
-        for (keys, what) in [
-            (&["\u{2191}", "\u{2193}"][..], "choose"),
-            (&["\u{2190}", "\u{2192}"][..], "change"),
-            (&["Enter"][..], "do it"),
-        ] {
-            for k in keys {
-                hx += self.key_cap(canvas, hx, foot + 16.0, k) + 4.0;
-            }
-            let spans = [span(what, 12.0, Weight::Regular, HINT)];
-            self.fonts
-                .text(Some(canvas), hx + 2.0, foot + 18.0, None, 1.0, &spans);
-            hx += self.fonts.measure(&spans) + 18.0;
-        }
-        let done = [span("done", 12.0, Weight::Regular, HINT)];
-        let kx = x + w - 28.0 - self.fonts.measure(&done);
-        self.fonts
-            .text(Some(canvas), kx, foot + 18.0, None, 1.0, &done);
-        let kx = kx - self.key_width("Esc") - 6.0;
-        self.key_cap(canvas, kx, foot + 16.0, "Esc");
+        self.hints(
+            canvas,
+            x + 28.0,
+            foot + 16.0,
+            &[
+                (&["\u{2191}", "\u{2193}"], "choose"),
+                (&["\u{2190}", "\u{2192}"], "change"),
+                (&["Enter", "/", "A"], "do it"),
+                (&["Esc", "/", "B"], "done"),
+            ],
+        );
 
         if let Some(choice) = guidance.asking() {
             canvas.shade(x, y, w, h, DIM, 150);
@@ -528,20 +519,16 @@ impl Panel {
         }
         let foot = y + h - 44.0;
         canvas.round_rect(x + 1.0, foot, w - 2.0, 1.0, 0.0, RULE);
-        let mut hx = x + 24.0;
-        for (keys, what) in [
-            (&["\u{2190}", "\u{2192}"][..], "choose"),
-            (&["Enter"][..], "confirm"),
-            (&["Esc"][..], "back to the picker"),
-        ] {
-            for k in keys {
-                hx += self.key_cap(canvas, hx, foot + 12.0, k) + 4.0;
-            }
-            let spans = [span(what, 12.0, Weight::Regular, HINT)];
-            self.fonts
-                .text(Some(canvas), hx + 2.0, foot + 14.0, None, 1.0, &spans);
-            hx += self.fonts.measure(&spans) + 16.0;
-        }
+        self.hints(
+            canvas,
+            x + 24.0,
+            foot + 12.0,
+            &[
+                (&["\u{2190}", "\u{2192}"], "choose"),
+                (&["Enter", "/", "A"], "confirm"),
+                (&["Esc", "/", "B"], "back"),
+            ],
+        );
     }
 
     /// The box of one setting in the picker, outlined when highlighted, and
@@ -611,6 +598,27 @@ impl Panel {
             .measure(&[span(key, 12.0, Weight::SemiBold, HINT_KEY)])
             .max(8.0)
             + 12.0
+    }
+
+    /// A row of key hints: each group's keys, then what they do. A `/`
+    /// between two keys is drawn as text, for a keyboard key and the
+    /// controller button that does the same.
+    fn hints(&mut self, canvas: &mut Canvas, mut x: f32, y: f32, groups: &[(&[&str], &str)]) {
+        for (keys, what) in groups {
+            for key in *keys {
+                if *key == "/" {
+                    let slash = [span("/", 12.0, Weight::Regular, HINT)];
+                    self.fonts.text(Some(canvas), x, y + 2.0, None, 1.0, &slash);
+                    x += self.fonts.measure(&slash) + 4.0;
+                } else {
+                    x += self.key_cap(canvas, x, y, key) + 4.0;
+                }
+            }
+            let spans = [span(what, 12.0, Weight::Regular, HINT)];
+            self.fonts
+                .text(Some(canvas), x + 2.0, y + 2.0, None, 1.0, &spans);
+            x += self.fonts.measure(&spans) + 16.0;
+        }
     }
 
     /// A key name in a small outline at (`x`, `y`); returns its width.
