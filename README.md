@@ -144,73 +144,28 @@ means the pacing is off rather than the game being slow.
 
 ## How this was built
 
-@starquake started this project, said what it should be, and steered it the
-whole way. Claude, Anthropic's AI assistant, did the building: about 14,000
-lines of Rust over three sessions, and every commit here, including this
-paragraph.
+@starquake started this project, said what it should be, and steered it
+throughout. Claude, Anthropic's AI assistant, wrote it: about 14,000 lines of
+Rust over three sessions, and every commit in this repository.
 
-Better to say so than to let people work it out from the commit messages.
+It began as an attempt to translate a Spectrum game into Rust at compile time
+rather than emulate it. That is static recompilation, and `crates/zx-recomp`
+is named after it. The attempt was dropped when @starquake decided the game
+should need no Z80 runtime at all, a choice made knowing that a hand rewrite
+was several times more work. `zx-recomp` now traces and disassembles the
+original, and the rewrite was written from its listings.
 
-### Where it came from
+@starquake supplied the game and the ROM, set the rule that nothing from
+either may be embedded in the binary, chose the direction at each fork,
+corrected the work, and holds the only merge authority here. Claude wrote the
+code, the notes in `docs/re`, the tests and the documentation.
 
-It started with a question:
-
-> So there are emulators for ZX Spectrums right? Could you rewrite a ZX
-> Spectrum to not use a emulator but by rewriting it to use rust and a cross
-> platform graphics/sound library? I mean like a game like starquake and
-> translating it. But instead of doing it runtime like an emulator do it at
-> compile time or whatever you would call it.
-
-That is static recompilation, and it was built first. `crates/zx-recomp` is
-named after it. It was shelved, and later deleted, because @starquake decided
-the shipped game should not need a Z80 runtime at all: only Rust, a window and
-an audio library. That choice was made after being told a hand rewrite was
-several times more work than finishing the recompiler.
-
-So the game logic is ordinary Rust, the original is used only as a reference,
-and each routine is checked against it byte for byte. `zx-recomp` is still
-here, as the tracer and disassembler the rewrite was written from.
-
-### Who did what
-
-@starquake set the brief and every decision under it:
-
-- The original idea, and then the decision to drop it: a hand rewrite with no
-  Z80 runtime, chosen in the knowledge that it was several times more work.
-- The rule that makes the project publishable. The original game file has to
-  be required at runtime and nothing may be embedded in the binary, so no
-  graphics, maps, text or code are copied into this repository.
-- Their own copy of the game and the Spectrum ROM. Neither is in this
-  repository, and the program will not run without the tape.
-- The choice at each fork: `pixels` for the window, bundle a font or draw the
-  glyphs in code, an overlay that looks native or one that is easy to read,
-  whether to ship binaries at all, whether easy mode meant more health or no
-  drain.
-- Corrections, several of which changed the result.
-- Review and merging. Claude has not merged a pull request here; the branch
-  ruleset needs a label only @starquake can add.
-
-Claude built what was asked for:
-
-- Read the original's Z80 code and wrote the notes in `docs/re`.
-- Wrote the Rust: the game, the reference interpreter, the differential
-  verifier, the frontend, the CI and the documentation.
-- Wrote the tests the project's claims depend on, and used them to find and
-  fix its own mistakes.
-
-### Reference material
-
-- The original program, disassembled by `zx-recomp`. No original code or data
-  is reproduced here; `docs/re` describes it in our own words.
-- The Z80 instruction set, including the undocumented flag behaviour, for the
-  reference interpreter.
-- The `.z80` snapshot format, from
-  [World of Spectrum's reference](https://worldofspectrum.org/faq/reference/z80format.htm).
-- The [Fuse](https://fuse-emulator.sourceforge.net/) project's Z80 test
-  corpus, used to check the reference interpreter. It found three faults in
-  it. See *Verification*.
-- [World of Spectrum](https://worldofspectrum.net/), for the game and the
-  Spectrum ROM and the permissions they are archived under.
+Reference material: the original program, disassembled by `zx-recomp`; the
+Z80 instruction set, including the undocumented flag behaviour; the
+[`.z80` format reference](https://worldofspectrum.org/faq/reference/z80format.htm);
+the [Fuse](https://fuse-emulator.sourceforge.net/) project's Z80 test corpus,
+which found three faults in the reference interpreter; and
+[World of Spectrum](https://worldofspectrum.net/) for the game and the ROM.
 
 ## Legal
 
