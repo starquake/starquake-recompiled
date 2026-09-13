@@ -141,13 +141,21 @@ impl Canvas<'_> {
         if x < 0 || y < 0 || x as usize >= self.width || y as usize >= self.height {
             return;
         }
+        // Over, with the frame's colours premultiplied by its alpha, so a
+        // transparent frame can be laid over something else afterwards.
         let i = (y as usize * self.width + x as usize) * 4;
         let a = u16::from(alpha);
         for (k, &c) in colour.iter().enumerate() {
             let under = u16::from(self.pixels[i + k]);
             self.pixels[i + k] = ((u16::from(c) * a + under * (255 - a)) / 255) as u8;
         }
-        self.pixels[i + 3] = 0xFF;
+        let under = u16::from(self.pixels[i + 3]);
+        self.pixels[i + 3] = (a + under * (255 - a) / 255) as u8;
+    }
+
+    /// Clears to nothing at all, for a frame laid over another.
+    pub fn clear_transparent(&mut self) {
+        self.pixels.fill(0);
     }
 
     pub fn clear(&mut self, colour: Rgb) {
@@ -159,7 +167,54 @@ impl Canvas<'_> {
 
     /// A filled rectangle with rounded corners, in logical pixels.
     pub fn round_rect(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, colour: Rgb) {
-        self.shape(x, y, w, h, radius, colour, |_, _| true);
+        self.shape(x, y, w, h, radius, colour, 255, |_, _| true);
+    }
+
+    /// A filled triangle through three points, in logical pixels.
+    pub fn triangle(&mut self, points: [(f32, f32); 3], colour: Rgb) {
+        let s = self.scale;
+        let p = points.map(|(x, y)| (x * s, y * s));
+        let (x0, x1) = (
+            p.iter().map(|q| q.0).fold(f32::MAX, f32::min),
+            p.iter().map(|q| q.0).fold(f32::MIN, f32::max),
+        );
+        let (y0, y1) = (
+            p.iter().map(|q| q.1).fold(f32::MAX, f32::min),
+            p.iter().map(|q| q.1).fold(f32::MIN, f32::max),
+        );
+        let edge = |a: (f32, f32), b: (f32, f32), q: (f32, f32)| {
+            (b.0 - a.0) * (q.1 - a.1) - (b.1 - a.1) * (q.0 - a.0)
+        };
+        let area = edge(p[0], p[1], p[2]);
+        for py in (y0.floor().max(0.0) as usize)..(y1.ceil() as usize).min(self.height) {
+            for px in (x0.floor().max(0.0) as usize)..(x1.ceil() as usize).min(self.width) {
+                let mut hits = 0usize;
+                for (dx, dy) in [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)] {
+                    let q = (px as f32 + dx, py as f32 + dy);
+                    let w = [
+                        edge(p[1], p[2], q),
+                        edge(p[2], p[0], q),
+                        edge(p[0], p[1], q),
+                    ];
+                    if w.iter().all(|&e| e * area >= 0.0) {
+                        hits += 1;
+                    }
+                }
+                if hits > 0 {
+                    self.blend(
+                        px as isize,
+                        py as isize,
+                        colour,
+                        [0, 64, 128, 191, 255][hits],
+                    );
+                }
+            }
+        }
+    }
+
+    /// A see-through rectangle: `alpha` of `colour` over what is there.
+    pub fn shade(&mut self, x: f32, y: f32, w: f32, h: f32, colour: Rgb, alpha: u8) {
+        self.shape(x, y, w, h, 0.0, colour, alpha, |_, _| true);
     }
 
     /// The outline of a rounded rectangle, `thickness` logical pixels wide,
@@ -183,7 +238,7 @@ impl Canvas<'_> {
         let t = thickness * s;
         let (x0, y0, x1, y1) = (x * s, y * s, (x + w) * s, (y + h) * s);
         let r = radius * s;
-        self.shape(x, y, w, h, radius, colour, move |px, py| {
+        self.shape(x, y, w, h, radius, colour, 255, move |px, py| {
             // Inside the shape; on the line if the same shape shrunk by the
             // thickness does not cover it.
             let inner = inside(px, py, x0 + t, y0 + t, x1 - t, y1 - t, (r - t).max(0.0));
@@ -213,6 +268,7 @@ impl Canvas<'_> {
         h: f32,
         radius: f32,
         colour: Rgb,
+        alpha: u8,
         keep: impl Fn(f32, f32) -> bool,
     ) {
         let s = self.scale;
@@ -234,7 +290,7 @@ impl Canvas<'_> {
                         px as isize,
                         py as isize,
                         colour,
-                        [0, 64, 128, 191, 255][hits as usize],
+                        ([0u16, 64, 128, 191, 255][hits as usize] * u16::from(alpha) / 255) as u8,
                     );
                 }
             }

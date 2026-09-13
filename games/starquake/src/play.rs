@@ -117,14 +117,21 @@ impl Game {
     /// the title screen, a game and the scores, over and over. Returns when
     /// the player quits from the menu.
     pub fn run(&mut self, host: &mut dyn Host) {
+        use crate::game::Scene;
+        self.scene = Scene::Loading;
         self.loading_screen(host);
         loop {
+            self.scene = Scene::Menu;
             match self.menu(host) {
                 crate::menu::Start::Quit => return,
                 crate::menu::Start::Play(method) => {
                     self.new_game(method);
                     self.intro(host);
+                    // From here the original reads A S D F G to abandon the
+                    // game, which is what the frontend's End this game uses.
+                    self.scene = Scene::Play;
                     self.play(host);
+                    self.scene = Scene::GameOver;
                     self.game_over(host);
                 }
             }

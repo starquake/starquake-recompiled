@@ -2,8 +2,11 @@
 
 mod audio;
 mod gamepad;
+mod guidance;
 pub mod headless;
 mod input;
+mod overlay;
+mod panel;
 mod prompt;
 pub mod tape;
 mod text;
@@ -18,6 +21,7 @@ use std::time::{Duration, Instant};
 use starquake::Game;
 use starquake::assets::Assets;
 use starquake::controls::Input;
+use starquake::game::Scene;
 use starquake::host::{FRAMES_PER_SECOND, Host};
 
 /// How long a Spectrum frame lasts, from the clock it is derived from
@@ -50,6 +54,10 @@ pub struct Shared {
     /// Set when the game thread stopped without being asked to, so the
     /// window can report it rather than sitting on a frozen picture.
     pub dead: AtomicBool,
+    /// The guidance level, training mode and the picker (#1).
+    pub guidance: Mutex<guidance::Guidance>,
+    /// Which part of the program the game is in, for the panel.
+    pub scene: Mutex<Scene>,
 }
 
 /// The game thread's side of the frontend.
@@ -68,9 +76,52 @@ struct FrontHost {
     wait: Vec<u32>,
     frame_start: Option<Instant>,
     bench: bool,
+    /// The scene last passed on to the window.
+    scene: Scene,
+    /// "End this game" was chosen and the game has not yet ended.
+    abandon: bool,
 }
 
 impl FrontHost {
+    /// Holds the game between frames while the guidance picker is open,
+    /// taking the gamepad's side of it: up and down choose a row, left and
+    /// right change a setting, A does an action, and B or Select goes back.
+    /// No time passes for the game, so its pacing starts again from now.
+    /// Returns no input for the frame it resumes on, so the button that
+    /// closed the picker is not also a shot in the game.
+    fn hold_for_picker(&mut self) -> gamepad::Pad {
+        while self.shared.guidance.lock().unwrap().picker_open()
+            && !self.shared.quit.load(Ordering::Relaxed)
+        {
+            std::thread::sleep(Duration::from_millis(20));
+            let pad = self.pad.poll();
+            let mut guidance = self.shared.guidance.lock().unwrap();
+            if pad.select || pad.east {
+                guidance.back();
+            }
+            if pad.up {
+                guidance.focus_up();
+            }
+            if pad.down {
+                guidance.focus_down();
+            }
+            if pad.left {
+                guidance.change(false);
+            }
+            if pad.right {
+                guidance.change(true);
+            }
+            if pad.south {
+                guidance.enter();
+                if guidance.take(guidance::Action::Exit) {
+                    self.shared.quit.store(true, Ordering::Relaxed);
+                }
+            }
+        }
+        self.next_frame = Instant::now();
+        gamepad::Pad::default()
+    }
+
     /// Prints how long frames actually took: the spread, and the worst.
     fn report(&mut self) {
         if self.times.is_empty() {
@@ -136,6 +187,16 @@ impl Host for FrontHost {
         }
 
         self.frame_start = Some(Instant::now());
+        if game.scene != self.scene {
+            let mut guidance = self.shared.guidance.lock().unwrap();
+            if game.scene == Scene::Play {
+                guidance.new_game();
+            }
+            guidance.set_playing(game.scene == Scene::Play);
+            drop(guidance);
+            self.scene = game.scene;
+            *self.shared.scene.lock().unwrap() = game.scene;
+        }
         let sound = game.frame_sound();
         let frames = sound.frames;
         self.beeper
@@ -186,10 +247,41 @@ impl Host for FrontHost {
         // chosen method reads, the Kempston port or the method's own keys.
         // Start presses the method's pause key, which is not a fixed key
         // either; on a fresh tape it is Space.
-        let (pad_bits, pad_pause) = self.pad.poll();
+        let mut pad = self.pad.poll();
+        {
+            let mut guidance = self.shared.guidance.lock().unwrap();
+            if pad.select && !guidance.picker_open() {
+                guidance.open();
+            }
+        }
+        if self.shared.guidance.lock().unwrap().picker_open() {
+            pad = self.hold_for_picker();
+        }
         let mut input = *self.shared.input.lock().unwrap();
-        game.controls.press(&mut input, pad_bits);
-        if pad_pause {
+        if self
+            .shared
+            .guidance
+            .lock()
+            .unwrap()
+            .take(guidance::Action::EndGame)
+        {
+            self.abandon = true;
+        }
+        // "End this game" holds A, S, D, F and G, the original's own way to
+        // abandon a game. BLOB's control reads them on the play loop's own
+        // frames only (`play_work`), so they are held on those frames and on
+        // no others: not during a death, a door or a teleporter booth, which
+        // reads letters for its code. The request lasts until the game has
+        // left play, however long that takes.
+        if self.abandon {
+            if game.scene != Scene::Play {
+                self.abandon = false;
+            } else if game.play_work {
+                input.keys[1] &= !0x1F;
+            }
+        }
+        game.controls.press(&mut input, pad.bits);
+        if pad.start {
             game.controls.press_pause(&mut input);
         }
 
@@ -248,6 +340,8 @@ fn play_game(
         wait: Vec::new(),
         frame_start: None,
         bench: std::env::var_os("SQ_BENCH").is_some(),
+        scene: Scene::Loading,
+        abandon: false,
     };
     // The frame counter runs throughout, which is what seeds each new game.
     game.run(&mut host);
@@ -261,6 +355,8 @@ fn new_shared() -> Arc<Shared> {
         input: Mutex::new(Input::default()),
         quit: AtomicBool::new(false),
         dead: AtomicBool::new(false),
+        guidance: Mutex::new(guidance::Guidance::default()),
+        scene: Mutex::new(Scene::Loading),
     })
 }
 

@@ -21,7 +21,7 @@ pub const HEIGHT: f32 = 768.0;
 const PAGE: &str = "https://worldofspectrum.net/item/0004873/";
 const PAGE_SHOWN: &str = "worldofspectrum.net/item/0004873";
 
-const BACKGROUND: Rgb = [0x0b, 0x0c, 0x10];
+pub const BACKGROUND: Rgb = [0x0b, 0x0c, 0x10];
 const LABEL: Rgb = [0x6d, 0x73, 0x85];
 const TITLE: Rgb = [0xf2, 0xf3, 0xf7];
 const BODY: Rgb = [0xa9, 0xaf, 0xbe];

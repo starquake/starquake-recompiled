@@ -30,6 +30,16 @@ Where to put the tape, the controls, and everything else a player needs are
 in [docs/player/README.txt](docs/player/README.txt). That folder is what a
 release archive carries besides the program.
 
+### Guidance
+
+Beside the picture is a panel for optional help, drawn by the program and
+never by the game, so nothing in it can change what the game does (#1). Esc,
+or Select on a gamepad, opens a menu that pauses the game and sets a guidance
+level from 0 (the original) to 5, and training mode. The highest level used,
+and whether training mode was on, are shown beside the game-over and
+high-score screens. The menu and panel are in place; the levels themselves
+(#50, #2, #3, #51, #52) and training mode (#4) are separate tickets.
+
 ## Status
 
 The whole game is here: the title screen and its menu, the intro, play,

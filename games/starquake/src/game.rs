@@ -13,6 +13,19 @@ use crate::printer::Printer;
 use crate::rng::Rng;
 use crate::room::{FORCE_FIELDS_LEN, Marker, RoomObjects, SPARKLE_TABLE_LEN};
 
+/// The parts of the program, as a frontend sees them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Scene {
+    /// The picture the tape showed while it loaded.
+    Loading,
+    /// The title screen and its menu, and a new game's intro.
+    Menu,
+    /// A game being played, with the deaths along the way.
+    Play,
+    /// The end of a game: the scores, entering initials, the high-score table.
+    GameOver,
+}
+
 #[derive(Clone)]
 pub struct Game {
     pub assets: Rc<Assets>,
@@ -70,6 +83,10 @@ pub struct Game {
     pub effects: Vec<u8>,
     /// Tone to play for the rest of this frame (see [`Game::sound_tick`]).
     pub tone: Option<u8>,
+    /// Which part of the program is running, for a frontend that shows
+    /// something beside it. Not part of the original's state: nothing in
+    /// the game reads it.
+    pub scene: Scene,
     /// Whether this frame boundary is the play loop's. The original spends
     /// the start of such a frame on the frame's work, in silence, before
     /// the sound (see [`Game::frame_sound`]).
@@ -221,6 +238,7 @@ impl Game {
             enemy_cursor: bytes(at::ENEMY_CURSOR, 2).try_into().unwrap(),
             effects: Vec::new(),
             tone: None,
+            scene: Scene::Loading,
             play_work: false,
             work: crate::sound::Work::default(),
             work_at_effect: None,
