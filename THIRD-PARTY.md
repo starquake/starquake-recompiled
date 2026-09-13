@@ -8,8 +8,8 @@ It says nothing about the game itself. Starquake is Stephen Crow's, this
 project contains no part of it, and the program reads everything it needs
 from the player's own copy when it starts. The README says where to get one.
 
-- Apache License 2.0: 142 crates
-- MIT License: 47 crates
+- Apache License 2.0: 144 crates
+- MIT License: 50 crates
 - ISC License: 3 crates
 - zlib License: 3 crates
 - BSD 3-Clause "New" or "Revised" License: 2 crates
@@ -3111,7 +3111,7 @@ limitations under the License.
 
 ## Apache License 2.0
 
-Used by `zx-core 0.1.0`, `zx-recomp 0.1.0`, `zx-runtime 0.1.0`, `starquake 0.1.0`, `sq-verify 0.1.0`, `ab_glyph 0.2.32`, `ab_glyph_rasterizer 0.1.10`, `allocator-api2 0.2.21`, `alsa 0.11.0`, `dasp_sample 0.11.0`, `dispatch2 0.3.1`, `document-features 0.2.12`, `gilrs-core 0.6.8`, `gilrs 0.11.2`, `gpu-descriptor-types 0.2.0`, `gpu-descriptor 0.3.2`, `half 2.7.1`, `libc 0.2.189`, `litrs 1.0.0`, `mach2 0.6.0`, `naga 29.0.4`, `objc2-audio-toolbox 0.3.2`, `objc2-core-audio-types 0.3.2`, `objc2-core-audio 0.3.2`, `objc2-core-foundation 0.3.2`, `objc2-io-kit 0.3.2`, `objc2-metal 0.3.2`, `objc2-quartz-core 0.3.2`, `owned_ttf_parser 0.25.1`, `pin-project-lite 0.2.17`, `proc-macro2 1.0.107`, `profiling 1.0.18`, `quote 1.0.47`, `raw-window-handle 0.6.2`, `serde 1.0.229`, `serde_core 1.0.229`, `serde_derive 1.0.229`, `shlex 2.0.1`, `spirv 0.4.0+sdk-1.4.341.0`, `syn 2.0.119`, `syn 3.0.5`, `thiserror-impl 1.0.69`, `thiserror-impl 2.0.20`, `thiserror 1.0.69`, `thiserror 2.0.20`, `typed-path 0.12.3`, `ultraviolet 0.10.0`, `unicode-ident 1.0.24`, `wgpu-core-deps-apple 29.0.4`, `wgpu-core-deps-windows-linux-android 29.0.4`, `wgpu-core 29.0.4`, `wgpu-hal 29.0.4`, `wgpu-naga-bridge 29.0.4`, `wgpu-types 29.0.4`, `wgpu 29.0.4`, `wide 0.7.33`.
+Used by `zx-core 0.1.0`, `zx-recomp 0.1.0`, `zx-runtime 0.1.0`, `starquake 0.1.0`, `sq-verify 0.1.0`, `ab_glyph 0.2.32`, `ab_glyph_rasterizer 0.1.10`, `allocator-api2 0.2.21`, `alsa 0.11.0`, `dasp_sample 0.11.0`, `dispatch2 0.3.1`, `document-features 0.2.12`, `fontdue 0.9.4`, `gilrs-core 0.6.8`, `gilrs 0.11.2`, `gpu-descriptor-types 0.2.0`, `gpu-descriptor 0.3.2`, `half 2.7.1`, `libc 0.2.189`, `litrs 1.0.0`, `mach2 0.6.0`, `naga 29.0.4`, `objc2-app-kit 0.3.2`, `objc2-audio-toolbox 0.3.2`, `objc2-core-audio-types 0.3.2`, `objc2-core-audio 0.3.2`, `objc2-core-foundation 0.3.2`, `objc2-io-kit 0.3.2`, `objc2-metal 0.3.2`, `objc2-quartz-core 0.3.2`, `owned_ttf_parser 0.25.1`, `pin-project-lite 0.2.17`, `proc-macro2 1.0.107`, `profiling 1.0.18`, `quote 1.0.47`, `raw-window-handle 0.6.2`, `serde 1.0.229`, `serde_core 1.0.229`, `serde_derive 1.0.229`, `shlex 2.0.1`, `spirv 0.4.0+sdk-1.4.341.0`, `syn 2.0.119`, `syn 3.0.5`, `thiserror-impl 1.0.69`, `thiserror-impl 2.0.20`, `thiserror 1.0.69`, `thiserror 2.0.20`, `typed-path 0.12.3`, `ultraviolet 0.10.0`, `unicode-ident 1.0.24`, `wgpu-core-deps-apple 29.0.4`, `wgpu-core-deps-windows-linux-android 29.0.4`, `wgpu-core 29.0.4`, `wgpu-hal 29.0.4`, `wgpu-naga-bridge 29.0.4`, `wgpu-types 29.0.4`, `wgpu 29.0.4`, `wide 0.7.33`.
 
 ```
 Apache License
@@ -3897,6 +3897,35 @@ SOFTWARE.
 
 ## MIT License
 
+Used by `rfd 0.17.2`.
+
+```
+MIT License
+
+Copyright (c) 2020 Bilal Elmoussaoui
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+## MIT License
+
 Used by `cfg_aliases 0.2.2`.
 
 ```
@@ -3943,7 +3972,7 @@ SOFTWARE.
 
 ## MIT License
 
-Used by `sctk-adwaita 0.10.1`.
+Used by `rfd 0.17.2`, `sctk-adwaita 0.10.1`.
 
 ```
 MIT License
@@ -3968,6 +3997,34 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+```
+
+## MIT License
+
+Used by `core_maths 0.1.1`.
+
+```
+MIT License
+
+Copyright (c) 2024 Robert Bastian
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 ## MIT License

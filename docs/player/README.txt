@@ -23,17 +23,19 @@ a tape you own works just as well.
 RUNNING IT
 ----------
 
-Put starquake.tap in the same folder as the program and run starquake,
-or starquake.exe on Windows. If your tape is somewhere else, give its
-path on the command line.
-
-The program also looks in the usual place for application data:
+Run starquake, or starquake.exe on Windows. If it cannot find your
+tape it asks for it: pick the file, or drop it onto the window. The zip
+World of Spectrum serves (Starquake.tap.zip) works as it is, with no
+need to unpack it. The tape is then kept for next time in the usual
+place for application data:
 
   Linux     ~/.local/share/starquake-recompiled/
   macOS     ~/Library/Application Support/starquake-recompiled/
   Windows   %APPDATA%\starquake-recompiled\
 
-If it cannot find a tape, it lists every place it looked.
+It also finds the tape, or the zip, if you put it in the same folder as
+the program, named starquake.tap or STARQUAK.TAP in any case. You can
+name it on the command line as well.
 
 macOS: the program is not signed, so macOS blocks it the first time.
 In Terminal, in this folder, run:
@@ -79,7 +81,8 @@ The program is licensed under either the MIT licence (LICENSE-MIT) or
 the Apache 2.0 licence (LICENSE-APACHE), at your option. That licence
 covers only this reimplementation and grants no rights in Starquake
 itself. THIRD-PARTY.txt lists the libraries built into the program and
-their licences.
+their licences. The text is set in Inter, under the SIL Open Font
+License (LICENSE-Inter.txt).
 
 @starquake started this project and steered it, and Claude,
 Anthropic's AI assistant, wrote it. The source code, and a fuller

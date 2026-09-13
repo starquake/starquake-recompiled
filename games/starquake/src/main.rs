@@ -68,25 +68,27 @@ fn main() {
         let rest: Vec<String> = args.drain(i..).skip(1).collect();
         rest.first().and_then(|s| s.parse().ok()).unwrap_or(20)
     });
-    let path = match args.first() {
-        Some(given) => PathBuf::from(given),
-        None => {
-            let folders = frontend::tape::folders();
-            match frontend::tape::find(&folders, starquake::assets::is_supported_tape) {
-                Some(tape) => tape.from,
-                None => fatal(&frontend::tape::not_found_message(&folders)),
-            }
-        }
+    // A tape named on the command line is used as it is; otherwise the usual
+    // places are searched.
+    let folders = frontend::tape::folders();
+    let path = args.first().map(PathBuf::from).or_else(|| {
+        frontend::tape::find(&folders, starquake::assets::is_supported_tape).map(|tape| tape.from)
+    });
+    // Without a window there is nobody to ask, so no tape is the end.
+    let required = || {
+        path.clone()
+            .unwrap_or_else(|| fatal(&frontend::tape::not_found_message(&folders)))
     };
     if let Some(secs) = bench {
-        if let Err(e) = frontend::bench(&path, secs) {
+        if let Err(e) = frontend::bench(&required(), secs) {
             fatal(&format!("error: {e}"));
         }
         return;
     }
     let result = match headless {
-        Some((frames, dir)) => frontend::headless::run(&path, frames, &dir),
-        None => frontend::run(&path),
+        Some((frames, dir)) => frontend::headless::run(&required(), frames, &dir),
+        // In a window, no tape means asking for one.
+        None => frontend::run(path.as_deref()),
     };
     if let Err(e) = result {
         fatal(&format!("error: {e}"));

@@ -10,7 +10,7 @@ publish.workspace = true
 default = ["frontend"]
 # The playable program (window, input, sound). The library alone has no
 # platform dependencies.
-frontend = ["dep:pixels", "dep:winit", "dep:cpal", "dep:gilrs", "dep:windows-sys", "dep:zip"]
+frontend = ["dep:pixels", "dep:winit", "dep:cpal", "dep:gilrs", "dep:windows-sys", "dep:zip", "dep:fontdue", "dep:rfd"]
 
 [dependencies]
 # Only the snapshot loader and SHA-1; no emulation.
@@ -22,6 +22,10 @@ gilrs = { version = "0.11", optional = true }
 # Reading the tape out of the zip the archives serve it in. Deflate only,
 # through the pure-Rust zlib; the other methods and encryption stay out.
 zip = { version = "8", default-features = false, features = ["deflate-flate2-zlib-rs"], optional = true }
+# The screen that asks for the tape: text in the bundled Inter (see fonts/),
+# and the system's own open-file dialog.
+fontdue = { version = "0.9", optional = true }
+rfd = { version = "0.17", optional = true }
 
 # Only for putting a fatal startup error in a message box, since a Windows
 # build has no console to print it to. Nothing else uses it.

@@ -19,6 +19,9 @@ pub const NAMES: [&str; 4] = [
     "starquak.tap.zip",
 ];
 
+/// What the program keeps a located tape as, in the data dir.
+const KEPT: &str = "starquake.tap";
+
 /// The folder under the data dir that is this program's.
 const APP: &str = "starquake-recompiled";
 
@@ -182,6 +185,26 @@ pub fn load(path: &Path, accept: impl Fn(&[u8]) -> bool) -> Result<Tape, Refused
 fn is_zip(path: &Path) -> bool {
     path.extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("zip"))
+}
+
+/// Saves a located tape where [`folders`] will find it next time, and
+/// returns where that is.
+///
+/// # Errors
+///
+/// If this system has no data dir, or it cannot be written.
+pub fn keep(bytes: &[u8]) -> Result<PathBuf, String> {
+    let dir = data_dir()
+        .ok_or("this system has no folder for application data")?
+        .join(APP);
+    keep_in(&dir, bytes)
+}
+
+fn keep_in(dir: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
+    fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    let path = dir.join(KEPT);
+    fs::write(&path, bytes).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    Ok(path)
 }
 
 /// The game's memory and loading screen from a file named on the command
@@ -353,5 +376,13 @@ mod tests {
             load(&dir.join("missing.tap"), accept),
             Err(Refused::Unreadable(_))
         ));
+    }
+    #[test]
+    fn keeping_creates_the_folder() {
+        let dir = folder("keep").join("deeper").join(APP);
+        let path = keep_in(&dir, GOOD).unwrap();
+        assert_eq!(path, dir.join(KEPT));
+        assert_eq!(fs::read(&path).unwrap(), GOOD);
+        assert_eq!(find(&[dir], accept).unwrap().bytes, GOOD);
     }
 }
