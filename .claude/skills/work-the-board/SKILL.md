@@ -157,7 +157,8 @@ direct maintainer request, and they are named as exceptions.
 | `Plan` | write the plan (and mockup) → `Your sign-off` | `design-slice`, `mockup` |
 | `Your sign-off` | **stop**, UNLESS the maintainer signalled go (a `go`/`approved` comment, OR moved it to `Build`) → build | `build-slice` |
 | `Build` | build the approved slice → green PR → `Your review` | `build-slice` |
-| `Your review` | **stop**: only `ready to merge` moves it. Do keep the PR mergeable: CI green, rebased if behind. | `merge-pr` |
+| `Your review` | **stop**: only `ready to merge` moves it. Do keep the PR mergeable: CI green, rebased if behind, and no thread left open that Claude has acted on (the ruleset refuses to merge with one). | `merge-pr` |
+| reply to one of Claude's review comments | `fix`: fix, push, reply with the commit, **resolve the thread**; `skip`: acknowledge, resolve; `ticket`: file a Backlog issue, reply with the link, resolve; anything else: answer in the thread (#77) | `build-slice` |
 | PR with new maintainer comments | address them, re-push | rework |
 | PR carrying `ready to merge` | **merge it** (label + green CI + title + squash) | `merge-pr` |
 
