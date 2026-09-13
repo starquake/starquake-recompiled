@@ -292,16 +292,15 @@ impl App {
         }
     }
 
-    /// The keys the guidance picker takes: F1 opens and closes it, and while
+    /// The keys the guidance picker takes: Esc opens and closes it, and while
     /// it is open it has the keyboard to itself, so nothing typed into it
     /// reaches the game. Returns whether the key was the picker's.
     fn picker_key(&mut self, code: KeyCode) -> bool {
         let mut guidance = self.shared.guidance.lock().unwrap();
         let open = guidance.picker_open();
         match code {
-            KeyCode::F1 => guidance.toggle_picker(),
-            _ if !open => return false,
             KeyCode::Escape => guidance.toggle_picker(),
+            _ if !open => return false,
             KeyCode::ArrowUp => guidance.focus_up(),
             KeyCode::ArrowDown => guidance.focus_down(),
             KeyCode::ArrowLeft => guidance.change(false),

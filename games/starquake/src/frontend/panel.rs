@@ -87,9 +87,9 @@ impl Panel {
                 1.2,
                 &[span(&title, 19.0, Weight::SemiBold, BRIGHT)],
             );
-            self.badge(canvas, WINDOW_W - 24.0, 28.0, "F1");
+            self.badge(canvas, WINDOW_W - 24.0, 28.0, "Esc");
             let (first, second) = if level == 0 {
-                ("No guidance.", "Press F1 or Select to choose a level.")
+                ("No guidance.", "Press Esc or Select to choose a level.")
             } else {
                 (
                     "This level is not built yet.",
@@ -325,8 +325,8 @@ impl Panel {
         kx -= self.fonts.measure(&or) + 6.0;
         self.fonts
             .text(Some(canvas), kx, foot + 18.0, None, 1.0, &or);
-        kx -= self.key_width("F1") + 6.0;
-        self.key_cap(canvas, kx, foot + 16.0, "F1");
+        kx -= self.key_width("Esc") + 6.0;
+        self.key_cap(canvas, kx, foot + 16.0, "Esc");
     }
 
     /// The box of one setting in the picker, outlined when highlighted, and
