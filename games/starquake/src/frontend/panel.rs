@@ -6,7 +6,7 @@
 
 use starquake::game::Scene;
 
-use super::guidance::{Guidance, LEVELS, Setting};
+use super::guidance::{Choice, Guidance, LEVELS, Setting};
 use super::text::{Canvas, Fonts, Rgb, Span, Weight};
 
 /// The window in logical pixels, and the picture's part of it.
@@ -221,9 +221,8 @@ impl Panel {
         );
 
         let focus = guidance.focus();
-        // The picker shows what confirming would put into effect.
-        let level = guidance.draft_level();
-        let training = guidance.draft_training();
+        let level = guidance.level();
+        let training = guidance.training();
 
         // The guidance level: a number and a name, the notches, and what it adds.
         let (rx, rw) = (x + 12.0, w - 24.0);
@@ -372,24 +371,118 @@ impl Panel {
         for (keys, what) in [
             (&["\u{2191}", "\u{2193}"][..], "choose"),
             (&["\u{2190}", "\u{2192}"][..], "change"),
-            (&["Enter"][..], "confirm"),
+            (&["Enter"][..], "do it"),
         ] {
             for k in keys {
-                // Enter lights up once there is something to confirm.
-                let lit = *k == "Enter" && guidance.changed();
-                hx += self.key_cap(canvas, hx, foot + 16.0, k, lit) + 4.0;
+                hx += self.key_cap(canvas, hx, foot + 16.0, k) + 4.0;
             }
             let spans = [span(what, 12.0, Weight::Regular, HINT)];
             self.fonts
                 .text(Some(canvas), hx + 2.0, foot + 18.0, None, 1.0, &spans);
             hx += self.fonts.measure(&spans) + 18.0;
         }
-        let done = [span("cancel", 12.0, Weight::Regular, HINT)];
+        let done = [span("done", 12.0, Weight::Regular, HINT)];
         let kx = x + w - 28.0 - self.fonts.measure(&done);
         self.fonts
             .text(Some(canvas), kx, foot + 18.0, None, 1.0, &done);
         let kx = kx - self.key_width("Esc") - 6.0;
-        self.key_cap(canvas, kx, foot + 16.0, "Esc", false);
+        self.key_cap(canvas, kx, foot + 16.0, "Esc");
+
+        if let Some(choice) = guidance.asking() {
+            canvas.shade(x, y, w, h, DIM, 150);
+            self.keep_changes(canvas, guidance, choice);
+        }
+    }
+
+    /// "Keep changes?" over the picker: what changed, and Keep or Undo.
+    fn keep_changes(&mut self, canvas: &mut Canvas, guidance: &Guidance, choice: Choice) {
+        let (was_level, was_training) = guidance.opened();
+        let on_off = |on: bool| if on { "On" } else { "Off" };
+        let mut lines = Vec::new();
+        if guidance.level() != was_level {
+            lines.push(format!(
+                "Guidance level: {was_level} \u{2192} {}",
+                guidance.level()
+            ));
+        }
+        if guidance.training() != was_training {
+            lines.push(format!(
+                "Training mode: {} \u{2192} {}",
+                on_off(was_training),
+                on_off(guidance.training())
+            ));
+        }
+        let (w, h) = (360.0, 176.0 + 20.0 * lines.len() as f32);
+        let x = (WINDOW_W - w) / 2.0;
+        let y = (WINDOW_H - h) / 2.0;
+        canvas.round_rect(x, y, w, h, 12.0, BUTTON_LINE);
+        canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0, 11.0, DIALOG);
+        self.fonts.text(
+            Some(canvas),
+            x + 24.0,
+            y + 20.0,
+            None,
+            1.0,
+            &[span("Keep changes?", 19.0, Weight::SemiBold, BRIGHT)],
+        );
+        let mut ly = y + 54.0;
+        for line in &lines {
+            self.fonts.text(
+                Some(canvas),
+                x + 24.0,
+                ly,
+                None,
+                1.0,
+                &[span(line, 13.0, Weight::Regular, HINT_KEY)],
+            );
+            ly += 20.0;
+        }
+        let by = ly + 12.0;
+        let bw = (w - 48.0 - 12.0) / 2.0;
+        for (i, (label, this)) in [("Keep", Choice::Keep), ("Undo", Choice::Undo)]
+            .into_iter()
+            .enumerate()
+        {
+            let bx = x + 24.0 + i as f32 * (bw + 12.0);
+            let chosen = choice == this;
+            if chosen {
+                canvas.round_rect(bx, by, bw, 40.0, 8.0, ACCENT);
+            } else {
+                canvas.round_rect(bx, by, bw, 40.0, 8.0, BUTTON_LINE);
+                canvas.round_rect(bx + 1.0, by + 1.0, bw - 2.0, 38.0, 7.0, DIALOG);
+            }
+            let spans = [span(
+                label,
+                15.0,
+                Weight::SemiBold,
+                if chosen { DIALOG } else { VALUE_DIM },
+            )];
+            let tw = self.fonts.measure(&spans);
+            self.fonts.text(
+                Some(canvas),
+                bx + (bw - tw) / 2.0,
+                by + 11.0,
+                None,
+                1.0,
+                &spans,
+            );
+        }
+        let foot = y + h - 44.0;
+        canvas.round_rect(x + 1.0, foot, w - 2.0, 1.0, 0.0, RULE);
+        let mut hx = x + 24.0;
+        for (keys, what) in [
+            (&["\u{2190}", "\u{2192}"][..], "choose"),
+            (&["Enter"][..], "confirm"),
+            (&["Esc"][..], "back"),
+        ] {
+            for k in keys {
+                hx += self.key_cap(canvas, hx, foot + 12.0, k) + 4.0;
+            }
+            let spans = [span(what, 12.0, Weight::Regular, HINT)];
+            self.fonts
+                .text(Some(canvas), hx + 2.0, foot + 14.0, None, 1.0, &spans);
+            hx += self.fonts.measure(&spans) + 16.0;
+        }
     }
 
     /// The box of one setting in the picker, outlined when highlighted, and
@@ -462,22 +555,17 @@ impl Panel {
     }
 
     /// A key name in a small outline at (`x`, `y`); returns its width.
-    fn key_cap(&mut self, canvas: &mut Canvas, x: f32, y: f32, key: &str, lit: bool) -> f32 {
+    fn key_cap(&mut self, canvas: &mut Canvas, x: f32, y: f32, key: &str) -> f32 {
         let w = self.key_width(key);
-        let (line, fill, text) = if lit {
-            (ACCENT, ACCENT, DIALOG)
-        } else {
-            (BUTTON_LINE, DIALOG, HINT_KEY)
-        };
-        canvas.round_rect(x, y, w, 20.0, 4.0, line);
-        canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, 18.0, 3.0, fill);
+        canvas.round_rect(x, y, w, 20.0, 4.0, BUTTON_LINE);
+        canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, 18.0, 3.0, DIALOG);
         self.fonts.text(
             Some(canvas),
             x + 6.0,
             y + 2.0,
             None,
             1.0,
-            &[span(key, 12.0, Weight::SemiBold, text)],
+            &[span(key, 12.0, Weight::SemiBold, HINT_KEY)],
         );
         w
     }
@@ -572,6 +660,21 @@ mod render_check {
                     g.focus_down();
                     g.focus_down();
                     g.enter();
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                "picker-keep-changes",
+                {
+                    let mut g = Guidance::default();
+                    g.set_level(1);
+                    g.open();
+                    g.change(true);
+                    g.change(true);
+                    g.focus_down();
+                    g.change(true);
+                    g.back();
                     g
                 },
                 Scene::Play,

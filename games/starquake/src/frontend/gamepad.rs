@@ -4,8 +4,8 @@
 //! cannot tell what moved them, so a gamepad drives them exactly as the
 //! hardware would. Pause is the odd one out — on a Spectrum it is a key, not
 //! a joystick button — so Start presses `P` for convenience. Select opens
-//! the guidance picker (#1), where the D-pad works it, A confirms and B
-//! or Select cancels.
+//! the guidance picker (#1), where the D-pad works it, A does an action,
+//! and B or Select closes it.
 //!
 //! How the pad is attached is not this code's business, or `gilrs`'s. A
 //! Bluetooth controller the operating system has paired is an ordinary
@@ -34,7 +34,7 @@ pub struct Pad {
     /// The bottom face button (A on an Xbox pad), which does the picker's
     /// highlighted action.
     pub south: bool,
-    /// The right face button (B on an Xbox pad), which cancels the picker.
+    /// The right face button (B on an Xbox pad), which closes the picker.
     pub east: bool,
 }
 

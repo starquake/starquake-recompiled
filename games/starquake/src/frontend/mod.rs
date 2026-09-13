@@ -89,7 +89,7 @@ const ABANDON_FRAMES: u32 = 50;
 impl FrontHost {
     /// Holds the game between frames while the guidance picker is open,
     /// taking the gamepad's side of it: up and down choose a row, left and
-    /// right change a setting, A confirms, and B or Select cancels. No time
+    /// right change a setting, A does an action, and B or Select goes back. No time
     /// passes for the game, so its pacing starts again from now. Returns the
     /// pad as it was when the picker closed.
     fn hold_for_picker(&mut self) -> gamepad::Pad {
@@ -101,7 +101,7 @@ impl FrontHost {
             pad = self.pad.poll();
             let mut guidance = self.shared.guidance.lock().unwrap();
             if pad.select || pad.east {
-                guidance.cancel();
+                guidance.back();
             }
             if pad.up {
                 guidance.focus_up();

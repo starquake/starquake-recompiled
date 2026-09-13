@@ -33,6 +33,13 @@ pub enum Setting {
     Exit,
 }
 
+/// The answers to "Keep changes?".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Choice {
+    Keep,
+    Undo,
+}
+
 /// What the picker was asked to do, once confirmed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -48,10 +55,12 @@ pub struct Guidance {
     training: bool,
     record: Record,
     picker: bool,
-    /// What the picker shows and changes: the settings as they will be if
-    /// the player confirms. Only confirming puts them into effect.
-    draft_level: u8,
-    draft_training: bool,
+    /// The level and training mode when the picker opened, which Undo goes
+    /// back to.
+    opened: (u8, bool),
+    /// "Keep changes?", asked when the picker is closed with changes made,
+    /// and which answer is highlighted.
+    asking: Option<Choice>,
     /// The row the picker has highlighted.
     focus: Setting,
     /// An action pressed once, waiting for the second press.
@@ -71,26 +80,8 @@ impl Guidance {
     }
 
     /// Whether training mode is in effect.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "what training mode does is #4, which reads this")
-    )]
     pub fn training(&self) -> bool {
         self.training
-    }
-
-    pub fn draft_level(&self) -> u8 {
-        self.draft_level
-    }
-
-    pub fn draft_training(&self) -> bool {
-        self.draft_training
-    }
-
-    /// Whether the picker holds changes that confirming would put into
-    /// effect.
-    pub fn changed(&self) -> bool {
-        self.draft_level != self.level || self.draft_training != self.training
     }
 
     pub fn record(&self) -> Record {
@@ -111,6 +102,21 @@ impl Guidance {
 
     pub fn armed(&self) -> Option<Setting> {
         self.armed
+    }
+
+    /// The "Keep changes?" question, if it is up, and the highlighted answer.
+    pub fn asking(&self) -> Option<Choice> {
+        self.asking
+    }
+
+    /// The level and training mode as they were when the picker opened.
+    pub fn opened(&self) -> (u8, bool) {
+        self.opened
+    }
+
+    /// Whether anything was changed since the picker opened.
+    pub fn changed(&self) -> bool {
+        (self.level, self.training) != self.opened
     }
 
     /// The rows the picker shows: ending a game only while one is played.
@@ -135,31 +141,57 @@ impl Guidance {
         self.version += 1;
     }
 
-    /// Opens the picker on its top row, showing the settings in effect.
+    /// Opens the picker on its top row.
     pub fn open(&mut self) {
         self.picker = true;
-        self.draft_level = self.level;
-        self.draft_training = self.training;
+        self.opened = (self.level, self.training);
+        self.asking = None;
         self.focus = Setting::Level;
         self.armed = None;
         self.version += 1;
     }
 
-    /// Esc, B or Select: closes the picker and forgets its changes.
-    pub fn cancel(&mut self) {
-        self.picker = false;
-        self.armed = None;
+    /// Esc, B or Select. With the question up, back to the picker. With
+    /// changes made, ask whether to keep them. Otherwise close.
+    pub fn back(&mut self) {
+        if self.asking.is_some() {
+            self.asking = None;
+        } else if self.changed() {
+            self.asking = Some(Choice::Keep);
+            self.armed = None;
+        } else {
+            self.close();
+            return;
+        }
         self.version += 1;
     }
 
-    /// Enter or A. On a setting it puts the picker's changes into effect and
-    /// closes it. On an action the first press asks for a second, and the
-    /// second requests the action, puts the changes into effect too, and
-    /// closes the picker.
+    /// Closes the picker, keeping what was set in it. The record takes the
+    /// settings as they are now, so passing through a level on the way to
+    /// another does not count as having used it.
+    pub fn close(&mut self) {
+        self.picker = false;
+        self.asking = None;
+        self.armed = None;
+        self.record.highest = self.record.highest.max(self.level);
+        self.record.training |= self.training;
+        self.version += 1;
+    }
+
+    /// Enter or A. On a setting it closes the picker, as Esc does. On an
+    /// action the first press asks for a second, and the second requests
+    /// the action and closes the picker.
     pub fn enter(&mut self) {
+        if let Some(choice) = self.asking {
+            if choice == Choice::Undo {
+                (self.level, self.training) = self.opened;
+            }
+            self.close();
+            return;
+        }
         let action = match self.focus {
             Setting::Level | Setting::Training => {
-                self.confirm();
+                self.close();
                 return;
             }
             Setting::EndGame => Action::EndGame,
@@ -167,17 +199,11 @@ impl Guidance {
         };
         if self.armed == Some(self.focus) {
             self.requested = Some(action);
-            self.confirm();
+            self.close();
         } else {
             self.armed = Some(self.focus);
             self.version += 1;
         }
-    }
-
-    fn confirm(&mut self) {
-        self.set_level(self.draft_level);
-        self.set_training(self.draft_training);
-        self.cancel();
     }
 
     /// Up and down in the picker: which row is highlighted. Moving away
@@ -191,6 +217,9 @@ impl Guidance {
     }
 
     fn move_focus(&mut self, by: isize) {
+        if self.asking.is_some() {
+            return;
+        }
         let rows = self.rows();
         let at = rows.iter().position(|&r| r == self.focus).unwrap_or(0) as isize;
         let to = (at + by).clamp(0, rows.len() as isize - 1) as usize;
@@ -210,26 +239,35 @@ impl Guidance {
     }
 
     /// Left and right in the picker: the highlighted setting down or up a
-    /// step, in the picker only until it is confirmed.
+    /// step, in effect at once. It is recorded when the picker closes.
     pub fn change(&mut self, up: bool) {
+        if let Some(choice) = &mut self.asking {
+            *choice = if up { Choice::Undo } else { Choice::Keep };
+            self.version += 1;
+            return;
+        }
         let max = LEVELS.len() as u8 - 1;
         match (self.focus, up) {
-            (Setting::Level, true) => self.draft_level = (self.draft_level + 1).min(max),
-            (Setting::Level, false) => self.draft_level = self.draft_level.saturating_sub(1),
-            (Setting::Training, on) => self.draft_training = on,
+            (Setting::Level, true) => self.level = (self.level + 1).min(max),
+            (Setting::Level, false) => self.level = self.level.saturating_sub(1),
+            (Setting::Training, on) => self.training = on,
             (Setting::EndGame | Setting::Exit, _) => return,
         }
         self.version += 1;
     }
 
-    /// Puts a level into effect, as confirming does.
+    /// Puts a level into effect and records it, outside the picker. For tests, which
+    /// start from a setting without going through the picker.
+    #[cfg(test)]
     pub fn set_level(&mut self, level: u8) {
         self.level = level.min(LEVELS.len() as u8 - 1);
         self.record.highest = self.record.highest.max(self.level);
         self.version += 1;
     }
 
-    /// Puts training mode into effect or out of it, as confirming does.
+    /// Puts training mode into effect or out of it and records it. For tests, which
+    /// start from a setting without going through the picker.
+    #[cfg(test)]
     pub fn set_training(&mut self, on: bool) {
         self.training = on;
         self.record.training |= on;
@@ -271,46 +309,87 @@ mod tests {
     }
 
     #[test]
-    fn changes_wait_for_enter() {
+    fn changes_are_in_effect_at_once_and_kept_on_closing() {
         let mut g = Guidance::default();
         g.open();
         g.change(true);
         g.change(true);
+        assert_eq!(g.level(), 2, "in effect at once");
         g.focus_down();
         g.change(true);
-        assert_eq!((g.draft_level(), g.draft_training()), (2, true));
-        assert_eq!(
-            (g.level(), g.training()),
-            (0, false),
-            "nothing in effect yet"
-        );
-        assert!(g.changed());
-        assert_eq!(g.record(), Record::default(), "and nothing recorded");
-        g.enter();
-        assert!(!g.picker_open());
-        assert_eq!((g.level(), g.training()), (2, true));
+        assert!(g.training());
+        g.close();
+        assert_eq!((g.level(), g.training()), (2, true), "kept");
+    }
+
+    #[test]
+    fn only_what_is_in_effect_on_closing_is_recorded() {
+        let mut g = Guidance::default();
+        g.open();
+        for _ in 0..5 {
+            g.change(true);
+        }
+        assert_eq!(g.record().highest, 0, "not while the picker is open");
+        for _ in 0..4 {
+            g.change(false);
+        }
+        g.focus_down();
+        g.change(true);
+        g.change(false);
+        g.close();
         assert_eq!(
             g.record(),
             Record {
-                highest: 2,
-                training: true
+                highest: 1,
+                training: false
             }
         );
     }
 
     #[test]
-    fn cancelling_forgets_the_changes() {
+    fn closing_with_changes_asks_whether_to_keep_them() {
         let mut g = Guidance::default();
-        g.set_level(1);
+        g.open();
+        g.back();
+        assert!(!g.picker_open(), "no changes: it just closes");
+
         g.open();
         g.change(true);
         g.change(true);
-        g.cancel();
+        g.back();
+        assert!(g.picker_open());
+        assert_eq!(g.asking(), Some(Choice::Keep));
+        g.enter();
         assert!(!g.picker_open());
-        assert_eq!(g.level(), 1);
-        assert_eq!(g.record().highest, 1);
+        assert_eq!(g.level(), 2, "kept");
+        assert_eq!(g.record().highest, 2);
+    }
+
+    #[test]
+    fn undo_puts_the_settings_back() {
+        let mut g = Guidance::default();
         g.open();
-        assert_eq!(g.draft_level(), 1, "reopened on what is in effect");
+        g.change(true);
+        g.focus_down();
+        g.change(true);
+        g.back();
+        g.change(true);
+        assert_eq!(g.asking(), Some(Choice::Undo));
+        g.enter();
+        assert_eq!((g.level(), g.training()), (0, false));
+        assert_eq!(g.record(), Record::default(), "nothing recorded");
+    }
+
+    #[test]
+    fn back_from_the_question_returns_to_the_picker() {
+        let mut g = Guidance::default();
+        g.open();
+        g.change(true);
+        g.back();
+        g.back();
+        assert!(g.picker_open());
+        assert_eq!(g.asking(), None);
+        assert_eq!(g.level(), 1, "still changed");
     }
 
     #[test]
@@ -318,11 +397,11 @@ mod tests {
         let mut g = Guidance::default();
         g.open();
         g.change(false);
-        assert_eq!(g.draft_level(), 0);
+        assert_eq!(g.level(), 0);
         for _ in 0..10 {
             g.change(true);
         }
-        assert_eq!(g.draft_level(), 5);
+        assert_eq!(g.level(), 5);
     }
 
     #[test]
@@ -364,7 +443,7 @@ mod tests {
         for _ in 0..5 {
             g.focus_down();
         }
-        g.cancel();
+        g.close();
         g.open();
         assert_eq!(g.focus(), Setting::Level);
     }
