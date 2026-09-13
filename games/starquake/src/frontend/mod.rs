@@ -210,6 +210,7 @@ impl Host for FrontHost {
                     guidance.set_teleporters(&game.teleporters_seen);
                     guidance.set_room(Some(game.room));
                     guidance.set_unvisited(&game.unvisited_rooms);
+                    guidance.set_pieces(&game.missing_piece_rooms());
                 }
                 Scene::GameOver => guidance.set_room(None),
                 // The game-over screens are done: the title screen starts

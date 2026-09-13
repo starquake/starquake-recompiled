@@ -86,6 +86,9 @@ pub struct Guidance {
     visited: Vec<bool>,
     /// The room BLOB is in, while a game is being played.
     room: Option<u16>,
+    /// The rooms holding a core piece still needed, for level 3 (#3), in
+    /// the game being played or just ended.
+    pieces: RoomSet,
     /// Bumped on every change, so a watcher can tell something changed.
     version: u64,
 }
@@ -193,6 +196,20 @@ impl Guidance {
         }
     }
 
+    /// Whether `room` holds a core piece still needed.
+    pub fn piece(&self, room: u16) -> bool {
+        self.pieces.contains(room)
+    }
+
+    /// Takes the rooms holding a core piece still needed, if they have
+    /// changed.
+    pub fn set_pieces(&mut self, rooms: &RoomSet) {
+        if self.pieces != *rooms {
+            self.pieces = rooms.clone();
+            self.version += 1;
+        }
+    }
+
     /// Takes the game's set of rooms not yet visited, if it has changed.
     pub fn set_unvisited(&mut self, unvisited: &RoomSet) {
         let same = self.visited.len() == ROOMS
@@ -203,13 +220,19 @@ impl Guidance {
         }
     }
 
-    /// Forgets the game that has ended, its map and its teleporter codes,
+    /// Forgets the game that has ended, its map, pieces and teleporter codes,
     /// once its game-over screens are done: the title screen shows none.
     pub fn forget_game(&mut self) {
-        if !self.teleporters.is_empty() || !self.visited.is_empty() || self.room.is_some() {
+        let empty = RoomSet::default();
+        if !self.teleporters.is_empty()
+            || !self.visited.is_empty()
+            || self.room.is_some()
+            || self.pieces != empty
+        {
             self.teleporters.clear();
             self.visited.clear();
             self.room = None;
+            self.pieces = empty;
             self.version += 1;
         }
     }
@@ -640,6 +663,15 @@ mod tests {
         g.set_room(Some(98));
         assert_eq!(g.version(), before, "nothing new, nothing to redraw");
 
+        let mut pieces = RoomSet::default();
+        pieces.set(300, true);
+        g.set_pieces(&pieces);
+        assert!(g.piece(300) && !g.piece(98));
+        let after = g.version();
+        assert!(after > before);
+        g.set_pieces(&pieces);
+        assert_eq!(g.version(), after, "the same pieces, nothing to redraw");
+
         g.set_room(Some(512));
         assert_eq!(
             g.room(),
@@ -655,6 +687,7 @@ mod tests {
         g.forget_game();
         assert_eq!(g.explored(), 0, "the title screen shows no map");
         assert!(g.teleporters().is_empty(), "nor any codes");
+        assert!(!g.piece(300), "nor any pieces");
         assert_eq!(g.room(), None);
         let forgotten = g.version();
         g.forget_game();
