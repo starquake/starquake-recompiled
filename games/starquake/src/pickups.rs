@@ -47,6 +47,13 @@ pub struct Bonus {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomSet(pub [u8; 64]);
 
+impl Default for RoomSet {
+    /// No rooms.
+    fn default() -> Self {
+        RoomSet([0; 64])
+    }
+}
+
 impl RoomSet {
     pub fn contains(&self, room: u16) -> bool {
         let room = room & crate::room::ROOM_MASK;

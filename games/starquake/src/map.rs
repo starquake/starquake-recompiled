@@ -9,6 +9,7 @@
 //! its cells read back.
 
 use crate::game::Game;
+use crate::pickups::{Item, RoomSet};
 
 /// The map's width and height, in rooms.
 pub const COLS: u16 = 16;
@@ -209,6 +210,40 @@ impl Game {
     }
 }
 
+impl Game {
+    /// The rooms holding a core piece the core still needs, for the guidance
+    /// map (#3).
+    pub fn missing_piece_rooms(&self) -> RoomSet {
+        missing_piece_rooms(&self.core_slots, &self.items)
+    }
+}
+
+/// The rooms of the items that would fill a hole still open in the core.
+///
+/// A hole is open while its slot has bit 7 set, and the rest of the byte is
+/// the graphic of the piece that fills it: the core takes any carried item
+/// with that graphic (`Game::core_room`), so every item with it counts,
+/// wherever it is. Not where it is carried or delivered, though: an item's
+/// row is 1 while it is being picked up and 2 to 5 in the inventory, and a
+/// delivered one is parked in the core room at row 10. An item not yet
+/// placed in its room has row 0 and still counts; its room is known.
+fn missing_piece_rooms(core_slots: &[u8; 9], items: &[Item]) -> RoomSet {
+    let wanted = |graphic: u8| {
+        core_slots
+            .iter()
+            .any(|&slot| slot & 0x80 != 0 && slot & 0x7F == graphic)
+    };
+    let mut rooms = RoomSet::default();
+    for item in items {
+        let carried = (1..=5).contains(&item.row());
+        let delivered = item.room() == crate::cores::CORE_ROOM && item.row() == 0x0A;
+        if wanted(item.graphic()) && !carried && !delivered {
+            rooms.set(item.room(), true);
+        }
+    }
+    rooms
+}
+
 /// Reads the four edges of a room from `free(row, col)`.
 ///
 /// BLOB is two cells by two. `room_exit` sends him through the left edge
@@ -381,6 +416,47 @@ mod tests {
             .into_iter()
             .flatten()
             .collect()
+    }
+
+    /// An item in `room` at `row`, with `graphic`.
+    fn item(room: u16, row: u8, graphic: u8) -> Item {
+        Item([
+            0,
+            ((room >> 8) as u8).rotate_right(1) | row,
+            room as u8,
+            graphic,
+        ])
+    }
+
+    #[test]
+    fn a_piece_for_an_open_hole_marks_its_room() {
+        // Hole 0 wants graphic 0x09 and hole 1 is filled (it holds its own
+        // number); the rest want graphics nothing here has.
+        let mut slots = [0x80 | 0x30; 9];
+        slots[0] = 0x80 | 0x09;
+        slots[1] = 1;
+        let items = [
+            item(300, 0, 0x09), // not placed yet: counts
+            item(40, 12, 0x09), // a second one with the same graphic
+            item(41, 12, 0x01), // wanted by no open hole
+            item(42, 12, 0x0F), // not a core piece at all
+        ];
+        let rooms = missing_piece_rooms(&slots, &items);
+        assert!(rooms.contains(300) && rooms.contains(40));
+        assert!(!rooms.contains(41) && !rooms.contains(42));
+    }
+
+    #[test]
+    fn carried_and_delivered_pieces_are_not_marked() {
+        let mut slots = [0x80 | 0x30; 9];
+        slots[0] = 0x80 | 0x09;
+        let items = [
+            item(50, 1, 0x09),                         // being picked up
+            item(51, 2, 0x09),                         // in the inventory
+            item(52, 5, 0x09),                         // last inventory slot
+            item(crate::cores::CORE_ROOM, 0x0A, 0x09), // delivered
+        ];
+        assert_eq!(missing_piece_rooms(&slots, &items), RoomSet::default());
     }
 
     #[test]
