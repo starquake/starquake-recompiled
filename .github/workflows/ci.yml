@@ -202,15 +202,16 @@ jobs:
       - name: Build
         run: cargo build --release --locked --all-features -p starquake --target x86_64-apple-darwin
 
-      # The same check as the release's: from an empty folder it must say it
-      # found no tape and exit 1, which runs the x86_64 binary under Rosetta.
+      # The same check as the release's: from an empty folder, headless, it
+      # must say it found no tape and exit 1, which runs the x86_64 binary
+      # under Rosetta.
       - name: Smoke test
         run: |
           bin="$PWD/target/x86_64-apple-darwin/release/starquake"
           empty=$(mktemp -d)
           cd "$empty"
           set +e
-          out=$(HOME="$empty" XDG_DATA_HOME="$empty" "$bin" 2>&1)
+          out=$(HOME="$empty" XDG_DATA_HOME="$empty" "$bin" --headless 1 "$empty/shots" 2>&1)
           code=$?
           set -e
           echo "$out"

@@ -112,7 +112,7 @@ impl Host for Headless {
 
 pub fn run(path: &Path, frames: u64, dir: &Path) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let (memory, loading_screen) = starquake::assets::read_game(path)?;
+    let (memory, loading_screen) = crate::frontend::tape::read(path)?;
     let mut parsed = Assets::from_memory(&memory);
     parsed.loading_screen = loading_screen;
     let assets = Rc::new(parsed);

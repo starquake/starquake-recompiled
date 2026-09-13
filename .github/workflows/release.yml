@@ -68,7 +68,8 @@ jobs:
 
       # Proves the binary starts on its runner: from an empty folder it must
       # say it found no tape and exit 1, which is as far as it gets without
-      # one. Not on Windows, where a release build says that in a dialog box
+      # one. Headless, because a windowed start with no tape opens a window to
+      # ask for it, and a runner has no display. Not on Windows, where a release build says that in a dialog box
       # and the job would wait for somebody to close it.
       - name: Smoke test
         if: runner.os != 'Windows'
@@ -77,7 +78,7 @@ jobs:
           empty=$(mktemp -d)
           cd "$empty"
           set +e
-          out=$(HOME="$empty" XDG_DATA_HOME="$empty" "$bin" 2>&1)
+          out=$(HOME="$empty" XDG_DATA_HOME="$empty" "$bin" --headless 1 "$empty/shots" 2>&1)
           code=$?
           set -e
           echo "$out"
@@ -104,6 +105,9 @@ jobs:
           cp docs/player/* "$dir/"
           cp LICENSE-MIT LICENSE-APACHE "$dir/"
           cp THIRD-PARTY.md "$dir/THIRD-PARTY.txt"
+          # The font the program draws its own screens in travels with its
+          # licence, as the OFL asks.
+          cp games/starquake/fonts/LICENSE.txt "$dir/LICENSE-Inter.txt"
           if [ "$RUNNER_OS" = "Windows" ]; then
             7z a -tzip "$dir.zip" "$dir" > /dev/null
             echo "ASSET=$dir.zip" >> "$GITHUB_ENV"

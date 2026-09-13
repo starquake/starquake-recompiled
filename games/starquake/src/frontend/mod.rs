@@ -4,6 +4,9 @@ mod audio;
 mod gamepad;
 pub mod headless;
 mod input;
+mod prompt;
+pub mod tape;
+mod text;
 mod video;
 
 use std::path::Path;
@@ -251,41 +254,52 @@ fn play_game(
     host.shared.quit.store(true, Ordering::Relaxed);
 }
 
-/// Runs the game with its real sound and pacing but no window, driving it
-/// with scripted input, and reports how long each frame actually took.
-/// What both ways of running the game need: the game's own copy of the tape,
-/// the state shared with whatever is showing it, and a sound card if there is
-/// one. The stream has to be held for as long as the sound should play.
-type Started = (
-    Vec<u8>,
-    Option<Vec<u8>>,
-    Arc<Shared>,
-    Option<audio::Output>,
-    Option<cpal::Stream>,
-);
-
-fn start(path: &Path) -> Result<Started, String> {
-    // Reading checks the file is a supported version.
-    let (memory, loading_screen) = starquake::assets::read_game(path)?;
-    let shared = Arc::new(Shared {
+/// The state shared between the game and whatever is showing it.
+fn new_shared() -> Arc<Shared> {
+    Arc::new(Shared {
         screen: Mutex::new((vec![0; starquake::display::BITMAP_LEN + 768], 0, 0)),
         input: Mutex::new(Input::default()),
         quit: AtomicBool::new(false),
         dead: AtomicBool::new(false),
-    });
-    let (audio, stream) = match audio::Output::start() {
+    })
+}
+
+/// The sound card, if there is one. The stream has to be held for as long
+/// as the sound should play.
+fn open_audio() -> (Option<audio::Output>, Option<cpal::Stream>) {
+    match audio::Output::start() {
         Ok((out, stream)) => (Some(out), Some(stream)),
         Err(e) => {
             eprintln!("no sound: {e}");
             (None, None)
         }
-    };
-    Ok((memory, loading_screen, shared, audio, stream))
+    }
 }
 
+/// Starts the game on its own thread, with sound, from a checked copy of
+/// the game. Returns the sound stream, which the caller holds.
+fn launch(
+    shared: &Arc<Shared>,
+    memory: Vec<u8>,
+    loading_screen: Option<Vec<u8>>,
+) -> Result<Option<cpal::Stream>, String> {
+    let (audio, stream) = open_audio();
+    let game_shared = shared.clone();
+    std::thread::Builder::new()
+        .name("game".into())
+        .spawn(move || game_thread(memory, loading_screen, game_shared, audio))
+        .map_err(|e| e.to_string())?;
+    Ok(stream)
+}
+
+/// Runs the game with its real sound and pacing but no window, driving it
+/// with scripted input, and reports how long each frame actually took.
 pub fn bench(path: &Path, seconds: u64) -> Result<(), String> {
     unsafe { std::env::set_var("SQ_BENCH", "1") };
-    let (memory, loading_screen, shared, audio, stream) = start(path)?;
+    // Reading checks the file is a supported version.
+    let (memory, loading_screen) = tape::read(path)?;
+    let shared = new_shared();
+    let (audio, stream) = open_audio();
     let keys = shared.clone();
     std::thread::spawn(move || {
         let mut n = 0u64;
@@ -309,15 +323,23 @@ pub fn bench(path: &Path, seconds: u64) -> Result<(), String> {
     Ok(())
 }
 
-pub fn run(path: &Path) -> Result<(), String> {
-    let (memory, loading_screen, shared, audio, stream) = start(path)?;
-    let game_shared = shared.clone();
-    std::thread::Builder::new()
-        .name("game".into())
-        .spawn(move || game_thread(memory, loading_screen, game_shared, audio))
-        .map_err(|e| e.to_string())?;
-
-    let result = video::run(shared);
+/// Runs the game in a window: from `path`, or, with none, from whatever the
+/// player locates on the screen that asks for the tape.
+pub fn run(path: Option<&Path>) -> Result<(), String> {
+    let shared = new_shared();
+    let (prompt, stream) = match path {
+        Some(path) => {
+            let (memory, loading_screen) = tape::read(path)?;
+            (None, launch(&shared, memory, loading_screen)?)
+        }
+        None => (Some(prompt::Prompt::new()), None),
+    };
+    let launcher = shared.clone();
+    let result = video::run(
+        shared,
+        prompt,
+        Box::new(move |memory, loading_screen| launch(&launcher, memory, loading_screen)),
+    );
     drop(stream);
     result
 }

@@ -7,12 +7,14 @@ use std::sync::atomic::Ordering;
 use pixels::{Pixels, SurfaceTexture};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{ElementState, WindowEvent};
+use winit::event::{ElementState, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
 use super::Shared;
+use super::prompt::{self, Outcome, Prompt};
+use super::text::Canvas;
 use starquake::controls::Input;
 use starquake::display::{BITMAP_LEN, HEIGHT, WIDTH};
 
@@ -41,8 +43,21 @@ pub fn draw(mem: &[u8], border: u8, frame: u64, out: &mut [u8]) {
     );
 }
 
+/// Starts the game from a checked copy of it, returning the sound stream to
+/// hold.
+pub type Launcher =
+    Box<dyn FnMut(Vec<u8>, Option<Vec<u8>>) -> Result<Option<cpal::Stream>, String>>;
+
 struct App {
     shared: Arc<Shared>,
+    /// The screen asking for the tape, while it is up. The game has not
+    /// started until it is gone.
+    prompt: Option<Prompt>,
+    launch: Launcher,
+    /// Held for as long as the game should have sound.
+    stream: Option<cpal::Stream>,
+    /// Device pixels per logical pixel, which the prompt draws at.
+    scale: f64,
     window: Option<Arc<Window>>,
     pixels: Option<Pixels<'static>>,
     error: Option<String>,
@@ -79,7 +94,9 @@ impl ApplicationHandler for App {
         // panics when a surface is configured that size.
         let (w, h) = (size.width.max(1), size.height.max(1));
         let surface = SurfaceTexture::new(w, h, window.clone());
-        match Pixels::new(FULL_W as u32, FULL_H as u32, surface) {
+        self.scale = window.scale_factor();
+        let (bw, bh) = self.buffer_size();
+        match Pixels::new(bw, bh, surface) {
             Ok(p) => self.pixels = Some(p),
             Err(e) => {
                 self.error = Some(e.to_string());
@@ -91,6 +108,10 @@ impl ApplicationHandler for App {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
+        if self.prompt.is_some() {
+            self.prompt_event(event_loop, event);
+            return;
+        }
         match event {
             WindowEvent::CloseRequested => {
                 self.shared.quit.store(true, Ordering::Relaxed);
@@ -143,6 +164,11 @@ impl ApplicationHandler for App {
             event_loop.exit();
             return;
         }
+        // The prompt changes only when something happens to it.
+        if self.prompt.is_some() {
+            event_loop.set_control_flow(ControlFlow::Wait);
+            return;
+        }
         // Paint only when the game has produced a new frame, and let the loop
         // sleep in between. Asking for a redraw every time round instead ties
         // the rate to how long `render` blocks, and the moment the window is
@@ -161,11 +187,127 @@ impl ApplicationHandler for App {
     }
 }
 
-pub fn run(shared: Arc<Shared>) -> Result<(), String> {
+impl App {
+    /// The frame buffer's size: the Spectrum's screen with its border, or,
+    /// for the prompt, the window at its real pixel density so the text is
+    /// sharp.
+    fn buffer_size(&self) -> (u32, u32) {
+        if self.prompt.is_some() {
+            (
+                (f64::from(prompt::WIDTH) * self.scale).round() as u32,
+                (f64::from(prompt::HEIGHT) * self.scale).round() as u32,
+            )
+        } else {
+            (FULL_W as u32, FULL_H as u32)
+        }
+    }
+
+    fn prompt_event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
+        let Some(prompt) = &mut self.prompt else {
+            return;
+        };
+        let outcome = match event {
+            WindowEvent::CloseRequested => Outcome::Quit,
+            WindowEvent::KeyboardInput { event, .. } => match event.physical_key {
+                PhysicalKey::Code(code)
+                    if event.state == ElementState::Pressed && !event.repeat =>
+                {
+                    prompt.key(code)
+                }
+                _ => Outcome::Nothing,
+            },
+            WindowEvent::CursorMoved { position, .. } => match &self.pixels {
+                Some(p) => {
+                    let (x, y) = p
+                        .window_pos_to_pixel((position.x as f32, position.y as f32))
+                        .unwrap_or_else(|(x, y)| (x.max(0) as usize, y.max(0) as usize));
+                    let s = self.scale as f32;
+                    prompt.cursor(x as f32 / s, y as f32 / s)
+                }
+                None => Outcome::Nothing,
+            },
+            WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: MouseButton::Left,
+                ..
+            } => prompt.clicked(),
+            WindowEvent::DroppedFile(path) => prompt.dropped(&path),
+            WindowEvent::Resized(size) => {
+                if let Some(p) = &mut self.pixels {
+                    let _ = p.resize_surface(size.width, size.height);
+                }
+                Outcome::Redraw
+            }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.scale = scale_factor;
+                let (w, h) = self.buffer_size();
+                if let Some(p) = &mut self.pixels {
+                    let _ = p.resize_buffer(w, h);
+                }
+                Outcome::Redraw
+            }
+            WindowEvent::RedrawRequested => {
+                let (w, h) = self.buffer_size();
+                if let (Some(p), Some(prompt)) = (&mut self.pixels, &mut self.prompt) {
+                    let mut canvas = Canvas {
+                        pixels: p.frame_mut(),
+                        width: w as usize,
+                        height: h as usize,
+                        scale: self.scale as f32,
+                    };
+                    prompt.draw(&mut canvas);
+                    if let Err(e) = p.render() {
+                        self.error = Some(e.to_string());
+                        event_loop.exit();
+                    }
+                }
+                Outcome::Nothing
+            }
+            _ => Outcome::Nothing,
+        };
+        match outcome {
+            Outcome::Nothing => {}
+            Outcome::Redraw => {
+                if let Some(w) = &self.window {
+                    w.request_redraw();
+                }
+            }
+            Outcome::Quit => {
+                self.shared.quit.store(true, Ordering::Relaxed);
+                event_loop.exit();
+            }
+            Outcome::Start(tape) => {
+                let started = starquake::assets::read_tape(&tape.bytes)
+                    .and_then(|(memory, loading_screen)| (self.launch)(memory, loading_screen));
+                match started {
+                    Ok(stream) => {
+                        self.stream = stream;
+                        self.prompt = None;
+                        let (w, h) = self.buffer_size();
+                        if let Some(p) = &mut self.pixels {
+                            let _ = p.resize_buffer(w, h);
+                        }
+                        self.shown = u64::MAX;
+                    }
+                    Err(e) => {
+                        self.error = Some(e);
+                        event_loop.exit();
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn run(shared: Arc<Shared>, prompt: Option<Prompt>, launch: Launcher) -> Result<(), String> {
     let event_loop = EventLoop::new().map_err(|e| e.to_string())?;
     event_loop.set_control_flow(ControlFlow::Poll);
     let mut app = App {
         shared,
+        prompt,
+        launch,
+        stream: None,
+        scale: 1.0,
         window: None,
         pixels: None,
         error: None,
