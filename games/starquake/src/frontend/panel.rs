@@ -374,8 +374,8 @@ impl Panel {
             &[
                 (&["\u{2191}", "\u{2193}"], "choose"),
                 (&["\u{2190}", "\u{2192}"], "change"),
-                (&["Enter", "/", "A"], "do it"),
-                (&["Esc", "/", "B"], "done"),
+                (&["Enter", "/", "(A)"], "do it"),
+                (&["Esc", "/", "(B)"], "done"),
             ],
         );
 
@@ -525,8 +525,8 @@ impl Panel {
             foot + 12.0,
             &[
                 (&["\u{2190}", "\u{2192}"], "choose"),
-                (&["Enter", "/", "A"], "confirm"),
-                (&["Esc", "/", "B"], "back"),
+                (&["Enter", "/", "(A)"], "confirm"),
+                (&["Esc", "/", "(B)"], "back"),
             ],
         );
     }
@@ -602,7 +602,8 @@ impl Panel {
 
     /// A row of key hints: each group's keys, then what they do. A `/`
     /// between two keys is drawn as text, for a keyboard key and the
-    /// controller button that does the same.
+    /// controller button that does the same; a key written `(A)` is a
+    /// controller's face button, drawn round like one.
     fn hints(&mut self, canvas: &mut Canvas, mut x: f32, y: f32, groups: &[(&[&str], &str)]) {
         for (keys, what) in groups {
             for key in *keys {
@@ -610,6 +611,9 @@ impl Panel {
                     let slash = [span("/", 12.0, Weight::Regular, HINT)];
                     self.fonts.text(Some(canvas), x, y + 2.0, None, 1.0, &slash);
                     x += self.fonts.measure(&slash) + 4.0;
+                } else if let Some(button) = key.strip_prefix('(').and_then(|k| k.strip_suffix(')'))
+                {
+                    x += self.pad_button(canvas, x, y, button) + 4.0;
                 } else {
                     x += self.key_cap(canvas, x, y, key) + 4.0;
                 }
@@ -619,6 +623,19 @@ impl Panel {
                 .text(Some(canvas), x + 2.0, y + 2.0, None, 1.0, &spans);
             x += self.fonts.measure(&spans) + 16.0;
         }
+    }
+
+    /// A controller button's letter in a small circle at (`x`, `y`); returns
+    /// its width.
+    fn pad_button(&mut self, canvas: &mut Canvas, x: f32, y: f32, button: &str) -> f32 {
+        let d = 20.0;
+        canvas.round_rect(x, y, d, d, d / 2.0, BUTTON_LINE);
+        canvas.round_rect(x + 1.0, y + 1.0, d - 2.0, d - 2.0, d / 2.0 - 1.0, DIALOG);
+        let spans = [span(button, 11.0, Weight::SemiBold, HINT_KEY)];
+        let tw = self.fonts.measure(&spans);
+        self.fonts
+            .text(Some(canvas), x + (d - tw) / 2.0, y + 3.0, None, 1.0, &spans);
+        d
     }
 
     /// A key name in a small outline at (`x`, `y`); returns its width.
