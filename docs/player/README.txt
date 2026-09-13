@@ -58,16 +58,36 @@ CONTROLS
   Alt, full stop or    Fire.
   comma
   Gamepad              D-pad or left stick to move, any face or
-                       shoulder button to fire, Start to pause. Works
-                       in every control method, over USB or Bluetooth.
+                       shoulder button to fire, Start to pause, Select
+                       for guidance (below). Works in every control
+                       method, over USB or Bluetooth.
                        Some controllers need the right mode: an 8BitDo
                        in Switch mode is detected but sends no input,
                        so try one of its other modes.
   P                    Pause.
   A S D F G together   Abandon the game.
+  Esc                  Guidance (below).
 
 At the title screen, 1 to 5 choose how to play, 6 defines your own
 keys, 0 starts the game and Q quits. Any key stops the tune.
+
+
+GUIDANCE
+--------
+
+Beside the game is a panel for optional help. Esc, or Select on a
+gamepad, opens the guidance menu and pauses the game:
+
+  Up and down          Choose a row.
+  Left and right       Change the guidance level or training mode.
+  Enter, or A          End this game, or exit, after pressing twice.
+  Esc, or B or Select  Close the menu.
+
+Guidance has levels from 0, the original game, to 5; each adds to the
+ones below it. Turning it up, or training mode on, shows on that
+game's score, so the menu asks before keeping such a change. This
+version has the menu and the panel; what the levels and training mode
+do is still to come.
 
 
 LEGAL
