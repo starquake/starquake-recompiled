@@ -38,11 +38,16 @@ jobs:
 
   build:
     name: build, test and lint (${{ matrix.os }})
+    # Every `run:` below is a bash script. Windows runners default to
+    # PowerShell, so say it once here rather than on each step.
+    defaults:
+      run:
+        shell: bash
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
