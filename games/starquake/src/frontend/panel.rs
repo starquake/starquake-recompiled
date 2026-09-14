@@ -225,12 +225,6 @@ impl Panel {
             canvas.triangle([(cx - r, cy), (cx, cy - r), (cx + r, cy)], CODE);
             canvas.triangle([(cx - r, cy), (cx, cy + r), (cx + r, cy)], CODE);
         }
-        for room in (0..rooms).filter(|&r| pieces && guidance.piece(r)) {
-            let (x, y) = at(room);
-            let r = 4.5 * unit;
-            let (cx, cy) = (x + pitch / 2.0, y + pitch / 2.0);
-            canvas.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, PIECE);
-        }
         if let Some(room) = guidance.room() {
             let (x, y) = at(room);
             let (outer, inner) = (3.0 * unit, 6.0 * unit);
@@ -244,6 +238,13 @@ impl Panel {
                 HERE,
             );
             canvas.round_rect(x + inner, y + inner, size(inner), size(inner), unit, FLOOR);
+        }
+        // Over the room BLOB is in, so a piece there still shows.
+        for room in (0..rooms).filter(|&r| pieces && guidance.piece(r)) {
+            let (x, y) = at(room);
+            let r = 4.5 * unit;
+            let (cx, cy) = (x + pitch / 2.0, y + pitch / 2.0);
+            canvas.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, PIECE);
         }
     }
 
@@ -1050,6 +1051,8 @@ mod render_check {
         for (col, row) in [(12, 13), (2, 24), (6, 8), (13, 29), (10, 4), (9, 21)] {
             pieces.set(row * COLS + col, true);
         }
+        // One in the room BLOB is in, to show its dot over the marker.
+        pieces.set(level3.room().unwrap(), true);
         level3.set_pieces(&pieces);
         let mut record = Guidance::default();
         record.set_level(3);
