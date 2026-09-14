@@ -46,7 +46,8 @@ impl Game {
     /// The openings of every room, indexed by room number.
     ///
     /// An edge is open where there is a gap in it, or a passage through the
-    /// wall: two rooms side by side that both have a passage marker.
+    /// wall: two rooms side by side that both have a passage marker. The core
+    /// room opens only on its left, where it is entered.
     pub fn all_openings(&self) -> Vec<Openings> {
         let mut scratch = self.clone();
         let mut passage = Vec::new();
@@ -67,6 +68,13 @@ impl Game {
                 openings[room + 1].left = true;
             }
         }
+        // The core room is not played in its tiles: walking in from the left
+        // runs its own screen, which puts BLOB back in the room he came from
+        // (`Game::core_room`). So its one way in and out is its left edge.
+        openings[crate::cores::CORE_ROOM as usize] = Openings {
+            left: true,
+            ..Openings::default()
+        };
         openings
     }
 }
