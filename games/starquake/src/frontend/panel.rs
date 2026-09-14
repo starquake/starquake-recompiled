@@ -50,13 +50,16 @@ const FLOOR: Rgb = [0x22, 0x2c, 0x45];
 const MAP_DOT: Rgb = [0x17, 0x1a, 0x22];
 const WALL: Rgb = [0x9a, 0xaa, 0xd0];
 const HERE: Rgb = [0xe8, 0xec, 0xf4];
+const PIECE: Rgb = [0xf0, 0x7a, 0xb0];
+const PIECE_ROOM: Rgb = [0x15, 0x1a, 0x26];
+const PIECE_ROOM_LINE: Rgb = [0x6b, 0x75, 0x94];
 
 /// What each level adds, for the picker.
 const ADDS: [&str; 6] = [
     "The original game, no help.",
     "The codes of the teleporters you have seen.",
     "A map of the rooms you have visited.",
-    "Not built yet: the missing core pieces, marked on the map.",
+    "The missing core pieces, marked on the map.",
     "Not built yet: an arrow along routes you know.",
     "Not built yet: the arrow routed through the whole map.",
 ];
@@ -114,7 +117,7 @@ impl Panel {
                     1.0,
                     &[span(&explored, 12.0, Weight::Regular, LABEL)],
                 );
-                self.map(canvas, guidance, 96.0, below - 16.0);
+                self.map(canvas, guidance, level >= 3, 96.0, below - 16.0);
             } else {
                 let lines = if level == 0 {
                     ["No guidance.", "Press Esc or Select to choose a level."]
@@ -145,8 +148,17 @@ impl Panel {
     /// square. Every room is a faint dot; visited rooms join into floor, with
     /// a line along each edge that has no opening, so an opening is a gap in
     /// the wall. The teleporters seen are diamonds and the room BLOB is in
-    /// is marked.
-    fn map(&mut self, canvas: &mut Canvas, guidance: &Guidance, top: f32, bottom: f32) {
+    /// is marked. With `pieces` (level 3, #3), so is every room holding a
+    /// core piece still needed, and one not visited is outlined so the mark
+    /// has somewhere to sit.
+    fn map(
+        &mut self,
+        canvas: &mut Canvas,
+        guidance: &Guidance,
+        pieces: bool,
+        top: f32,
+        bottom: f32,
+    ) {
         let (cols, rows) = (f32::from(COLS), f32::from(ROWS));
         // 18 pixels a room as in the mockup, smaller when the teleporter codes
         // take more than one row.
@@ -165,6 +177,12 @@ impl Panel {
             let (x, y) = at(room);
             if guidance.visited(room) {
                 canvas.round_rect(x, y, pitch, pitch, 0.0, FLOOR);
+            } else if pieces && guidance.piece(room) {
+                let (inset, size) = (2.5 * unit, pitch - 5.0 * unit);
+                let (x, y) = (x + inset, y + inset);
+                canvas.round_rect(x, y, size, size, 2.0 * unit, PIECE_ROOM);
+                let dash = Some(2.5 * unit);
+                canvas.outline(x, y, size, size, 2.0 * unit, 1.0, dash, PIECE_ROOM_LINE);
             } else {
                 let dot = 8.0 * unit;
                 let inset = (pitch - dot) / 2.0;
@@ -220,6 +238,13 @@ impl Panel {
                 HERE,
             );
             canvas.round_rect(x + inner, y + inner, size(inner), size(inner), unit, FLOOR);
+        }
+        // Over the room BLOB is in, so a piece there still shows.
+        for room in (0..rooms).filter(|&r| pieces && guidance.piece(r)) {
+            let (x, y) = at(room);
+            let r = 4.5 * unit;
+            let (cx, cy) = (x + pitch / 2.0, y + pitch / 2.0);
+            canvas.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, PIECE);
         }
     }
 
@@ -1019,6 +1044,16 @@ mod render_check {
         let mut crowded = Guidance::default();
         crowded.set_level(2);
         explore(&mut crowded, 7);
+        let mut level3 = Guidance::default();
+        level3.set_level(3);
+        explore(&mut level3, 3);
+        let mut pieces = RoomSet::default();
+        for (col, row) in [(12, 13), (2, 24), (6, 8), (13, 29), (10, 4), (9, 21)] {
+            pieces.set(row * COLS + col, true);
+        }
+        // One in the room BLOB is in, to show its dot over the marker.
+        pieces.set(level3.room().unwrap(), true);
+        level3.set_pieces(&pieces);
         let mut record = Guidance::default();
         record.set_level(3);
         record.set_training(true);
@@ -1026,6 +1061,7 @@ mod render_check {
             ("level0", Guidance::default(), Scene::Play),
             ("level2", level2, Scene::Play),
             ("level2-many-codes", crowded, Scene::Play),
+            ("level3", level3, Scene::Play),
             (
                 "level1-codes",
                 {

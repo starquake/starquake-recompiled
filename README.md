@@ -38,8 +38,9 @@ or Select on a gamepad, opens a menu that pauses the game and sets a guidance
 level from 0 (the original) to 5, and training mode. The highest level used,
 and whether training mode was on, are shown beside the game-over and
 high-score screens. Level 1 shows the codes of the teleporters seen (#50) and
-level 2 a map of the rooms visited, with their openings (#2); levels 3 to 5
-(#3, #51, #52) and training mode (#4) are separate tickets.
+level 2 a map of the rooms visited, with their openings (#2), and level 3
+marks the rooms holding the core pieces still needed (#3); levels 4 and 5
+(#51, #52) and training mode (#4) are separate tickets.
 
 ## Status
 

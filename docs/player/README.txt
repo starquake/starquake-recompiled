@@ -94,8 +94,12 @@ game's score, so the menu asks before keeping such a change. So far:
            inside a room divides it: the ways on either side of it do
            not meet, and a dashed one is a security door. A way on
            can still need a lift.
+  Level 3  The rooms holding a core piece the core still needs, marked
+           in pink on the map, including rooms you have not reached.
+           There are usually two of each piece; either will do, and
+           while you carry one the other is not marked.
 
-Levels 3 to 5 and training mode are still to come.
+Levels 4 and 5 and training mode are still to come.
 
 
 LEGAL
