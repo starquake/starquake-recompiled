@@ -1429,12 +1429,18 @@ fn check_map_openings(env: &Env, states: &[Zx]) -> bool {
         return report("map openings", &[], 0);
     };
     let openings = env.game(first).all_openings();
+    let parts: Vec<starquake::map::Parts> = (0..openings.len() as u16)
+        .map(|r| env.game(first).room_parts(r))
+        .collect();
+    let mut inside = 0;
     let mut failures = Vec::new();
     let mut crossings = 0;
     let mut r = Rng(0x3A9);
     for (n, state) in states.iter().enumerate().flat_map(|s| [s; 4]) {
         let mut g = env.game(state);
         let mut input = input_of(state);
+        // The part of the room BLOB was first seen in since he entered it.
+        let mut part = 0;
         for frame in 0..2000 {
             if frame % 40 == 0 {
                 input.kempston = r.byte() & 0x0F;
@@ -1443,6 +1449,28 @@ fn check_map_openings(env: &Env, states: &[Zx]) -> bool {
             let event = g.play_frame(&input);
             if !matches!(event, FrameEvent::Continue | FrameEvent::CoreRoom) {
                 break;
+            }
+            if g.room != from {
+                part = 0;
+            }
+            let (x, y) = (g.entities[0].x(), g.entities[0].y());
+            let here = parts
+                .get(g.room as usize)
+                .map_or(0, |p| p.at((0xBF - y) >> 3, x >> 3));
+            if here != 0 && x & 7 == 0 {
+                inside += 1;
+                if part == 0 {
+                    part = here;
+                } else if here != part {
+                    failures.push((
+                        format!("state {n} frame {frame}"),
+                        vec![format!(
+                            "crossed a wall inside room {} at ({x:#04x}, {y:#04x})",
+                            g.room
+                        )],
+                    ));
+                    part = here;
+                }
             }
             let o = openings[from as usize];
             let (edge, open) = match g.room.wrapping_sub(from) {
@@ -1486,7 +1514,7 @@ fn check_map_openings(env: &Env, states: &[Zx]) -> bool {
         })
         .sum();
     println!(
-        "  {open} of {} edges open; {crossings} crossings; rooms that disagree with a neighbour: {disagree:?}",
+        "  {open} of {} edges open; {crossings} crossings; {inside} positions inside rooms; rooms that disagree with a neighbour: {disagree:?}",
         rooms * 4
     );
     report("map openings", &failures, crossings)
