@@ -90,8 +90,10 @@ game's score, so the menu asks before keeping such a change. So far:
   Level 1  The codes of the teleporters you have seen.
   Level 2  A map of the rooms you have visited. Walls are lines, and
            a gap in one is a way on; the square is where you are and
-           the diamonds are the teleporters you have seen. A way on
-           can still need a lift or be behind a door.
+           the diamonds are the teleporters you have seen. A line
+           inside a room divides it: the ways on either side of it do
+           not meet, and a dashed one is a security door. A way on
+           can still need a lift.
 
 Levels 3 to 5 and training mode are still to come.
 
