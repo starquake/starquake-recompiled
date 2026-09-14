@@ -96,7 +96,8 @@ game's score, so the menu asks before keeping such a change. So far:
            can still need a lift.
   Level 3  The rooms holding a core piece the core still needs, marked
            in pink on the map, including rooms you have not reached.
-           There are usually two of each piece; either will do.
+           There are usually two of each piece; either will do, and
+           while you carry one the other is not marked.
 
 Levels 4 and 5 and training mode are still to come.
 

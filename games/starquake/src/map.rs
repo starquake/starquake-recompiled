@@ -222,21 +222,25 @@ impl Game {
 /// A hole is open while its slot has bit 7 set, and the rest of the byte is
 /// the graphic of the piece that fills it: the core takes any carried item
 /// with that graphic (`Game::core_room`), so every item with it counts,
-/// wherever it is. Not where it is carried or delivered, though: an item's
-/// row is 1 while it is being picked up and 2 to 5 in the inventory, and a
-/// delivered one is parked in the core room at row 10. An item not yet
-/// placed in its room has row 0 and still counts; its room is known.
+/// wherever it is. An item's row is 1 while it is being picked up and 2 to 5
+/// in the inventory, and a delivered one is parked in the core room at row
+/// 10; neither is somewhere to go. An item not yet placed in its room has row
+/// 0 and still counts; its room is known.
+///
+/// A hole whose piece is being carried marks nothing: most pieces come in
+/// twos, and the other one is not needed while you have one.
 fn missing_piece_rooms(core_slots: &[u8; 9], items: &[Item]) -> RoomSet {
+    let carried = |item: &Item| (1..=5).contains(&item.row());
     let wanted = |graphic: u8| {
         core_slots
             .iter()
             .any(|&slot| slot & 0x80 != 0 && slot & 0x7F == graphic)
+            && !items.iter().any(|i| carried(i) && i.graphic() == graphic)
     };
     let mut rooms = RoomSet::default();
     for item in items {
-        let carried = (1..=5).contains(&item.row());
         let delivered = item.room() == crate::cores::CORE_ROOM && item.row() == 0x0A;
-        if wanted(item.graphic()) && !carried && !delivered {
+        if wanted(item.graphic()) && !carried(item) && !delivered {
             rooms.set(item.room(), true);
         }
     }
@@ -449,13 +453,26 @@ mod tests {
     fn carried_and_delivered_pieces_are_not_marked() {
         let mut slots = [0x80 | 0x30; 9];
         slots[0] = 0x80 | 0x09;
+        slots[1] = 0x80 | 0x0A;
+        slots[2] = 0x80 | 0x0B;
         let items = [
-            item(50, 1, 0x09),                         // being picked up
-            item(51, 2, 0x09),                         // in the inventory
-            item(52, 5, 0x09),                         // last inventory slot
             item(crate::cores::CORE_ROOM, 0x0A, 0x09), // delivered
+            item(51, 2, 0x0A),                         // in the inventory
+            item(52, 5, 0x0B),                         // last inventory slot
         ];
         assert_eq!(missing_piece_rooms(&slots, &items), RoomSet::default());
+    }
+
+    #[test]
+    fn carrying_a_piece_unmarks_its_twin() {
+        let mut slots = [0x80 | 0x30; 9];
+        slots[0] = 0x80 | 0x09;
+        let twin = item(60, 12, 0x09);
+        assert!(missing_piece_rooms(&slots, &[twin]).contains(60));
+        for row in [1, 2, 5] {
+            let rooms = missing_piece_rooms(&slots, &[item(61, row, 0x09), twin]);
+            assert!(!rooms.contains(60), "carried at row {row}");
+        }
     }
 
     #[test]
