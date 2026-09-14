@@ -37,6 +37,11 @@ maintainer's.
   entirely, so nothing fails when the structure goes missing. The body's first
   line is the attribution header:
   `> 🤖 **Issue by Claude** (AI pair-programmer working with @starquake) — posted through @starquake's account.`
+- **A sub-issue** (filed under a parent, or split out of one) names its parent
+  as `Part of #NN` and never with `Closes`, `Fixes` or `Resolves`; nor does
+  its plan ask its PR to close the parent. A parent's own plan, while any
+  sub-issue is open, ends in `Part of #NN` too: #76 closed #1 with four
+  guidance levels still open (#84).
 - **The issue exists but is free-form?** Restructure its body into the
   template's sections, keeping everything true that's already there.
 - **The BODY is the living spec; the COMMENTS are the history.** Opposite
