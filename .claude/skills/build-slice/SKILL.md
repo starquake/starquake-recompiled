@@ -167,8 +167,8 @@ the maintainer's replies are part of the review.
 - **Check the ticket's sub-issues too** before writing `Closes #NN`:
   `gh api repos/starquake/starquake-recompiled/issues/<n>/sub_issues -q '.[] | select(.state=="open") | .number'`.
   Any still open (other than ones this PR closes) means `Part of #NN`: PR #76
-  closed #1, the guidance levels' parent, with four still open (#84). CI's
-  *no parent issue closed with sub-issues open* check fails such a PR.
+  closed #1, the guidance levels' parent, with four still open (#84). A PR for
+  a sub-issue says `Closes` only for that sub-issue, never for its parent.
 - Move the card to **`Your review`** (NOT `Your sign-off`, which is the
   pre-build gate) and post a Next-steps comment: *Next: review the PR and add
   `ready to merge`.* List any task still open after the merge in that comment,

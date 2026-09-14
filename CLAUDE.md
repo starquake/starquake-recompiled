@@ -57,8 +57,9 @@ answer given in chat is written back into the issue body before acting on it.
   in different states is split into sub-issues. A PR says `Closes #NN` only
   when it completes every task in the ticket's plan, maintainer steps included;
   otherwise `Part of #NN`, and the ticket stays open. **A parent issue with a
-  sub-issue still open is never closed by a PR**, whatever its own plan says:
-  CI's *no parent issue closed with sub-issues open* check fails it (#84).
+  sub-issue still open is never closed by a PR**, whatever its own plan says,
+  and a sub-issue's ticket or PR never mentions closing its parent: they say
+  `Part of #NN` (#76 closed #1 with four levels still open, #84).
 - **The board is the handoff baton**: the Status field of the "Starquake
   Recompiled" user Project
   (https://github.com/users/starquake/projects/5). Read and move it with
