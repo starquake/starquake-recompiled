@@ -205,12 +205,17 @@ impl Host for FrontHost {
         }
         {
             let mut guidance = self.shared.guidance.lock().unwrap();
-            guidance.set_teleporters(&game.teleporters_seen);
-            if game.scene == Scene::Play {
-                guidance.set_room(Some(game.room));
-                guidance.set_unvisited(&game.unvisited_rooms);
-            } else {
-                guidance.set_room(None);
+            match game.scene {
+                Scene::Play => {
+                    guidance.set_teleporters(&game.teleporters_seen);
+                    guidance.set_room(Some(game.room));
+                    guidance.set_unvisited(&game.unvisited_rooms);
+                }
+                Scene::GameOver => guidance.set_room(None),
+                // The game-over screens are done: the title screen starts
+                // from nothing, though the game keeps its lists until the
+                // next one starts.
+                Scene::Loading | Scene::Menu => guidance.forget_game(),
             }
         }
         let sound = game.frame_sound();

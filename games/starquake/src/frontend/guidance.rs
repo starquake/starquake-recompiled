@@ -81,8 +81,8 @@ pub struct Guidance {
     teleporters: Vec<SeenTeleporter>,
     /// Every room's openings, for the map (#2). Empty until they are found.
     openings: Vec<Openings>,
-    /// The rooms visited in the game being played, or the last one; empty
-    /// before the first.
+    /// The rooms visited in the game being played, or just ended; empty on
+    /// the title screen.
     visited: Vec<bool>,
     /// The room BLOB is in, while a game is being played.
     room: Option<u16>,
@@ -199,6 +199,17 @@ impl Guidance {
             && (0..ROOMS).all(|r| self.visited[r] != unvisited.contains(r as u16));
         if !same {
             self.visited = (0..ROOMS).map(|r| !unvisited.contains(r as u16)).collect();
+            self.version += 1;
+        }
+    }
+
+    /// Forgets the game that has ended, its map and its teleporter codes,
+    /// once its game-over screens are done: the title screen shows none.
+    pub fn forget_game(&mut self) {
+        if !self.teleporters.is_empty() || !self.visited.is_empty() || self.room.is_some() {
+            self.teleporters.clear();
+            self.visited.clear();
+            self.room = None;
             self.version += 1;
         }
     }
@@ -636,6 +647,18 @@ mod tests {
             "512 is where the game leaves it, not a room"
         );
         assert!(g.version() > before);
+
+        g.set_teleporters(&[SeenTeleporter {
+            room: 40,
+            code: *b"ABCDE",
+        }]);
+        g.forget_game();
+        assert_eq!(g.explored(), 0, "the title screen shows no map");
+        assert!(g.teleporters().is_empty(), "nor any codes");
+        assert_eq!(g.room(), None);
+        let forgotten = g.version();
+        g.forget_game();
+        assert_eq!(g.version(), forgotten, "nothing left to forget");
     }
 
     #[test]
