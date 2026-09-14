@@ -19,6 +19,7 @@ pub mod game;
 pub mod host;
 pub mod hud;
 pub mod layout;
+pub mod map;
 pub mod menu;
 pub mod music;
 pub mod newgame;

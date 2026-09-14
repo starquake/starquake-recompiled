@@ -56,8 +56,8 @@ if [ -f assets/starquake.tap ] && [ -f assets/48.rom ]; then
   status=$?
   echo "$out" | tail -40
   suites=$(printf '%s\n' "$out" | grep -c 'cases match')
-  if [ $status -ne 0 ] || [ "$suites" -lt 28 ]; then
-    failed+=("sq-verify ($suites/28 suites reported)")
+  if [ $status -ne 0 ] || [ "$suites" -lt 30 ]; then
+    failed+=("sq-verify ($suites/30 suites reported)")
   fi
 else
   echo "!!! sq-verify SKIPPED: assets/starquake.tap or assets/48.rom missing."

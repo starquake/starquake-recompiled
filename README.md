@@ -37,8 +37,9 @@ never by the game, so nothing in it can change what the game does (#1). Esc,
 or Select on a gamepad, opens a menu that pauses the game and sets a guidance
 level from 0 (the original) to 5, and training mode. The highest level used,
 and whether training mode was on, are shown beside the game-over and
-high-score screens. The menu and panel are in place; the levels themselves
-(#50, #2, #3, #51, #52) and training mode (#4) are separate tickets.
+high-score screens. Level 1 shows the codes of the teleporters seen (#50) and
+level 2 a map of the rooms visited, with their openings (#2); levels 3 to 5
+(#3, #51, #52) and training mode (#4) are separate tickets.
 
 ## Status
 
@@ -106,6 +107,11 @@ Each check runs a routine of the original in the reference interpreter and
 the rewritten code from the same starting state (thousands of states, from
 real play and from a tour of the map), then compares the resulting screen
 and game state byte for byte.
+
+One check is different, because what it checks is not in the original: *map
+openings* plays the rewrite on from the same states under random joystick
+input and checks that every edge BLOB leaves a room through is one the
+guidance map (#2) shows open.
 
 ### What the reference interpreter rests on
 
