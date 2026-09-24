@@ -191,6 +191,7 @@ impl Host for FrontHost {
         }
 
         self.frame_start = Some(Instant::now());
+        self.shared.guidance.lock().unwrap().set_paused(game.paused);
         if game.scene != self.scene {
             let mut guidance = self.shared.guidance.lock().unwrap();
             if game.scene == Scene::Play {

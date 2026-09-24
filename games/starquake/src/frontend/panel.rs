@@ -146,7 +146,50 @@ impl Panel {
 
         if guidance.picker_open() {
             self.picker(canvas, guidance);
+        } else if guidance.paused() {
+            self.paused(canvas);
         }
+    }
+
+    /// The notice while the game is held by its pause key (#89): the picture
+    /// dimmed, not the panel, and a card saying how to go on, as the game
+    /// itself goes on: at a move or fire once the pause key is let go.
+    fn paused(&mut self, canvas: &mut Canvas) {
+        canvas.shade(0.0, 0.0, PICTURE_W, WINDOW_H, DIM, 158);
+        let (w, h) = (440.0, 160.0);
+        let x = (PICTURE_W - w) / 2.0;
+        let y = (WINDOW_H - h) / 2.0;
+        canvas.round_rect(x, y, w, h, 12.0, BADGE_LINE);
+        canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0, 11.0, DIALOG);
+        self.fonts.text(
+            Some(canvas),
+            x + 28.0,
+            y + 22.0,
+            None,
+            1.0,
+            &[span("Paused", 24.0, Weight::SemiBold, TITLE)],
+        );
+        self.fonts.text(
+            Some(canvas),
+            x + 28.0,
+            y + 60.0,
+            None,
+            1.0,
+            &[span("Move or fire to go on.", 16.0, Weight::Regular, SOFT)],
+        );
+        let foot = y + h - 52.0;
+        canvas.round_rect(x + 1.0, foot, w - 2.0, 1.0, 0.0, RULE);
+        // The firing button is the left one on every pad; `(X)` draws it
+        // as the pad has it printed.
+        self.hints(
+            canvas,
+            x + 28.0,
+            foot + 16.0,
+            &[
+                (&["\u{2190}", "\u{2191}", "\u{2192}", "\u{2193}"], "move"),
+                (&["Alt", "/", "(X)"], "fire"),
+            ],
+        );
     }
 
     /// Level 2 (#2): the planet between `top` and `bottom`, a room to a
@@ -841,10 +884,22 @@ impl Panel {
     /// connected pad has it printed; returns its width. A and B keep their
     /// letters on an Xbox pad and a Nintendo one alike (what changes is the
     /// button under each); a PlayStation pad has the cross and the circle.
+    /// `X` is the left button, which fires: X on an Xbox pad, Y on a
+    /// Nintendo one, the square on a PlayStation one.
     fn pad_button(&mut self, canvas: &mut Canvas, x: f32, y: f32, button: &str) -> f32 {
         let d = 20.0;
         canvas.round_rect(x, y, d, d, d / 2.0, BUTTON_LINE);
         canvas.round_rect(x + 1.0, y + 1.0, d - 2.0, d - 2.0, d / 2.0 - 1.0, DIALOG);
+        if self.pad == Layout::PlayStation && button == "X" {
+            let (cx, cy, r) = (x + d / 2.0, y + d / 2.0, d * 0.22);
+            canvas.outline(cx - r, cy - r, 2.0 * r, 2.0 * r, 1.0, 1.8, None, HINT_KEY);
+            return d;
+        }
+        let button = if self.pad == Layout::Nintendo && button == "X" {
+            "Y"
+        } else {
+            button
+        };
         if self.pad == Layout::PlayStation && matches!(button, "A" | "B") {
             let (cx, cy, r) = (x + d / 2.0, y + d / 2.0, d * 0.24);
             if button == "A" {
@@ -1108,6 +1163,46 @@ mod render_check {
                 Scene::Play,
             ),
             ("picker", picker.clone(), Scene::Play),
+            (
+                "picker-playstation",
+                {
+                    let mut g = picker.clone();
+                    g.set_pad(Layout::PlayStation);
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                "paused",
+                {
+                    let mut g = Guidance::default();
+                    g.set_level(2);
+                    explore(&mut g, 3);
+                    g.set_paused(true);
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                "paused-nintendo",
+                {
+                    let mut g = Guidance::default();
+                    g.set_paused(true);
+                    g.set_pad(Layout::Nintendo);
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                "paused-playstation",
+                {
+                    let mut g = Guidance::default();
+                    g.set_paused(true);
+                    g.set_pad(Layout::PlayStation);
+                    g
+                },
+                Scene::Play,
+            ),
             (
                 "picker-training",
                 {

@@ -92,6 +92,8 @@ pub struct Guidance {
     pieces: RoomSet,
     /// The letters the connected pad carries, for the legends (#88).
     pad: Layout,
+    /// Whether the game is held by its pause key, for the notice (#89).
+    paused: bool,
     /// Bumped on every change, so a watcher can tell something changed.
     version: u64,
 }
@@ -117,6 +119,19 @@ impl Guidance {
 
     pub fn version(&self) -> u64 {
         self.version
+    }
+
+    /// Whether the game is held by its pause key.
+    pub fn paused(&self) -> bool {
+        self.paused
+    }
+
+    /// Notes whether the game is paused, redrawing when that changes.
+    pub fn set_paused(&mut self, paused: bool) {
+        if self.paused != paused {
+            self.paused = paused;
+            self.version += 1;
+        }
     }
 
     /// The letters the connected pad carries.

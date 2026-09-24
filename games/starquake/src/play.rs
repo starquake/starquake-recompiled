@@ -147,12 +147,14 @@ impl Game {
             let mut event = self.play_logic(&input);
             if event == FrameEvent::Pause {
                 // Wait for the pause key to be let go, then for any control.
+                self.paused = true;
                 while self.controls.pause_pressed(&self.input) {
                     self.sync(host);
                 }
                 while self.controls.read(&self.input) == 0 {
                     self.sync(host);
                 }
+                self.paused = false;
                 let input = self.input;
                 event = self.play_logic(&input);
             }
