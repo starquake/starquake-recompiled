@@ -8,7 +8,7 @@ use starquake::game::{Scene, SeenTeleporter};
 use starquake::map::{AROUND, COLS, ROWS};
 
 use super::gamepad::Layout;
-use super::guidance::{Choice, Guidance, Heroes, LEVELS, Setting};
+use super::guidance::{Choice, Guidance, Heroes, Hole, LEVELS, Setting};
 use super::text::{Canvas, Fonts, Rgb, Span, Weight};
 
 /// The window in logical pixels, and the picture's part of it.
@@ -16,6 +16,17 @@ pub const WINDOW_W: f32 = 1368.0;
 pub const WINDOW_H: f32 = 768.0;
 pub const PICTURE_W: f32 = 960.0;
 
+/// Where the core's square and the codes' rail start (#91).
+const BLOCK_TOP: f32 = 70.0;
+/// A game pixel in the core's square, a slot's tile, and the gap between.
+const CORE_PIXEL: f32 = 2.0;
+const CORE_TILE: f32 = 16.0 * CORE_PIXEL + 6.0;
+const CORE_GAP: f32 = 4.0;
+/// The core's square: three tiles and the gaps between them.
+const CORE_SQUARE: f32 = 3.0 * CORE_TILE + 2.0 * CORE_GAP;
+/// A delivered slot, and a slot's tile.
+const DELIVERED: Rgb = [0x3a, 0x3f, 0x4b];
+const TILE: Rgb = [0x1b, 0x1f, 0x29];
 const PANEL: Rgb = [0x0f, 0x11, 0x17];
 const RULE: Rgb = [0x22, 0x26, 0x2f];
 const LABEL: Rgb = [0x6d, 0x73, 0x85];
@@ -56,13 +67,14 @@ const PIECE_ROOM: Rgb = [0x15, 0x1a, 0x26];
 const PIECE_ROOM_LINE: Rgb = [0x6b, 0x75, 0x94];
 
 /// What each level adds, for the picker.
-const ADDS: [&str; 6] = [
+const ADDS: [&str; 7] = [
     "The original game, no help.",
-    "The codes of the teleporters you have seen.",
-    "A map of the rooms you have visited.",
-    "The missing core pieces, marked on the map.",
-    "Not built yet: an arrow along routes you know.",
-    "Not built yet: the arrow routed through the whole map.",
+    "The codes you have been shown, and the core's nine slots.",
+    "A map of the rooms you have walked through.",
+    "Core pieces still needed, in the rooms you have walked through.",
+    "And in the rooms you have not.",
+    "Not built yet: routes to a piece and to the core.",
+    "Not built yet: every code, and the whole planet.",
 ];
 
 pub struct Panel {
@@ -91,45 +103,72 @@ impl Panel {
         if scene == Scene::GameOver {
             self.score_note(canvas, left, guidance);
         } else {
+            // The level in the corner opposite the label, with its name
+            // under it (#91).
             self.spaced(canvas, left, 26.0, "GUIDANCE");
             let level = guidance.level();
             let title = if level == 0 {
-                "Off".to_string()
+                "OFF".to_string()
             } else {
-                format!("Level {level} \u{b7} {}", LEVELS[level as usize])
+                format!("LEVEL {level}")
             };
-            self.fonts.text(
-                Some(canvas),
-                left,
-                44.0,
-                Some(width - 48.0),
-                1.2,
-                &[span(&title, 19.0, Weight::SemiBold, BRIGHT)],
-            );
-            self.badge(canvas, WINDOW_W - 24.0, 28.0, "Esc");
-            let below = if level >= 1 {
-                self.teleporters(canvas, left, width - 48.0, guidance.teleporters())
-            } else {
-                WINDOW_H
-            };
-            if level >= 2 {
-                let explored = format!("explored {} of {} rooms", guidance.explored(), COLS * ROWS);
-                self.fonts.text(
-                    Some(canvas),
-                    left,
-                    72.0,
-                    None,
-                    1.0,
-                    &[span(&explored, 12.0, Weight::Regular, LABEL)],
-                );
-                self.map(canvas, guidance, level >= 3, 96.0, below - 16.0);
-            } else {
-                let lines = if level == 0 {
-                    ["No guidance.", "Press Esc or Select to choose a level."]
+            let right = WINDOW_W - 24.0;
+            let title_w = self.spaced_width(&title);
+            self.spaced_colour(canvas, right - title_w, 26.0, &title, 11.0, BRIGHT);
+            if level >= 1 {
+                let name = [span(
+                    LEVELS[usize::from(level)],
+                    12.0,
+                    Weight::Regular,
+                    SOFT,
+                )];
+                let w = self.fonts.measure(&name);
+                self.fonts
+                    .text(Some(canvas), right - w, 42.0, None, 1.0, &name);
+            }
+            // Everything has one place, the same at every level it shows at
+            // (#91): the core's square at the top left, the codes in a rail
+            // at the right, the map under the square to the panel's bottom.
+            if level >= 1 {
+                let rail_w = self.codes_rail(canvas, right, BLOCK_TOP, guidance.teleporters());
+                if !guidance.core().is_empty() {
+                    self.spaced(canvas, left, BLOCK_TOP, "CORE");
+                    self.core_grid(canvas, guidance.core(), left, BLOCK_TOP + 22.0);
+                }
+                let foot = BLOCK_TOP + 22.0 + CORE_SQUARE;
+                let map_w = right - rail_w - 16.0 - left;
+                if level >= 2 {
+                    self.map(
+                        canvas,
+                        guidance,
+                        level,
+                        left,
+                        foot + 16.0,
+                        WINDOW_H - 24.0,
+                        map_w,
+                    );
                 } else {
-                    ["The map appears at level 2.", ""]
-                };
-                for (i, line) in lines.into_iter().enumerate() {
+                    let spans = [span(
+                        "The map appears at level 2.",
+                        13.0,
+                        Weight::Regular,
+                        QUIET,
+                    )];
+                    let w = self.fonts.measure(&spans);
+                    self.fonts.text(
+                        Some(canvas),
+                        left + (map_w - w) / 2.0,
+                        420.0,
+                        None,
+                        1.0,
+                        &spans,
+                    );
+                }
+            } else {
+                for (i, line) in ["No guidance.", "Press Esc or Select to choose a level."]
+                    .into_iter()
+                    .enumerate()
+                {
                     let spans = [span(line, 14.0, Weight::Regular, QUIET)];
                     let w = self.fonts.measure(&spans);
                     self.fonts.text(
@@ -196,23 +235,30 @@ impl Panel {
     /// square. Every room is a faint dot; visited rooms join into floor, with
     /// a line along each edge that has no opening, so an opening is a gap in
     /// the wall. The teleporters seen are diamonds and the room BLOB is in
-    /// is marked. With `pieces` (level 3, #3), so is every room holding a
-    /// core piece still needed, and one not visited is outlined so the mark
-    /// has somewhere to sit.
+    /// is marked. From level 3 (#91), so is every room you have walked
+    /// through holding a core piece still needed; from level 4 every such
+    /// room, one not visited outlined so the mark has somewhere to sit. The
+    /// map fills `width` from `left`, between `top` and `bottom`.
+    #[allow(clippy::too_many_arguments, reason = "the level, and where it goes")]
     fn map(
         &mut self,
         canvas: &mut Canvas,
         guidance: &Guidance,
-        pieces: bool,
+        level: u8,
+        left: f32,
         top: f32,
         bottom: f32,
+        width: f32,
     ) {
         let (cols, rows) = (f32::from(COLS), f32::from(ROWS));
-        // 18 pixels a room as in the mockup, smaller when the teleporter codes
-        // take more than one row.
-        let pitch = ((bottom - top) / rows).floor().min(18.0);
+        // At most 18 pixels a room, as in the mockup.
+        let pitch = ((bottom - top) / rows).min(width / cols).floor().min(18.0);
         let unit = pitch / 18.0;
-        let x0 = (PICTURE_W + (WINDOW_W - PICTURE_W - pitch * cols) / 2.0).floor();
+        let x0 = (left + (width - pitch * cols) / 2.0).floor();
+        // Level 3 shows what you could have seen; level 4 what you could not.
+        let piece = |room: u16| {
+            level >= 3 && guidance.piece(room) && (level >= 4 || guidance.visited(room))
+        };
         let rooms = COLS * ROWS;
         let at = |room: u16| {
             (
@@ -225,7 +271,7 @@ impl Panel {
             let (x, y) = at(room);
             if guidance.visited(room) {
                 canvas.round_rect(x, y, pitch, pitch, 0.0, FLOOR);
-            } else if pieces && guidance.piece(room) {
+            } else if piece(room) {
                 let (inset, size) = (2.5 * unit, pitch - 5.0 * unit);
                 let (x, y) = (x + inset, y + inset);
                 canvas.round_rect(x, y, size, size, 2.0 * unit, PIECE_ROOM);
@@ -288,7 +334,7 @@ impl Panel {
             canvas.round_rect(x + inner, y + inner, size(inner), size(inner), unit, FLOOR);
         }
         // Over the room BLOB is in, so a piece there still shows.
-        for room in (0..rooms).filter(|&r| pieces && guidance.piece(r)) {
+        for room in (0..rooms).filter(|&r| piece(r)) {
             let (x, y) = at(room);
             let r = 4.5 * unit;
             let (cx, cy) = (x + pitch / 2.0, y + pitch / 2.0);
@@ -296,75 +342,95 @@ impl Panel {
         }
     }
 
-    /// Level 1 (#50): the codes of the teleporters seen this game, along the
-    /// bottom of the panel, in the order they were seen. Returns where the
-    /// block starts, for what is drawn above it.
-    fn teleporters(
+    /// Level 1 (#50, #91): the codes of the teleporters seen this game in a
+    /// rail at the panel's right, one to a line under TELEPORTS, in the
+    /// order they were seen, with "None yet" under the heading until there
+    /// is one. Returns the rail's width.
+    fn codes_rail(
         &mut self,
         canvas: &mut Canvas,
-        left: f32,
-        width: f32,
+        right: f32,
+        top: f32,
         seen: &[SeenTeleporter],
     ) -> f32 {
         let (chip_h, gap) = (26.0, 8.0);
-        // Lay the chips out in rows first, so the block can sit on the
-        // panel's bottom edge however many rows there are.
-        let mut rows: Vec<Vec<(String, f32)>> = vec![Vec::new()];
-        let mut used = 0.0;
+        let chip_w = self
+            .fonts
+            .measure(&[span("MMMMM", 14.0, Weight::SemiBold, CODE)])
+            + 16.0;
+        let width = chip_w.max(self.spaced_width("TELEPORTS"));
+        let heading = self.spaced_width("TELEPORTS");
+        self.spaced(canvas, right - heading, top, "TELEPORTS");
+        let mut y = top + 22.0;
+        if seen.is_empty() {
+            let none = [span("None yet", 13.0, Weight::Regular, QUIET)];
+            let w = self.fonts.measure(&none);
+            self.fonts
+                .text(Some(canvas), right - w, y, None, 1.0, &none);
+        }
         for teleporter in seen {
             let text = String::from_utf8_lossy(&teleporter.code).into_owned();
-            let w = self
-                .fonts
-                .measure(&[span(&text, 14.0, Weight::SemiBold, CODE)])
-                + 16.0;
-            if used + w > width && !rows[rows.len() - 1].is_empty() {
-                rows.push(Vec::new());
-                used = 0.0;
-            }
-            used += w + gap;
-            rows.last_mut().unwrap().push((text, w));
-        }
-        let lines = if seen.is_empty() {
-            1.0
-        } else {
-            rows.len() as f32
-        };
-        let top = WINDOW_H - 24.0 - lines * (chip_h + gap) + gap - 22.0;
-        self.spaced(canvas, left, top, "TELEPORTERS SEEN");
-        if seen.is_empty() {
+            let x = right - chip_w;
+            canvas.round_rect(x, y, chip_w, chip_h, 4.0, CODE_FILL);
+            let spans = [span(&text, 14.0, Weight::SemiBold, CODE)];
+            let w = self.fonts.measure(&spans);
             self.fonts.text(
                 Some(canvas),
-                left,
-                top + 24.0,
-                Some(width),
+                x + (chip_w - w) / 2.0,
+                y + 5.0,
+                None,
                 1.0,
-                &[span(
-                    "None yet: a code shows once you enter its booth.",
-                    13.0,
-                    Weight::Regular,
-                    QUIET,
-                )],
+                &spans,
             );
-            return top;
-        }
-        let mut y = top + 22.0;
-        for row in rows {
-            let mut x = left;
-            for (text, w) in row {
-                canvas.round_rect(x, y, w, chip_h, 4.0, CODE_FILL);
-                self.fonts.text(
-                    Some(canvas),
-                    x + 8.0,
-                    y + 5.0,
-                    None,
-                    1.0,
-                    &[span(&text, 14.0, Weight::SemiBold, CODE)],
-                );
-                x += w + gap;
-            }
             y += chip_h + gap;
         }
-        top
+        width
+    }
+
+    /// Level 1 (#91): the core's nine slots as a square of three by three
+    /// at the panel's top left, in the order the core holds them, each in
+    /// the game's own graphic: white while still wanted, dimmed once
+    /// delivered, outlined while its piece is carried.
+    fn core_grid(&mut self, canvas: &mut Canvas, core: &[Hole], left: f32, top: f32) {
+        let px = CORE_PIXEL;
+        for (i, hole) in core.iter().enumerate() {
+            let x = left + (i % 3) as f32 * (CORE_TILE + CORE_GAP);
+            let y = top + (i / 3) as f32 * (CORE_TILE + CORE_GAP);
+            canvas.round_rect(x, y, CORE_TILE, CORE_TILE, 3.0, TILE);
+            if hole.carried {
+                canvas.outline(x, y, CORE_TILE, CORE_TILE, 3.0, 2.0, None, HERE);
+            }
+            let colour = if hole.open { HERE } else { DELIVERED };
+            let inset = (CORE_TILE - 16.0 * px) / 2.0;
+            // Cells top-left, top-right, bottom-left, bottom-right, eight
+            // rows of eight each.
+            for (cell, rows) in hole.graphic.chunks(8).enumerate() {
+                let (cx, cy) = ((cell % 2) as f32 * 8.0, (cell / 2) as f32 * 8.0);
+                for (r, bits) in rows.iter().enumerate() {
+                    for c in 0..8 {
+                        if bits & (0x80 >> c) != 0 {
+                            canvas.round_rect(
+                                x + inset + (cx + c as f32) * px,
+                                y + inset + (cy + r as f32) * px,
+                                px,
+                                px,
+                                0.0,
+                                colour,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// How wide a spaced label is.
+    fn spaced_width(&mut self, label: &str) -> f32 {
+        let mut w = 0.0;
+        for c in label.chars() {
+            w += self.fonts.advance(c, 11.0, Weight::SemiBold) + 11.0 * 0.14;
+        }
+        w
     }
 
     fn score_note(&mut self, canvas: &mut Canvas, left: f32, guidance: &Guidance) {
@@ -517,7 +583,15 @@ impl Panel {
         let top = y + 56.0;
         let focused = focus == Setting::Level;
         self.setting_box(canvas, rx, top, rw, 184.0, focused, "GUIDANCE LEVEL");
-        self.arrows(canvas, rx, rw, top + 69.0, focused, level > 0, level < 5);
+        self.arrows(
+            canvas,
+            rx,
+            rw,
+            top + 69.0,
+            focused,
+            level > 0,
+            usize::from(level) < LEVELS.len() - 1,
+        );
         let value = if focused { TITLE } else { VALUE_DIM };
         self.centred_in(
             canvas,
@@ -534,8 +608,10 @@ impl Panel {
             &[span(LEVELS[level as usize], 17.0, Weight::SemiBold, value)],
         );
         let (nx, nw, gap) = (rx + 16.0, rw - 32.0, 6.0);
-        let step = (nw - 4.0 * gap) / 5.0;
-        for i in 1..=5u8 {
+        // A notch a level above 0.
+        let notches = (LEVELS.len() - 1) as u8;
+        let step = (nw - f32::from(notches - 1) * gap) / f32::from(notches);
+        for i in 1..=notches {
             let colour = match (i <= level, focused) {
                 (true, true) => ACCENT,
                 (true, false) => ACCENT_DIM,
@@ -981,17 +1057,6 @@ impl Panel {
         w
     }
 
-    /// A small key name in an outline, right-aligned to `right`.
-    fn badge(&mut self, canvas: &mut Canvas, right: f32, y: f32, key: &str) {
-        let spans = [span(key, 11.0, Weight::SemiBold, LABEL)];
-        let w = self.fonts.measure(&spans) + 14.0;
-        let x = right - w;
-        canvas.round_rect(x, y - 1.0, w, 19.0, 4.0, BADGE_LINE);
-        canvas.round_rect(x + 1.0, y, w - 2.0, 17.0, 3.0, PANEL);
-        self.fonts
-            .text(Some(canvas), x + 7.0, y + 1.0, None, 1.0, &spans);
-    }
-
     /// A small label with its letters spread out.
     fn spaced(&mut self, canvas: &mut Canvas, x: f32, y: f32, text: &str) {
         self.spaced_colour(canvas, x, y, text, 11.0, LABEL);
@@ -1145,6 +1210,26 @@ mod render_check {
         g.set_unvisited(&unvisited);
         g.set_room(Some(row * COLS + col));
         g.set_teleporters(&seen);
+        // A core of made-up shapes, not the game's: six still wanted, one of
+        // them carried, and three delivered.
+        let core: Vec<Hole> = (0..9u8)
+            .map(|i| {
+                let mut graphic = [0u8; 32];
+                for (k, row) in graphic.iter_mut().enumerate() {
+                    *row = match (k % 8, k / 8) {
+                        (0 | 7, _) => 0xFF,
+                        (_, 0 | 2) => 0x80 | (1 << (i % 7)),
+                        _ => 0x01 | (0x80 >> (i % 7)),
+                    };
+                }
+                Hole {
+                    graphic,
+                    open: i < 6,
+                    carried: i == 2,
+                }
+            })
+            .collect();
+        g.set_core(&core);
     }
 
     /// Draws the panel in a few states, over a grey stand-in for the
@@ -1182,7 +1267,16 @@ mod render_check {
             ("level0", Guidance::default(), Scene::Play),
             ("level2", level2, Scene::Play),
             ("level2-many-codes", crowded, Scene::Play),
-            ("level3", level3, Scene::Play),
+            ("level3", level3.clone(), Scene::Play),
+            (
+                "level4",
+                {
+                    let mut g = level3;
+                    g.set_level(4);
+                    g
+                },
+                Scene::Play,
+            ),
             (
                 "level1-codes",
                 {

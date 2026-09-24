@@ -13,14 +13,18 @@ use starquake::pickups::RoomSet;
 /// The number of rooms on the planet.
 const ROOMS: usize = (starquake::map::COLS * starquake::map::ROWS) as usize;
 
-/// The levels, each including the ones before it (#1).
-pub const LEVELS: [&str; 6] = [
+/// The levels, each including the ones before it (#1), as ZX Sidekick
+/// re-cut them after playing (#91). Levels 0 to 3 show only what you could
+/// have written down yourself; 4 and up tell you what you could not have
+/// known.
+pub const LEVELS: [&str; 7] = [
     "Off",
-    "Teleporter codes",
-    "Map",
-    "Missing pieces",
-    "Arrow, known routes",
-    "Arrow, whole map",
+    "Codes and the core",
+    "The map you have walked",
+    "What you have seen",
+    "What you have not",
+    "Routes",
+    "Everything",
 ];
 
 /// The CORE OF HEROES table as the panel lists it beside the game's own
@@ -32,6 +36,16 @@ pub struct Heroes {
     pub names: [[u8; 3]; 8],
     pub levels: [Option<u8>; 8],
     pub this_game: Option<usize>,
+}
+
+/// One of the core's nine slots, for the square at the panel's top left
+/// (#91): the piece it takes, in the game's own graphic, whether it is still
+/// wanted, and whether that piece is being carried.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Hole {
+    pub graphic: [u8; 32],
+    pub open: bool,
+    pub carried: bool,
 }
 
 /// How much help one game has had: the highest level in use at any point,
@@ -107,6 +121,9 @@ pub struct Guidance {
     paused: bool,
     /// The high-score table, while the CORE OF HEROES screen shows it.
     heroes: Option<Heroes>,
+    /// The core's nine slots in the game being played or just ended; empty
+    /// on the title screen.
+    core: Vec<Hole>,
     /// Bumped on every change, so a watcher can tell something changed.
     version: u64,
 }
@@ -172,6 +189,18 @@ impl Guidance {
         }
     }
 
+    /// The core's nine slots, or none before a game.
+    pub fn core(&self) -> &[Hole] {
+        &self.core
+    }
+
+    pub fn set_core(&mut self, core: &[Hole]) {
+        if self.core != core {
+            self.core = core.to_vec();
+            self.version += 1;
+        }
+    }
+
     pub fn focus(&self) -> Setting {
         self.focus
     }
@@ -233,6 +262,7 @@ impl Guidance {
     }
 
     /// How many rooms have been visited.
+    #[cfg(test)]
     pub fn explored(&self) -> usize {
         self.visited.iter().filter(|&&v| v).count()
     }
@@ -284,11 +314,13 @@ impl Guidance {
             || !self.visited.is_empty()
             || self.room.is_some()
             || self.pieces != empty
+            || !self.core.is_empty()
         {
             self.teleporters.clear();
             self.visited.clear();
             self.room = None;
             self.pieces = empty;
+            self.core.clear();
             self.version += 1;
         }
     }
@@ -623,7 +655,7 @@ mod tests {
         for _ in 0..10 {
             g.change(true);
         }
-        assert_eq!(g.level(), 5);
+        assert_eq!(g.level(), 6, "the re-cut's top level, Everything");
     }
 
     #[test]

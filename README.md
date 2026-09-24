@@ -35,12 +35,23 @@ release archive carries besides the program.
 Beside the picture is a panel for optional help, drawn by the program and
 never by the game, so nothing in it can change what the game does (#1). Esc,
 or Select on a gamepad, opens a menu that pauses the game and sets a guidance
-level from 0 (the original) to 5, and training mode. The highest level used,
+level from 0 (the original) to 6, and training mode. The highest level used,
 and whether training mode was on, are shown beside the game-over and
-high-score screens. Level 1 shows the codes of the teleporters seen (#50) and
-level 2 a map of the rooms visited, with their openings (#2), and level 3
-marks the rooms holding the core pieces still needed (#3); levels 4 and 5
-(#51, #52) and training mode (#4) are separate tickets.
+high-score screens. The levels are ZX Sidekick's re-cut (#91), each adding
+to the ones below it:
+
+| level | | adds |
+|:-:|---|---|
+| 1 | Codes and the core | the teleporter codes seen (#50), in a rail at the right, and the core's nine slots in the game's own pictures at the top left |
+| 2 | The map you have walked | a map of the rooms visited, with their openings (#2) |
+| 3 | What you have seen | the core pieces still needed, in rooms walked through (#3) |
+| 4 | What you have not | the same in rooms not reached |
+| 5 | Routes | routes to a piece and to the core (#52) |
+| 6 | Everything | every code and the whole planet (#95) |
+
+Levels 0 to 3 show only what you could have written down yourself; 4 and up
+tell you things you could not have known. Levels 5 and 6 and training mode
+(#4) are still to come.
 
 ## Status
 
