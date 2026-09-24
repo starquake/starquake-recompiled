@@ -4,7 +4,7 @@
 //! Everything is drawn in logical pixels of the whole window: the picture
 //! takes the left `PICTURE_W`, the panel the rest.
 
-use starquake::game::{Scene, SeenTeleporter};
+use starquake::game::Scene;
 use starquake::map::{COLS, ROWS};
 
 use super::gamepad::Layout;
@@ -17,6 +17,10 @@ pub const WINDOW_W: f32 = 1368.0;
 pub const WINDOW_H: f32 = 768.0;
 pub const PICTURE_W: f32 = 960.0;
 
+/// A game pixel in a door's key code card in the codes' rail (#94), and a
+/// card not yet answered by what is carried.
+const CARD_PIXEL: f32 = 1.5;
+const CODE_DIM: Rgb = [0x3e, 0x6a, 0x66];
 /// Where the core's square and the codes' rail start (#91).
 const BLOCK_TOP: f32 = 70.0;
 /// A game pixel in the core's square, a slot's tile, and the gap between.
@@ -138,7 +142,7 @@ impl Panel {
             // (#91): the core's square at the top left, the codes in a rail
             // at the right, the map under the square to the panel's bottom.
             if level >= 1 {
-                let rail_w = self.codes_rail(canvas, right, BLOCK_TOP, guidance.teleporters());
+                let rail_w = self.codes_rail(canvas, right, BLOCK_TOP, guidance);
                 if !guidance.core().is_empty() {
                     self.spaced(canvas, left, BLOCK_TOP, "CORE");
                     self.core_grid(canvas, guidance.core(), left, BLOCK_TOP + 22.0);
@@ -423,25 +427,61 @@ impl Panel {
                 }
             }
         }
+        // Each security door whose code is in the rail, numbered where it
+        // stands in its room with the number beside its code (#94), drawn
+        // last with a dark rim so nothing hides it.
+        for (i, door) in guidance.doors().iter().enumerate() {
+            let Some((row, col)) = guidance
+                .openings()
+                .get(usize::from(door.room))
+                .and_then(|o| o.door)
+            else {
+                continue;
+            };
+            let (x, y) = at(door.room);
+            // The middle of the door's tile, four cells by three.
+            let cx = x + (f32::from(col) + 2.0) / 32.0 * pitch;
+            let cy = y + (f32::from(row) + 1.5) / 18.0 * pitch;
+            let r = 6.5;
+            canvas.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, ITEM_EDGE);
+            canvas.round_rect(
+                cx - r + 1.0,
+                cy - r + 1.0,
+                2.0 * r - 2.0,
+                2.0 * r - 2.0,
+                r - 1.0,
+                CODE_FILL,
+            );
+            let label = (i + 1).to_string();
+            let spans = [span(&label, 10.0, Weight::SemiBold, CODE)];
+            let w = self.fonts.measure(&spans);
+            self.fonts
+                .text(Some(canvas), cx - w / 2.0, cy - 7.0, None, 1.0, &spans);
+        }
     }
 
-    /// Level 1 (#50, #91): the codes of the teleporters seen this game in a
-    /// rail at the panel's right, one to a line under TELEPORTS, in the
-    /// order they were seen, with "None yet" under the heading until there
-    /// is one. Returns the rail's width.
+    /// Level 1 (#50, #91, #94): the codes shown this game in a rail at the
+    /// panel's right: the teleporters' one to a line under TELEPORTS, then
+    /// under DOORS each security door's three key code cards in the game's
+    /// own graphics, numbered as the map numbers the door, each card dim
+    /// until something carried answers it. "None yet" stands under a
+    /// heading with nothing. Returns the rail's width.
     fn codes_rail(
         &mut self,
         canvas: &mut Canvas,
         right: f32,
         top: f32,
-        seen: &[SeenTeleporter],
+        guidance: &Guidance,
     ) -> f32 {
+        let seen = guidance.teleporters();
         let (chip_h, gap) = (26.0, 8.0);
         let chip_w = self
             .fonts
             .measure(&[span("MMMMM", 14.0, Weight::SemiBold, CODE)])
             + 16.0;
-        let width = chip_w.max(self.spaced_width("TELEPORTS"));
+        let card = 16.0 * CARD_PIXEL + 4.0;
+        let door_w = 14.0 + 3.0 * card + 2.0 * 3.0;
+        let width = chip_w.max(door_w).max(self.spaced_width("TELEPORTS"));
         let heading = self.spaced_width("TELEPORTS");
         self.spaced(canvas, right - heading, top, "TELEPORTS");
         let mut y = top + 22.0;
@@ -466,6 +506,32 @@ impl Panel {
                 &spans,
             );
             y += chip_h + gap;
+        }
+        if seen.is_empty() {
+            y += 22.0;
+        }
+        y += 14.0;
+        let heading = self.spaced_width("DOORS");
+        self.spaced(canvas, right - heading, y, "DOORS");
+        y += 22.0;
+        if guidance.doors().is_empty() {
+            let none = [span("None yet", 13.0, Weight::Regular, QUIET)];
+            let w = self.fonts.measure(&none);
+            self.fonts
+                .text(Some(canvas), right - w, y, None, 1.0, &none);
+        }
+        for (i, door) in guidance.doors().iter().enumerate() {
+            let label = (i + 1).to_string();
+            let number = [span(&label, 12.0, Weight::SemiBold, SOFT)];
+            self.fonts
+                .text(Some(canvas), right - door_w, y + 7.0, None, 1.0, &number);
+            for (k, graphic) in door.graphics.iter().enumerate() {
+                let x = right - 3.0 * card - 2.0 * 3.0 + k as f32 * (card + 3.0);
+                canvas.round_rect(x, y, card, card, 3.0, CODE_FILL);
+                let colour = if door.answered[k] { CODE } else { CODE_DIM };
+                draw_graphic(canvas, graphic, x + 2.0, y + 2.0, CARD_PIXEL, colour);
+            }
+            y += card + 6.0;
         }
         width
     }
@@ -1165,6 +1231,28 @@ impl Panel {
     }
 }
 
+/// A game graphic, 16 by 16 in cells top-left, top-right, bottom-left and
+/// bottom-right, its set pixels `px` square from (`x`, `y`).
+fn draw_graphic(canvas: &mut Canvas, graphic: &[u8; 32], x: f32, y: f32, px: f32, colour: Rgb) {
+    for (cell, rows) in graphic.chunks(8).enumerate() {
+        let (cx, cy) = ((cell % 2) as f32 * 8.0, (cell / 2) as f32 * 8.0);
+        for (r, bits) in rows.iter().enumerate() {
+            for c in 0..8 {
+                if bits & (0x80 >> c) != 0 {
+                    canvas.round_rect(
+                        x + (cx + c as f32) * px,
+                        y + (cy + r as f32) * px,
+                        px,
+                        px,
+                        0.0,
+                        colour,
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// A straight line `width` wide from `a` to `b`, with square ends, dashed
 /// when `dash` gives the length of a dash and of a gap.
 #[allow(
@@ -1217,7 +1305,9 @@ fn span(text: &str, size: f32, weight: Weight, colour: Rgb) -> Span<'_> {
 
 #[cfg(test)]
 mod render_check {
+    use super::super::guidance::DoorCode;
     use super::*;
+    use starquake::game::SeenTeleporter;
     use starquake::map::{Divides, Openings};
     use starquake::pickups::RoomSet;
 
@@ -1350,6 +1440,26 @@ mod render_check {
             });
         }
         g.set_items(items);
+        // Two made-up doors in rooms walked through, their cards numbered
+        // shapes, one answered.
+        let mut openings = g.openings().to_vec();
+        let doors: Vec<DoorCode> = walked
+            .iter()
+            .skip(4)
+            .step_by(17)
+            .take(2)
+            .enumerate()
+            .map(|(i, &room)| {
+                openings[usize::from(room)].door = Some((7, 14));
+                DoorCode {
+                    room,
+                    graphics: [diamond; 3],
+                    answered: [i == 0, false, i == 0],
+                }
+            })
+            .collect();
+        g.set_openings(openings);
+        g.set_doors(doors);
     }
 
     /// Draws the panel in a few states, over a grey stand-in for the

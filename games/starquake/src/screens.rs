@@ -32,6 +32,65 @@ const BLANK: u16 = 0xDF40;
 const MASTER_KEY: u8 = 0x0F;
 const WILDCARD: u8 = 0x0E;
 
+/// Where a security door's screen draws its code, which the code is made
+/// from along with the game's seed and the room.
+const DOOR_CODE_AT: (u8, u8) = (0x11, 0x0B);
+
+/// The key code cards a code asks for, by graphic (9 to 13), made from the
+/// game's `seed`, the `room` and where the screen draws the code
+/// (`row`, `col`). A door's screen asks for all three, a pyramid's for the
+/// first two.
+pub fn code_items(seed: u16, room: u16, row: u8, col: u8) -> [u8; 3] {
+    let [seed_lo, seed_hi] = seed.to_le_bytes();
+    let first = row ^ seed_hi ^ room as u8;
+    let second = first ^ seed_lo ^ col;
+    let third = second ^ seed_hi ^ row;
+    [first, second, third].map(|a| (a & 0x3F) % 5 + 9)
+}
+
+/// The inventory slot that answers a code's card `wanted`, among `slots`
+/// (the carried items' graphics) not yet `used` (a bit a slot, 8 for the
+/// first): the access card, which answers any and stays, or that card, or
+/// failing both a "?" card. Says whether the slot is used up.
+pub fn match_slot(wanted: u8, slots: [u8; 4], used: u8) -> Option<(usize, bool)> {
+    let free = |s: usize| used & (8 >> s) == 0;
+    (0..4)
+        .find_map(|s| match slots[s] {
+            _ if !free(s) => None,
+            MASTER_KEY => Some((s, false)),
+            g if g == wanted => Some((s, true)),
+            _ => None,
+        })
+        .or_else(|| {
+            (0..4)
+                .find(|&s| free(s) && slots[s] == WILDCARD)
+                .map(|s| (s, true))
+        })
+}
+
+/// Which of a code's cards `wanted` the carried items `slots` answer, as a
+/// door's screen checks them in turn.
+pub fn answered(wanted: &[u8], slots: [u8; 4]) -> Vec<bool> {
+    let mut used = 0u8;
+    wanted
+        .iter()
+        .map(|&w| {
+            let hit = match_slot(w, slots, used);
+            if let Some((slot, true)) = hit {
+                used |= 8 >> slot;
+            }
+            hit.is_some()
+        })
+        .collect()
+}
+
+impl Game {
+    /// The key code cards the door in `room` asks for this game (#94).
+    pub fn door_code(&self, room: u16) -> [u8; 3] {
+        code_items(self.seed, room, DOOR_CODE_AT.0, DOOR_CODE_AT.1)
+    }
+}
+
 impl Game {
     /// Prints an original text from its address.
     pub(crate) fn print_text(&mut self, addr: usize) {
@@ -106,16 +165,11 @@ impl Game {
         self.code_pos = (col, row);
         self.code = [3; 6];
         self.pause_frames(host, 15);
-        let [seed_lo, seed_hi] = self.seed.to_le_bytes();
-        let room_lo = self.room as u8;
-        let a = row ^ seed_hi ^ room_lo;
-        self.code[0] = a;
-        let a = a ^ seed_lo ^ col;
-        self.code[2] = a;
-        let a = a ^ seed_hi ^ row;
-        self.code[4] = a;
-        for i in 0..3 {
-            self.code[i * 2] = (self.code[i * 2] & 0x3F) % 5 + 9;
+        for (i, card) in code_items(self.seed, self.room, row, col)
+            .into_iter()
+            .enumerate()
+        {
+            self.code[i * 2] = card;
         }
         self.draw_code();
 
@@ -133,24 +187,8 @@ impl Game {
             self.draw_code();
 
             let wanted = self.code[item * 2];
-            let slots = self.status.inventory;
-            let matched = (0..4).find_map(|s| {
-                let bit = 8u8 >> s;
-                if used & bit != 0 {
-                    return None;
-                }
-                match slots[s].0 {
-                    MASTER_KEY => Some((s, false)),
-                    g if g == wanted => Some((s, true)),
-                    _ => None,
-                }
-            });
-            let matched = matched.or_else(|| {
-                (0..4)
-                    .find(|&s| used & (8 >> s) == 0 && slots[s].0 == WILDCARD)
-                    .map(|s| (s, true))
-            });
-            if let Some((slot, consume)) = matched {
+            let slots = self.status.inventory.map(|(g, _)| g);
+            if let Some((slot, consume)) = match_slot(wanted, slots, used) {
                 if consume {
                     used |= 8 >> slot;
                 }
@@ -199,7 +237,14 @@ impl Game {
         self.draw_tile(0x25, 0x0A, 0x0C);
         self.draw_tile(0x26, 0x0A, 0x10);
         self.request_effect(8);
-        if self.code_check(host, 3, 0x11, 0x0B) {
+        let cards = self.door_code(self.room);
+        if !self.doors_seen.iter().any(|d| d.room == self.room) {
+            self.doors_seen.push(crate::game::SeenDoor {
+                room: self.room,
+                cards,
+            });
+        }
+        if self.code_check(host, 3, DOOR_CODE_AT.0, DOOR_CODE_AT.1) {
             self.request_effect(0x0A);
             let b = &mut self.entities[0].0;
             b[field::X] = if b[crate::blob::b::INPUT] & 1 != 0 {
@@ -352,6 +397,46 @@ impl Game {
             Modal::SecurityDoor => self.security_door(host),
             Modal::Cheops => self.cheops(host),
             Modal::TeleportBooth => self.teleport_booth(host),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_card_answers_one_slot_and_the_access_card_every_one() {
+        let (two, four, eight) = (11, 12, 13);
+        let none = [0; 4];
+        assert_eq!(answered(&[two, four, eight], none), [false; 3]);
+        assert_eq!(
+            answered(&[two, four, eight], [four, 0, 0, 0]),
+            [false, true, false]
+        );
+        assert_eq!(
+            answered(&[two, two, eight], [two, 0, 0, 0]),
+            [true, false, false],
+            "one card answers one slot"
+        );
+        assert_eq!(
+            answered(&[two, four, eight], [MASTER_KEY, 0, 0, 0]),
+            [true; 3]
+        );
+        assert_eq!(
+            answered(&[two, four, eight], [WILDCARD, four, 0, 0]),
+            [true, true, false],
+            "the ? card stands in for the first card nothing else answers"
+        );
+    }
+
+    #[test]
+    fn a_code_is_made_of_numbered_cards() {
+        for seed in [0, 0x1234, 0xFFFF] {
+            for room in [176, 210, 429] {
+                let cards = code_items(seed, room, DOOR_CODE_AT.0, DOOR_CODE_AT.1);
+                assert!(cards.iter().all(|c| (9..=13).contains(c)), "{cards:?}");
+            }
         }
     }
 }

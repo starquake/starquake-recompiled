@@ -251,6 +251,23 @@ fn found(game: &Game) -> Vec<guidance::Found> {
         .collect()
 }
 
+/// The security doors whose codes the game has shown (#94), each card
+/// lit when what is carried answers it, as the door's screen checks them.
+fn door_codes(game: &Game) -> Vec<guidance::DoorCode> {
+    let slots = game.status.inventory.map(|(g, _)| g);
+    game.doors_seen
+        .iter()
+        .map(|door| {
+            let answered = starquake::screens::answered(&door.cards, slots);
+            guidance::DoorCode {
+                room: door.room,
+                graphics: door.cards.map(|c| game.assets.graphic32(c)),
+                answered: std::array::from_fn(|i| answered[i]),
+            }
+        })
+        .collect()
+}
+
 impl Host for FrontHost {
     fn heroes(&mut self, table: &[u8], new: Option<usize>) {
         let mut guidance = self.shared.guidance.lock().unwrap();
@@ -319,6 +336,7 @@ impl Host for FrontHost {
                     guidance.set_pieces(&game.missing_piece_rooms());
                     guidance.set_core(&core_holes(game));
                     guidance.set_items(found(game));
+                    guidance.set_doors(door_codes(game));
                 }
                 Scene::GameOver => guidance.set_room(None),
                 // The game-over screens are done: the title screen starts

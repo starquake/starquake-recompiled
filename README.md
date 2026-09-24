@@ -42,7 +42,7 @@ to the ones below it:
 
 | level | | adds |
 |:-:|---|---|
-| 1 | Codes and the core | the teleporter codes seen (#50), in a rail at the right, and the core's nine slots in the game's own pictures at the top left |
+| 1 | Codes and the core | the teleporter codes seen (#50) and each security door's key code cards once shown (#94), in a rail at the right, and the core's nine slots in the game's own pictures at the top left |
 | 2 | The map you have walked | a map of the rooms visited, with their openings (#2) |
 | 3 | What you have seen | the items lying in rooms walked through, in the game's own pictures, coloured by what they do (#93) |
 | 4 | What you have not | the same in rooms not reached |

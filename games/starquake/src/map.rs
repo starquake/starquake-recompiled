@@ -48,6 +48,9 @@ pub struct Openings {
     /// Walls inside the room, where they stand: the solid cells between
     /// openings that do not reach each other.
     pub divides: Divides,
+    /// The cell of its security door's tile, if it has one, rows from the
+    /// top of the play area: where the map numbers the door (#94).
+    pub door: Option<(u8, u8)>,
 }
 
 /// The solid cells that keep two of a room's openings apart, a bit per cell
@@ -313,8 +316,10 @@ impl Game {
                 }
             }
         }
+        let mut openings = scan(|row, col| free(display.attr(row, col)));
+        openings.door = doors.first().map(|&(r, c)| (r - FIRST_ROW, c));
         Room {
-            openings: scan(|row, col| free(display.attr(row, col))),
+            openings,
             shut: Parts::find(|row, col| free(display.attr(row, col))),
             open,
             passage,
@@ -412,6 +417,7 @@ fn scan(free: impl Fn(u8, u8) -> bool) -> Openings {
         up: (0..LAST_COL).any(|col| window(FIRST_ROW, col)),
         down: (0..LAST_COL).any(|col| window(LAST_ROW - 1, col)),
         divides: Divides::default(),
+        door: None,
     }
 }
 

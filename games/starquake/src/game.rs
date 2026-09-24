@@ -26,6 +26,14 @@ pub enum Scene {
     GameOver,
 }
 
+/// A security door whose screen has shown its code: the room it is in and
+/// the three key code cards it asks for, by graphic (#94).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SeenDoor {
+    pub room: u16,
+    pub cards: [u8; 3],
+}
+
 /// A teleporter whose booth has been entered: the room it is in and its
 /// code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,6 +104,10 @@ pub struct Game {
     /// and where they are (#2). Not part of the original's state: nothing
     /// in the game reads it.
     pub teleporters_seen: Vec<SeenTeleporter>,
+    /// The security doors whose screens have shown their codes this game,
+    /// in the order they were seen, for a frontend that shows them (#94).
+    /// Not part of the original's state: nothing in the game reads it.
+    pub doors_seen: Vec<SeenDoor>,
     /// Which part of the program is running, for a frontend that shows
     /// something beside it. Not part of the original's state: nothing in
     /// the game reads it.
@@ -264,6 +276,7 @@ impl Game {
             tone: None,
             scene: Scene::Loading,
             teleporters_seen: Vec::new(),
+            doors_seen: Vec::new(),
             play_work: false,
             pad: crate::controls::PadMeaning::default(),
             paused: false,
