@@ -200,6 +200,12 @@ pub fn keep(bytes: &[u8]) -> Result<PathBuf, String> {
     keep_in(&dir, bytes)
 }
 
+/// The folder the tape is kept in, where the program keeps what else it
+/// keeps between runs (#90).
+pub fn app_dir() -> Option<PathBuf> {
+    data_dir().map(|d| d.join(APP))
+}
+
 fn keep_in(dir: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
     fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     let path = dir.join(KEPT);

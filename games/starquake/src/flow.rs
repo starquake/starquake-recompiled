@@ -175,8 +175,9 @@ impl Game {
         self.score_digits.as_slice() > last
     }
 
-    /// Types three initials into the table and sorts it.
-    fn enter_initials(&mut self, host: &mut dyn Host) {
+    /// Types three initials into the table and sorts it. Returns where the
+    /// new entry ended up.
+    fn enter_initials(&mut self, host: &mut dyn Host) -> usize {
         self.message_screen(7);
         self.print_text(at::INITIALS_TEXT);
         let mut initials = [b' '; 3];
@@ -191,14 +192,19 @@ impl Game {
         self.high_scores[last + 3..last + 9].copy_from_slice(&self.score_digits);
         self.high_scores[last + 9] = self.adventure;
         // Bubble the new entry up the table.
+        let mut new = HEROES - 1;
         for i in (0..HEROES - 1).rev() {
             let (a, b) = (i * ENTRY, (i + 1) * ENTRY);
             if self.high_scores[a + 3..a + 9] < self.high_scores[b + 3..b + 9] {
                 for k in 0..ENTRY {
                     self.high_scores.swap(a + k, b + k);
                 }
+                if new == i + 1 {
+                    new = i;
+                }
             }
         }
+        new
     }
 
     /// The high-score table.
@@ -232,10 +238,16 @@ impl Game {
     pub fn game_over(&mut self, host: &mut dyn Host) {
         self.game_over_screen();
         self.tune_until_key(host, 1);
-        if self.beats_high_score() {
-            self.enter_initials(host);
-        }
+        let new = if self.beats_high_score() {
+            Some(self.enter_initials(host))
+        } else {
+            None
+        };
+        host.heroes(&self.high_scores, new);
         self.core_of_heroes(host);
+        if let Some(table) = host.heroes_shown() {
+            self.high_scores = table;
+        }
     }
 
     /// What the end of a game shows: score, rooms visited, time taken, core

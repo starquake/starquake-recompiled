@@ -8,6 +8,7 @@ mod input;
 mod overlay;
 mod panel;
 mod prompt;
+mod scores;
 pub mod tape;
 mod text;
 mod video;
@@ -85,6 +86,9 @@ struct FrontHost {
     /// The scene the last frame's input was built in, to tell the first
     /// frame of play (#114).
     scene_seen: Scene,
+    /// The high-score table kept between runs (#90), and where.
+    keeper: scores::Keeper,
+    scores_path: Option<std::path::PathBuf>,
 }
 
 /// The Spectrum's 0 key: port 0xEFFE, bit 0.
@@ -182,6 +186,26 @@ impl FrontHost {
 }
 
 impl Host for FrontHost {
+    fn heroes(&mut self, table: &[u8], new: Option<usize>) {
+        let mut guidance = self.shared.guidance.lock().unwrap();
+        if let Some(kept) = self.keeper.heroes(table, new, guidance.record())
+            && let Some(path) = &self.scores_path
+            && let Err(e) = scores::save(path, kept)
+        {
+            eprintln!("the high scores were not kept: {e}");
+        }
+        let kept = &self.keeper.kept;
+        guidance.set_heroes(Some(guidance::Heroes {
+            names: std::array::from_fn(|i| kept.name(i)),
+            levels: kept.levels,
+            this_game: self.keeper.this_game,
+        }));
+    }
+
+    fn heroes_shown(&mut self) -> Option<Vec<u8>> {
+        self.keeper.shown()
+    }
+
     fn frame(&mut self, game: &Game) -> (Input, u32) {
         if self.shared.quit.load(Ordering::Relaxed) {
             if self.bench {
@@ -206,6 +230,9 @@ impl Host for FrontHost {
                 guidance.new_game();
             }
             guidance.set_playing(game.scene == Scene::Play);
+            if game.scene != Scene::GameOver {
+                guidance.set_heroes(None);
+            }
             drop(guidance);
             self.scene = game.scene;
             *self.shared.scene.lock().unwrap() = game.scene;
@@ -401,6 +428,13 @@ fn play_game(
     parsed.loading_screen = loading_screen;
     let assets = Rc::new(parsed);
     let mut game = Game::from_memory(assets, memory);
+    // The table kept from earlier runs, in place of the tape's own (#90).
+    let scores_path = scores::path();
+    let file = scores_path
+        .as_ref()
+        .and_then(|p| std::fs::read_to_string(p).ok());
+    let keeper = scores::Keeper::new(file.as_deref(), &game.high_scores);
+    game.high_scores.clone_from(&keeper.kept.table);
     let rate = audio.as_ref().map_or(44100, audio::Output::rate);
     let mut host = FrontHost {
         shared,
@@ -419,6 +453,8 @@ fn play_game(
         abandon: false,
         starting: false,
         scene_seen: Scene::Loading,
+        keeper,
+        scores_path,
     };
     // The frame counter runs throughout, which is what seeds each new game.
     game.run(&mut host);

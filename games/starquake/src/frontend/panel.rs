@@ -8,7 +8,7 @@ use starquake::game::{Scene, SeenTeleporter};
 use starquake::map::{AROUND, COLS, ROWS};
 
 use super::gamepad::Layout;
-use super::guidance::{Choice, Guidance, LEVELS, Setting};
+use super::guidance::{Choice, Guidance, Heroes, LEVELS, Setting};
 use super::text::{Canvas, Fonts, Rgb, Span, Weight};
 
 /// The window in logical pixels, and the picture's part of it.
@@ -422,6 +422,46 @@ impl Panel {
                     Weight::Regular,
                     BRIGHT,
                 )],
+            );
+            y += 24.0;
+        }
+        if let Some(heroes) = guidance.heroes() {
+            self.heroes(canvas, left, y + 40.0, &heroes);
+        }
+    }
+
+    /// Beside the game's CORE OF HEROES screen (#90): each entry's initials
+    /// and the guidance its game had, the one the last game put in bright.
+    fn heroes(&mut self, canvas: &mut Canvas, left: f32, top: f32, heroes: &Heroes) {
+        self.spaced(canvas, left, top, "CORE OF HEROES");
+        for (i, (name, level)) in heroes.names.iter().zip(heroes.levels).enumerate() {
+            let y = top + 26.0 + i as f32 * 26.0;
+            let colour = if heroes.this_game == Some(i) {
+                BRIGHT
+            } else {
+                SOFT
+            };
+            let name = format!("{}  {}", i + 1, String::from_utf8_lossy(name));
+            self.fonts.text(
+                Some(canvas),
+                left,
+                y,
+                None,
+                1.0,
+                &[span(&name, 15.0, Weight::SemiBold, colour)],
+            );
+            let what = match level {
+                None => "from the tape".to_string(),
+                Some(0) => "no guidance".to_string(),
+                Some(l) => format!("level {l} \u{b7} {}", LEVELS[usize::from(l)]),
+            };
+            self.fonts.text(
+                Some(canvas),
+                left + 76.0,
+                y + 1.0,
+                None,
+                1.0,
+                &[span(&what, 14.0, Weight::Regular, colour)],
             );
         }
     }
@@ -1256,6 +1296,22 @@ mod render_check {
                 Scene::Play,
             ),
             ("score", record, Scene::GameOver),
+            (
+                "score-heroes",
+                {
+                    let mut g = Guidance::default();
+                    g.set_level(3);
+                    g.set_heroes(Some(Heroes {
+                        names: [
+                            *b"JAN", *b"SQ ", *b"BOB", *b"AAA", *b"BBB", *b"CCC", *b"DDD", *b"EEE",
+                        ],
+                        levels: [Some(3), Some(0), Some(5), None, None, None, None, None],
+                        this_game: Some(0),
+                    }));
+                    g
+                },
+                Scene::GameOver,
+            ),
         ];
         let mut panel = Panel::new();
         for (name, guidance, scene) in cases {
