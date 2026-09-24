@@ -10,7 +10,7 @@ use winit::dpi::LogicalSize;
 use winit::event::{ElementState, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
-use winit::window::{Window, WindowId};
+use winit::window::{Theme, Window, WindowId};
 
 use super::Shared;
 use super::overlay::Overlay;
@@ -129,6 +129,10 @@ impl ApplicationHandler for App {
         }
         let attrs = Window::default_attributes()
             .with_title("Starquake")
+            // Always dark: a light title bar over the Spectrum's black
+            // border reads as a white stripe (#86). Linux leaves it to the
+            // window manager.
+            .with_theme(Some(Theme::Dark))
             .with_inner_size(LogicalSize::new(
                 WINDOW_W as f64 * SCALE,
                 FULL_H as f64 * SCALE,
