@@ -67,6 +67,11 @@ CONTROLS
   P                    Pause.
   A S D F G together   Abandon the game.
   Esc                  Guidance (below).
+  F11                  Leave fullscreen for a window, or go back.
+                       On a Mac: Control-Command-F.
+
+The game starts fullscreen. The picture is always scaled by a whole
+number, so fullscreen is often a step larger than any window fits.
 
 At the title screen, 1 to 5 choose how to play, 6 defines your own
 keys, 0 starts the game and Q quits. Any key stops the tune.

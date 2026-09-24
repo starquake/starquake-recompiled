@@ -9,8 +9,8 @@ use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::{KeyCode, PhysicalKey};
-use winit::window::{Theme, Window, WindowId};
+use winit::keyboard::{KeyCode, ModifiersState, PhysicalKey};
+use winit::window::{Fullscreen, Theme, Window, WindowId};
 
 use super::Shared;
 use super::overlay::Overlay;
@@ -24,6 +24,7 @@ use starquake::game::Scene;
 const BORDER: usize = 32;
 pub const FULL_W: usize = WIDTH + 2 * BORDER;
 pub const FULL_H: usize = HEIGHT + 2 * BORDER;
+/// The window's scale when no monitor says how large it is.
 const SCALE: f64 = 3.0;
 /// The guidance panel's width at the Spectrum's scale (#1). The window is
 /// the picture and the panel side by side, and a whole multiple of both, so
@@ -120,6 +121,28 @@ struct App {
     held: HashSet<KeyCode>,
     /// The game frame last painted, so the same one is not painted twice.
     shown: u64,
+    /// The modifier keys down now, for the Mac's fullscreen shortcut.
+    modifiers: ModifiersState,
+}
+
+/// Whether `code`, with `modifiers` down, leaves or enters fullscreen: F11,
+/// and on a Mac, where F11 never reaches a program (it is a media key
+/// without Fn, and Show Desktop with it), the Mac's own Control-Command-F
+/// (#87).
+fn fullscreen_key(code: KeyCode, modifiers: ModifiersState, macos: bool) -> bool {
+    code == KeyCode::F11
+        || (macos
+            && code == KeyCode::KeyF
+            && modifiers.contains(ModifiersState::CONTROL | ModifiersState::SUPER))
+}
+
+/// The whole scale a window fits at on a screen `width` by `height`
+/// logical pixels (#87): the largest whose window fits with room for the
+/// window's own frame and the taskbar or dock, and never less than one.
+fn windowed_scale(width: f64, height: f64) -> f64 {
+    let (room_w, room_h) = (width * 0.98, height - 96.0);
+    let fit = (room_w / WINDOW_W as f64).min(room_h / FULL_H as f64);
+    fit.floor().max(1.0)
 }
 
 impl ApplicationHandler for App {
@@ -127,15 +150,32 @@ impl ApplicationHandler for App {
         if self.window.is_some() {
             return;
         }
+        // The game starts fullscreen (#87), since the picture is scaled by
+        // a whole number and a screen's work area rarely has room for the
+        // next step up: at 1920 × 1080 a window can only reach three
+        // screen pixels a Spectrum pixel, where fullscreen reaches four.
+        // The size below is the one leaving fullscreen falls back to.
+        let scale = event_loop
+            .primary_monitor()
+            .or_else(|| event_loop.available_monitors().next())
+            .map_or(SCALE, |monitor| {
+                let factor = monitor.scale_factor();
+                let size = monitor.size();
+                windowed_scale(
+                    f64::from(size.width) / factor,
+                    f64::from(size.height) / factor,
+                )
+            });
         let attrs = Window::default_attributes()
             .with_title("Starquake")
             // Always dark: a light title bar over the Spectrum's black
             // border reads as a white stripe (#86). Linux leaves it to the
             // window manager.
             .with_theme(Some(Theme::Dark))
+            .with_fullscreen(Some(Fullscreen::Borderless(None)))
             .with_inner_size(LogicalSize::new(
-                WINDOW_W as f64 * SCALE,
-                FULL_H as f64 * SCALE,
+                WINDOW_W as f64 * scale,
+                FULL_H as f64 * scale,
             ))
             .with_min_inner_size(LogicalSize::new(WINDOW_W as f64, FULL_H as f64));
         let window = match event_loop.create_window(attrs) {
@@ -173,6 +213,21 @@ impl ApplicationHandler for App {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
+        if let WindowEvent::ModifiersChanged(modifiers) = &event {
+            self.modifiers = modifiers.state();
+        }
+        // The fullscreen key leaves or enters fullscreen on every screen,
+        // the tape prompt too, where the player may want the desktop to
+        // find the file.
+        if let WindowEvent::KeyboardInput { event: key, .. } = &event
+            && key.state == ElementState::Pressed
+            && !key.repeat
+            && let PhysicalKey::Code(code) = key.physical_key
+            && fullscreen_key(code, self.modifiers, cfg!(target_os = "macos"))
+        {
+            self.toggle_fullscreen();
+            return;
+        }
         if self.prompt.is_some() {
             self.prompt_event(event_loop, event);
             return;
@@ -282,6 +337,19 @@ impl ApplicationHandler for App {
 }
 
 impl App {
+    /// The fullscreen key leaves fullscreen, or goes back to it (#87). The
+    /// window falls back to the size it was created at, which is the
+    /// largest whole scale that fits the screen.
+    fn toggle_fullscreen(&mut self) {
+        if let Some(window) = &self.window {
+            let to = match window.fullscreen() {
+                Some(_) => None,
+                None => Some(Fullscreen::Borderless(None)),
+            };
+            window.set_fullscreen(to);
+        }
+    }
+
     /// The frame buffer's size: the Spectrum's screen with its border, or,
     /// for the prompt, the window at its real pixel density so the text is
     /// sharp.
@@ -448,6 +516,7 @@ pub fn run(shared: Arc<Shared>, prompt: Option<Prompt>, launch: Launcher) -> Res
         error: None,
         shown: u64::MAX,
         held: HashSet::new(),
+        modifiers: ModifiersState::empty(),
     };
     event_loop.run_app(&mut app).map_err(|e| e.to_string())?;
     if let Some(e) = app.error {
@@ -457,4 +526,42 @@ pub fn run(shared: Arc<Shared>, prompt: Option<Prompt>, launch: Launcher) -> Res
         return Err("the game stopped unexpectedly; see the panic above".into());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use winit::keyboard::{KeyCode, ModifiersState};
+
+    use super::{fullscreen_key, windowed_scale};
+
+    #[test]
+    fn f11_everywhere_and_control_command_f_on_a_mac() {
+        let none = ModifiersState::empty();
+        let both = ModifiersState::CONTROL | ModifiersState::SUPER;
+        assert!(fullscreen_key(KeyCode::F11, none, false));
+        assert!(fullscreen_key(KeyCode::F11, none, true));
+        assert!(fullscreen_key(KeyCode::KeyF, both, true));
+        assert!(!fullscreen_key(KeyCode::KeyF, both, false), "not off a Mac");
+        assert!(!fullscreen_key(KeyCode::KeyF, ModifiersState::SUPER, true));
+        assert!(
+            !fullscreen_key(KeyCode::KeyF, none, true),
+            "the Spectrum's F"
+        );
+    }
+
+    #[test]
+    fn the_window_opens_at_the_largest_whole_scale_that_fits() {
+        // The window is 456 by 256 Spectrum pixels a scale: the picture
+        // with its border, and the panel beside it.
+        assert_eq!(
+            windowed_scale(1920.0, 1080.0),
+            3.0,
+            "1024 tall does not fit under the chrome"
+        );
+        assert_eq!(windowed_scale(2560.0, 1440.0), 5.0);
+        assert_eq!(windowed_scale(3840.0, 2160.0), 8.0);
+        assert_eq!(windowed_scale(1366.0, 768.0), 2.0);
+        assert_eq!(windowed_scale(1600.0, 900.0), 3.0);
+        assert_eq!(windowed_scale(640.0, 480.0), 1.0, "never less than one");
+    }
 }
