@@ -125,12 +125,17 @@ the menu asks before keeping such a change. So far:
            ways on either side of it do not meet. A dotted one is a
            security door or a teleport pad, which opens with the right
            item. A way on can still need a lift.
-  Level 3  What you have seen: the rooms you have walked through
-           that hold a core piece the core still needs, marked in pink.
-           There are usually two of each piece; either will do, and
-           while you carry one the other is not marked.
+  Level 3  What you have seen: the items lying in the rooms you have
+           walked through, each in the game's own picture and coloured
+           by what it does: lilac for a key code card or the access
+           card that opens any door, yellow for the key that opens
+           teleport pads, white for something a trading pyramid takes,
+           pink for a piece the core still needs. There are usually two
+           of each piece; either will do, and while you carry one the
+           other is not marked.
   Level 4  What you have not: the same in rooms you have not reached,
-           outlined.
+           outlined. The game places every item as a game starts, so
+           it knows where they all are.
 
 Levels 5 (routes) and 6 (every code and the whole planet), and
 training mode, are still to come.

@@ -8,8 +8,9 @@ use starquake::game::{Scene, SeenTeleporter};
 use starquake::map::{COLS, ROWS};
 
 use super::gamepad::Layout;
-use super::guidance::{Choice, Guidance, Heroes, Hole, LEVELS, Setting};
+use super::guidance::{Choice, Found, Guidance, Heroes, Hole, LEVELS, Setting};
 use super::text::{Canvas, Fonts, Rgb, Span, Weight};
+use starquake::pickups::Kind;
 
 /// The window in logical pixels, and the picture's part of it.
 pub const WINDOW_W: f32 = 1368.0;
@@ -64,6 +65,13 @@ const WALL: Rgb = [0x9a, 0xaa, 0xd0];
 const HERE: Rgb = [0xe8, 0xec, 0xf4];
 const PIECE: Rgb = [0xf0, 0x7a, 0xb0];
 const PIECE_ROOM: Rgb = [0x15, 0x1a, 0x26];
+/// An item on the map by what it does (#93): lilac for what opens a door,
+/// yellow for the pad key, white for what a pyramid takes; a core piece
+/// still wanted is `PIECE`.
+const ITEM_DOOR: Rgb = [0x9b, 0x8a, 0xf0];
+const ITEM_PAD: Rgb = [0xf5, 0xd0, 0x4b];
+const ITEM_TRADE: Rgb = [0xe6, 0xea, 0xf2];
+const ITEM_EDGE: Rgb = [0x00, 0x00, 0x00];
 const PIECE_ROOM_LINE: Rgb = [0x6b, 0x75, 0x94];
 
 /// What each level adds, for the picker.
@@ -259,6 +267,15 @@ impl Panel {
         let piece = |room: u16| {
             level >= 3 && guidance.piece(room) && (level >= 4 || guidance.visited(room))
         };
+        // Levels 3 and 4 (#93): the items lying out on the planet, those
+        // seen in rooms walked through at level 3, all of them at level 4.
+        let shown = |f: &&Found| level >= 4 || (level >= 3 && f.seen);
+        let items: Vec<&Found> = guidance.items().iter().filter(shown).collect();
+        // A piece drawn as itself needs no dot; a room not walked through
+        // that holds something drawn is outlined, so the mark has somewhere
+        // to sit.
+        let itself = |room: u16| items.iter().any(|f| f.room == room && f.piece);
+        let holds = |room: u16| items.iter().any(|f| f.room == room);
         let rooms = COLS * ROWS;
         let at = |room: u16| {
             (
@@ -271,7 +288,7 @@ impl Panel {
             let (x, y) = at(room);
             if guidance.visited(room) {
                 canvas.round_rect(x, y, pitch, pitch, 0.0, FLOOR);
-            } else if piece(room) {
+            } else if piece(room) || holds(room) {
                 let (inset, size) = (2.5 * unit, pitch - 5.0 * unit);
                 let (x, y) = (x + inset, y + inset);
                 canvas.round_rect(x, y, size, size, 2.0 * unit, PIECE_ROOM);
@@ -347,11 +364,64 @@ impl Panel {
             canvas.round_rect(x + inner, y + inner, size(inner), size(inner), unit, FLOOR);
         }
         // Over the room BLOB is in, so a piece there still shows.
-        for room in (0..rooms).filter(|&r| piece(r)) {
+        for room in (0..rooms).filter(|&r| piece(r) && !itself(r)) {
             let (x, y) = at(room);
             let r = 4.5 * unit;
             let (cx, cy) = (x + pitch / 2.0, y + pitch / 2.0);
             canvas.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, PIECE);
+        }
+        // Each item in the game's own graphic, a game pixel as many whole
+        // screen pixels as the room holds with a little air, in the colour
+        // of what it does, with a pixel of black around it so it stands off
+        // the floor.
+        let steps = (pitch * canvas.scale / 16.0).floor().clamp(1.0, 4.0);
+        let px = steps / canvas.scale;
+        for found in items {
+            let (x, y) = at(found.room);
+            let colour = if found.piece {
+                PIECE
+            } else {
+                match found.kind {
+                    Kind::PadKey => ITEM_PAD,
+                    Kind::Trade | Kind::Pack => ITEM_TRADE,
+                    Kind::Chip(_) | Kind::AnyChip | Kind::DoorCard => ITEM_DOOR,
+                }
+            };
+            let size = 16.0 * px;
+            let (ix, iy) = (x + (pitch - size) / 2.0, y + (pitch - size) / 2.0);
+            // Cells top-left, top-right, bottom-left, bottom-right.
+            let lit = |row: i32, col: i32| {
+                if !(0..16).contains(&row) || !(0..16).contains(&col) {
+                    return false;
+                }
+                let cell = (row / 8 * 2 + col / 8) as usize;
+                found.graphic[cell * 8 + (row % 8) as usize] & (0x80 >> (col % 8)) != 0
+            };
+            // The black first, a pixel outside the graphic's own box so an
+            // edge touching it is outlined too, then the graphic over it.
+            for edge in [true, false] {
+                for row in -1..=16i32 {
+                    for col in -1..=16i32 {
+                        let here = lit(row, col);
+                        let draw = if edge {
+                            !here && (-1..=1).any(|dr| (-1..=1).any(|dc| lit(row + dr, col + dc)))
+                        } else {
+                            here
+                        };
+                        if draw {
+                            let ink = if edge { ITEM_EDGE } else { colour };
+                            canvas.round_rect(
+                                ix + col as f32 * px,
+                                iy + row as f32 * px,
+                                px,
+                                px,
+                                0.0,
+                                ink,
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1241,6 +1311,45 @@ mod render_check {
             })
             .collect();
         g.set_core(&core);
+        // Made-up items, not the game's: a diamond for each, one of every
+        // kind, in rooms walked through and not.
+        let mut diamond = [0u8; 32];
+        for (k, row) in diamond.iter_mut().enumerate() {
+            let r = (k / 16) * 8 + k % 8;
+            let half = if r < 8 { r } else { 15 - r };
+            let bits = (0xFFFFu16 >> (8 - half.min(7))) & (0xFFFFu16 << (8 - half.min(7)));
+            *row = if (k / 8) % 2 == 0 {
+                (bits >> 8) as u8
+            } else {
+                bits as u8
+            };
+        }
+        let walked: Vec<u16> = (0..COLS * ROWS).filter(|&r| g.visited(r)).collect();
+        let far: Vec<u16> = (0..COLS * ROWS)
+            .filter(|&r| !g.visited(r))
+            .step_by(37)
+            .collect();
+        let kinds = [Kind::Chip(b'2'), Kind::PadKey, Kind::Trade, Kind::DoorCard];
+        let mut items = Vec::new();
+        for (i, &room) in walked.iter().step_by(11).take(6).enumerate() {
+            items.push(Found {
+                room,
+                kind: kinds[i % kinds.len()],
+                piece: i == 5,
+                graphic: diamond,
+                seen: true,
+            });
+        }
+        for (i, &room) in far.iter().take(6).enumerate() {
+            items.push(Found {
+                room,
+                kind: kinds[i % kinds.len()],
+                piece: i % 3 == 0,
+                graphic: diamond,
+                seen: false,
+            });
+        }
+        g.set_items(items);
     }
 
     /// Draws the panel in a few states, over a grey stand-in for the
