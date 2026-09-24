@@ -113,35 +113,34 @@ down yourself; 4 and up tell you things you could not have known.
 Turning it up, or training mode on, shows on that game's score, so
 the menu asks before keeping such a change. So far:
 
-  Level 1  Codes and the core: the codes of the teleporters you have
-           seen, in a column at the panel's right, and under them each
-           security door's three key code cards once its screen has
-           shown them, numbered; a card stays dim until something you
-           carry answers it: that card, a "?" card for one missing, or
-           the access card for all three. The map shows each door's
-           number where it stands. And the core's nine
-           slots at its top left in the game's own pictures: bright
+  Level 1  Codes and the core: the codes of the teleports you have
+           entered, in a column at the panel's right, and under them
+           each security door's three key code cards once its screen
+           has shown them, numbered. A card stays dim until something
+           you carry answers it: that card, a "?" card for one
+           missing, or the access card for all three. The map shows
+           each door's number where it stands. At the panel's top left
+           are the core's nine slots in the game's own pictures: bright
            while still wanted, dim once delivered, outlined while you
            carry that piece.
-  Level 2  The map you have walked: the rooms you have visited. Walls are lines, and
-           a gap in one is a way on; the square is where you are and
-           the diamonds are the teleporters you have seen. A wall
-           inside a room is drawn where it stands and divides it: the
-           ways on either side of it do not meet. A dotted one is a
-           security door or a teleport pad, which opens with the right
-           item. A way on can still need a lift.
+  Level 2  The map you have walked: the rooms you have visited. Walls
+           are lines, and a gap in one is a way on; the square is where
+           you are and the diamonds are the teleports you have entered.
+           A wall inside a room is drawn where it stands and divides
+           it: the ways on either side of it do not meet. A dotted one
+           is a security door or a space lock, which opens with the
+           right item. A way on can still need a vacuum tube.
   Level 3  What you have seen: the items lying in the rooms you have
            walked through, each in the game's own picture and coloured
            by what it does: lilac for a key code card or the access
            card that opens any door, yellow for the key that opens
-           teleport pads, white for something a trading pyramid takes,
+           space locks, white for something a trading pyramid takes,
            pink for a piece the core still needs. There are usually two
            of each piece; either will do, and while you carry one the
            other is not marked.
   Level 4  What you have not: the same in rooms you have not reached,
            outlined. The game places every item as a game starts, so
            it knows where they all are.
-
   Level 5  Routes: a line on the map and an arrow in the picture's
            border to a missing piece, in pink and marked "item", and
            while you carry a piece the core needs, one to the core, in
@@ -149,21 +148,21 @@ the menu asks before keeping such a change. So far:
            switches the piece route between the three nearest pieces.
            The routes run over the whole map as the map reads it,
            dashed through rooms you have not visited, taking vacuum
-           tubes up only and the teleporters whose codes you have. The code a route needs next is
-           outlined in its colour, and what its door still wants is
-           ringed where it lies.
-  Level 6  Everything: every teleporter's and every door's code,
-           whether you have been shown it or not, and the whole
-           planet's map, the rooms you have never entered drawn
-           dimmer.
+           tubes up only, secret passages, and the teleports whose
+           codes you have. The code a route needs next is outlined in
+           its colour, and what its door still wants is ringed where
+           it lies.
+  Level 6  Everything: every teleport's and every door's code, whether
+           you have been shown it or not, and the whole planet's map,
+           the rooms you have never entered drawn dimmer.
 
 Training mode is five switches under the level in the same menu, each
 off or on: full energy, full bridging platforms and full laser each
 fill their bar and keep it full; endless lives keeps a death from
 costing one; no harm from enemies keeps them from draining energy or
-killing, and stops the patches and force fields that kill on touch.
-The score names the switches used, and a game played with any of them
-on is not kept in the high-score table.
+killing, and stops the impalers and zap rays that kill on touch. The
+score names the switches used, and a game played with any of them on
+is not kept in the high-score table.
 
 
 LEGAL
