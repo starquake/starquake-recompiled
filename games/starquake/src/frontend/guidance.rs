@@ -151,6 +151,10 @@ pub struct Guidance {
     items: Vec<Found>,
     /// The security doors whose codes have been shown, in the order seen.
     doors: Vec<DoorCode>,
+    /// Every teleporter and every door on the planet, the seen ones first,
+    /// for level 6 (#95).
+    every_teleporter: Vec<SeenTeleporter>,
+    every_door: Vec<DoorCode>,
     /// Bumped on every change, so a watcher can tell something changed.
     version: u64,
 }
@@ -216,9 +220,22 @@ impl Guidance {
         }
     }
 
-    /// The security doors whose codes have been shown this game.
-    pub fn doors(&self) -> &[DoorCode] {
-        &self.doors
+    /// The teleporters and doors whose codes the panel shows: those seen,
+    /// or at level 6 every one there is (#95).
+    pub fn codes(&self) -> (&[SeenTeleporter], &[DoorCode]) {
+        if self.level >= 6 {
+            (&self.every_teleporter, &self.every_door)
+        } else {
+            (&self.teleporters, &self.doors)
+        }
+    }
+
+    pub fn set_every(&mut self, teleporters: Vec<SeenTeleporter>, doors: Vec<DoorCode>) {
+        if self.every_teleporter != teleporters || self.every_door != doors {
+            self.every_teleporter = teleporters;
+            self.every_door = doors;
+            self.version += 1;
+        }
     }
 
     pub fn set_doors(&mut self, doors: Vec<DoorCode>) {
@@ -278,7 +295,14 @@ impl Guidance {
         self.level > self.record.highest || (self.training && !self.record.training)
     }
 
+    /// The doors seen this game.
+    #[cfg(test)]
+    pub fn doors_for_test(&self) -> &[DoorCode] {
+        &self.doors
+    }
+
     /// The teleporters seen this game.
+    #[cfg(test)]
     pub fn teleporters(&self) -> &[SeenTeleporter] {
         &self.teleporters
     }
@@ -368,6 +392,7 @@ impl Guidance {
             || !self.core.is_empty()
             || !self.items.is_empty()
             || !self.doors.is_empty()
+            || !self.every_door.is_empty()
         {
             self.teleporters.clear();
             self.visited.clear();
@@ -376,6 +401,8 @@ impl Guidance {
             self.core.clear();
             self.items.clear();
             self.doors.clear();
+            self.every_teleporter.clear();
+            self.every_door.clear();
             self.version += 1;
         }
     }

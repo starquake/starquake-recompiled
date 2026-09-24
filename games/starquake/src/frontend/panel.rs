@@ -69,6 +69,9 @@ const WALL: Rgb = [0x9a, 0xaa, 0xd0];
 const HERE: Rgb = [0xe8, 0xec, 0xf4];
 const PIECE: Rgb = [0xf0, 0x7a, 0xb0];
 const PIECE_ROOM: Rgb = [0x15, 0x1a, 0x26];
+/// A room never entered, on level 6's whole planet (#95).
+const FLOOR_UNSEEN: Rgb = [0x1a, 0x20, 0x30];
+const WALL_UNSEEN: Rgb = [0x4b, 0x53, 0x68];
 /// An item on the map by what it does (#93): lilac for what opens a door,
 /// yellow for the pad key, white for what a pyramid takes; a core piece
 /// still wanted is `PIECE`.
@@ -86,7 +89,7 @@ const ADDS: [&str; 7] = [
     "Core pieces still needed, in the rooms you have walked through.",
     "And in the rooms you have not.",
     "Not built yet: routes to a piece and to the core.",
-    "Not built yet: every code, and the whole planet.",
+    "Every code, and the whole planet.",
 ];
 
 pub struct Panel {
@@ -292,6 +295,8 @@ impl Panel {
             let (x, y) = at(room);
             if guidance.visited(room) {
                 canvas.round_rect(x, y, pitch, pitch, 0.0, FLOOR);
+            } else if level >= 6 {
+                canvas.round_rect(x, y, pitch, pitch, 0.0, FLOOR_UNSEEN);
             } else if piece(room) || holds(room) {
                 let (inset, size) = (2.5 * unit, pitch - 5.0 * unit);
                 let (x, y) = (x + inset, y + inset);
@@ -306,8 +311,15 @@ impl Panel {
         }
         // Walls after all the floor, so no floor covers them.
         let (line, overhang) = (2.0, 1.0);
-        for room in (0..rooms).filter(|&r| guidance.visited(r)) {
+        // Level 6 (#95): the whole planet, the rooms never entered dimmer.
+        let whole = level >= 6;
+        for room in (0..rooms).filter(|&r| whole || guidance.visited(r)) {
             let (x, y) = at(room);
+            let wall = if guidance.visited(room) {
+                WALL
+            } else {
+                WALL_UNSEEN
+            };
             let open = guidance
                 .openings()
                 .get(room as usize)
@@ -315,16 +327,16 @@ impl Panel {
                 .unwrap_or_default();
             let long = pitch + 2.0 * overhang;
             if !open.up {
-                canvas.round_rect(x - overhang, y - overhang, long, line, 0.0, WALL);
+                canvas.round_rect(x - overhang, y - overhang, long, line, 0.0, wall);
             }
             if !open.down {
-                canvas.round_rect(x - overhang, y + pitch - overhang, long, line, 0.0, WALL);
+                canvas.round_rect(x - overhang, y + pitch - overhang, long, line, 0.0, wall);
             }
             if !open.left {
-                canvas.round_rect(x - overhang, y - overhang, line, long, 0.0, WALL);
+                canvas.round_rect(x - overhang, y - overhang, line, long, 0.0, wall);
             }
             if !open.right {
-                canvas.round_rect(x + pitch - overhang, y - overhang, line, long, 0.0, WALL);
+                canvas.round_rect(x + pitch - overhang, y - overhang, line, long, 0.0, wall);
             }
             // Walls inside, where they stand in the room (#92): its 32 by 18
             // cells stretched over the square, a door's or a pad's every
@@ -342,12 +354,12 @@ impl Panel {
                         cw.max(1.0),
                         ch.max(1.0),
                         0.0,
-                        WALL,
+                        wall,
                     );
                 }
             }
         }
-        for seen in guidance.teleporters() {
+        for seen in guidance.codes().0 {
             let (x, y) = at(seen.room % rooms);
             let (cx, cy, r) = (x + pitch / 2.0, y + pitch / 2.0, 5.0 * unit);
             canvas.triangle([(cx - r, cy), (cx, cy - r), (cx + r, cy)], CODE);
@@ -430,7 +442,7 @@ impl Panel {
         // Each security door whose code is in the rail, numbered where it
         // stands in its room with the number beside its code (#94), drawn
         // last with a dark rim so nothing hides it.
-        for (i, door) in guidance.doors().iter().enumerate() {
+        for (i, door) in guidance.codes().1.iter().enumerate() {
             let Some((row, col)) = guidance
                 .openings()
                 .get(usize::from(door.room))
@@ -473,13 +485,23 @@ impl Panel {
         top: f32,
         guidance: &Guidance,
     ) -> f32 {
-        let seen = guidance.teleporters();
-        let (chip_h, gap) = (26.0, 8.0);
+        let (seen, doors) = guidance.codes();
+        // Rows as tall as the mockup's while they fit, closer together when
+        // there are more than the panel holds: level 6 shows fifteen
+        // teleporters and eight doors (#95).
+        let roomy =
+            seen.len() as f32 * 34.0 + doors.len() as f32 * (16.0 * CARD_PIXEL + 10.0) + 100.0
+                <= WINDOW_H - 24.0 - top;
+        let (chip_h, gap, text_y, px, card_gap) = if roomy {
+            (26.0, 8.0, 5.0, CARD_PIXEL, 6.0)
+        } else {
+            (20.0, 3.0, 2.0, 1.0, 3.0)
+        };
         let chip_w = self
             .fonts
             .measure(&[span("MMMMM", 14.0, Weight::SemiBold, CODE)])
             + 16.0;
-        let card = 16.0 * CARD_PIXEL + 4.0;
+        let card = 16.0 * px + 4.0;
         let door_w = 14.0 + 3.0 * card + 2.0 * 3.0;
         let width = chip_w.max(door_w).max(self.spaced_width("TELEPORTS"));
         let heading = self.spaced_width("TELEPORTS");
@@ -500,7 +522,7 @@ impl Panel {
             self.fonts.text(
                 Some(canvas),
                 x + (chip_w - w) / 2.0,
-                y + 5.0,
+                y + text_y,
                 None,
                 1.0,
                 &spans,
@@ -514,13 +536,13 @@ impl Panel {
         let heading = self.spaced_width("DOORS");
         self.spaced(canvas, right - heading, y, "DOORS");
         y += 22.0;
-        if guidance.doors().is_empty() {
+        if doors.is_empty() {
             let none = [span("None yet", 13.0, Weight::Regular, QUIET)];
             let w = self.fonts.measure(&none);
             self.fonts
                 .text(Some(canvas), right - w, y, None, 1.0, &none);
         }
-        for (i, door) in guidance.doors().iter().enumerate() {
+        for (i, door) in doors.iter().enumerate() {
             let label = (i + 1).to_string();
             let number = [span(&label, 12.0, Weight::SemiBold, SOFT)];
             self.fonts
@@ -529,9 +551,9 @@ impl Panel {
                 let x = right - 3.0 * card - 2.0 * 3.0 + k as f32 * (card + 3.0);
                 canvas.round_rect(x, y, card, card, 3.0, CODE_FILL);
                 let colour = if door.answered[k] { CODE } else { CODE_DIM };
-                draw_graphic(canvas, graphic, x + 2.0, y + 2.0, CARD_PIXEL, colour);
+                draw_graphic(canvas, graphic, x + 2.0, y + 2.0, px, colour);
             }
-            y += card + 6.0;
+            y += card + card_gap;
         }
         width
     }
@@ -1498,6 +1520,30 @@ mod render_check {
             ("level2", level2, Scene::Play),
             ("level2-many-codes", crowded, Scene::Play),
             ("level3", level3.clone(), Scene::Play),
+            (
+                "level6",
+                {
+                    let mut g = level3.clone();
+                    let mut every = g.codes().0.to_vec();
+                    g.set_level(6);
+                    for (k, room) in [40u16, 77, 150, 233, 301, 402, 11, 22, 33, 44, 55, 66]
+                        .into_iter()
+                        .enumerate()
+                    {
+                        every.push(SeenTeleporter {
+                            room,
+                            code: [b'P' + k as u8, b'Q', b'R', b'S', b'T'],
+                        });
+                    }
+                    let mut doors = g.doors_for_test().to_vec();
+                    for room in [90u16, 120, 260, 300, 380, 420] {
+                        doors.push(DoorCode { room, ..doors[1] });
+                    }
+                    g.set_every(every, doors);
+                    g
+                },
+                Scene::Play,
+            ),
             (
                 "level4",
                 {
