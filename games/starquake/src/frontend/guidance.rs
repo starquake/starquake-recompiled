@@ -7,7 +7,7 @@
 
 use super::gamepad::Layout;
 use starquake::game::SeenTeleporter;
-use starquake::map::Openings;
+use starquake::map::{Openings, Step};
 use starquake::pickups::RoomSet;
 
 /// The number of rooms on the planet.
@@ -57,6 +57,8 @@ pub struct Found {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DoorCode {
     pub room: u16,
+    /// The cards by graphic number, and their pictures.
+    pub cards: [u8; 3],
     pub graphics: [[u8; 32]; 3],
     pub answered: [bool; 3],
 }
@@ -151,6 +153,16 @@ pub struct Guidance {
     items: Vec<Found>,
     /// The security doors whose codes have been shown, in the order seen.
     doors: Vec<DoorCode>,
+    /// Level 5's routes (#52): to the chosen of the nearest missing pieces,
+    /// and to the core while a piece it needs is carried; the first door
+    /// each has to pass; the piece chosen with Tab, and which of how many
+    /// the route leads to; and a Tab pressed and not yet taken.
+    route: Option<Vec<Step>>,
+    core_route: Option<Vec<Step>>,
+    route_doors: [Option<u16>; 2],
+    chosen_piece: Option<u16>,
+    piece_choice: (u8, u8),
+    switch: bool,
     /// Every teleporter and every door on the planet, the seen ones first,
     /// for level 6 (#95).
     every_teleporter: Vec<SeenTeleporter>,
@@ -195,6 +207,36 @@ impl Guidance {
         }
     }
 
+    /// The route to the chosen missing piece, if there is one (#52).
+    pub fn route(&self) -> Option<&[Step]> {
+        self.route.as_deref()
+    }
+
+    /// The route to the core, while a piece it needs is carried.
+    pub fn core_route(&self) -> Option<&[Step]> {
+        self.core_route.as_deref()
+    }
+
+    /// The first room with a security door each route has to pass: the
+    /// piece route's, then the core route's.
+    pub fn route_doors(&self) -> [Option<u16>; 2] {
+        self.route_doors
+    }
+
+    pub fn set_routes(
+        &mut self,
+        route: Option<Vec<Step>>,
+        core_route: Option<Vec<Step>>,
+        doors: [Option<u16>; 2],
+    ) {
+        if self.route != route || self.core_route != core_route || self.route_doors != doors {
+            self.route = route;
+            self.core_route = core_route;
+            self.route_doors = doors;
+            self.version += 1;
+        }
+    }
+
     /// The letters the connected pad carries.
     pub fn pad(&self) -> Layout {
         self.pad
@@ -204,6 +246,24 @@ impl Guidance {
     pub fn set_pad(&mut self, layout: Layout) {
         if self.pad != layout {
             self.pad = layout;
+            self.version += 1;
+        }
+    }
+
+    /// The piece room chosen with Tab, if any.
+    pub fn chosen_piece(&self) -> Option<u16> {
+        self.chosen_piece
+    }
+
+    /// Which of how many nearest pieces the route leads to, counting from 1.
+    pub fn piece_choice(&self) -> (u8, u8) {
+        self.piece_choice
+    }
+
+    pub fn set_piece_choice(&mut self, chosen: Option<u16>, choice: (u8, u8)) {
+        if self.chosen_piece != chosen || self.piece_choice != choice {
+            self.chosen_piece = chosen;
+            self.piece_choice = choice;
             self.version += 1;
         }
     }
@@ -218,6 +278,18 @@ impl Guidance {
             self.heroes = heroes;
             self.version += 1;
         }
+    }
+
+    /// Tab was pressed: the next of the nearest pieces, at level 5 and up.
+    pub fn request_switch(&mut self) {
+        if self.level >= 5 {
+            self.switch = true;
+        }
+    }
+
+    /// Whether Tab was pressed since this was last asked.
+    pub fn take_switch(&mut self) -> bool {
+        std::mem::take(&mut self.switch)
     }
 
     /// The teleporters and doors whose codes the panel shows: those seen,
@@ -393,6 +465,8 @@ impl Guidance {
             || !self.items.is_empty()
             || !self.doors.is_empty()
             || !self.every_door.is_empty()
+            || self.route.is_some()
+            || self.core_route.is_some()
         {
             self.teleporters.clear();
             self.visited.clear();
@@ -403,6 +477,11 @@ impl Guidance {
             self.doors.clear();
             self.every_teleporter.clear();
             self.every_door.clear();
+            self.route = None;
+            self.core_route = None;
+            self.route_doors = [None; 2];
+            self.chosen_piece = None;
+            self.piece_choice = (0, 0);
             self.version += 1;
         }
     }

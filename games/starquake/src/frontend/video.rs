@@ -374,6 +374,9 @@ impl App {
         match code {
             KeyCode::Escape if open => guidance.back(),
             KeyCode::Escape => guidance.open(),
+            // Level 5 (#52): the piece route's next of the nearest pieces.
+            // Tab is no Spectrum key, so the game loses nothing.
+            KeyCode::Tab if !open => guidance.request_switch(),
             _ if !open => return false,
             KeyCode::ArrowUp => guidance.focus_up(),
             KeyCode::ArrowDown => guidance.focus_down(),

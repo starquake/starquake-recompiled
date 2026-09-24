@@ -142,12 +142,22 @@ the menu asks before keeping such a change. So far:
            outlined. The game places every item as a game starts, so
            it knows where they all are.
 
+  Level 5  Routes: a line on the map and an arrow in the picture's
+           border to a missing piece, in pink and marked "item", and
+           while you carry a piece the core needs, one to the core, in
+           orange and marked "core". Tab switches the piece route
+           between the three nearest pieces. The routes run over the
+           whole map as the map reads it, dashed through rooms you have
+           not visited, taking vacuum tubes up only and the teleporters
+           whose codes you have. The code a route needs next is
+           outlined in its colour, and what its door still wants is
+           ringed where it lies.
   Level 6  Everything: every teleporter's and every door's code,
            whether you have been shown it or not, and the whole
            planet's map, the rooms you have never entered drawn
            dimmer.
 
-Level 5 (routes) and training mode are still to come.
+Training mode is still to come.
 
 
 LEGAL

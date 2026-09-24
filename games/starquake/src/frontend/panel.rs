@@ -5,10 +5,11 @@
 //! takes the left `PICTURE_W`, the panel the rest.
 
 use starquake::game::Scene;
-use starquake::map::{COLS, ROWS};
+use starquake::map::{COLS, ROWS, Step};
 
 use super::gamepad::Layout;
 use super::guidance::{Choice, Found, Guidance, Heroes, Hole, LEVELS, Setting};
+use super::routes::walked_steps;
 use super::text::{Canvas, Fonts, Rgb, Span, Weight};
 use starquake::pickups::Kind;
 
@@ -69,6 +70,8 @@ const WALL: Rgb = [0x9a, 0xaa, 0xd0];
 const HERE: Rgb = [0xe8, 0xec, 0xf4];
 const PIECE: Rgb = [0xf0, 0x7a, 0xb0];
 const PIECE_ROOM: Rgb = [0x15, 0x1a, 0x26];
+/// The route to the core, and its arrow (#52).
+const ROUTE: Rgb = [0xf5, 0xb8, 0x4b];
 /// A room never entered, on level 6's whole planet (#95).
 const FLOOR_UNSEEN: Rgb = [0x1a, 0x20, 0x30];
 const WALL_UNSEEN: Rgb = [0x4b, 0x53, 0x68];
@@ -88,7 +91,7 @@ const ADDS: [&str; 7] = [
     "A map of the rooms you have walked through.",
     "Core pieces still needed, in the rooms you have walked through.",
     "And in the rooms you have not.",
-    "Not built yet: routes to a piece and to the core.",
+    "Routes: pink to a missing piece, orange to the core.",
     "Every code, and the whole planet.",
 ];
 
@@ -151,6 +154,10 @@ impl Panel {
                     self.core_grid(canvas, guidance.core(), left, BLOCK_TOP + 22.0);
                 }
                 let foot = BLOCK_TOP + 22.0 + CORE_SQUARE;
+                if level >= 5 {
+                    // Standing on the square's bottom edge, over the map.
+                    self.route_legend(canvas, left + CORE_SQUARE + 18.0, foot - 4.0, guidance);
+                }
                 let map_w = right - rail_w - 16.0 - left;
                 if level >= 2 {
                     self.map(
@@ -195,6 +202,33 @@ impl Panel {
                         &spans,
                     );
                 }
+            }
+        }
+
+        // Level 5 (#52): an arrow in the picture's border for each route
+        // that walks out of the room next, side by side when both leave the
+        // same way.
+        if scene == Scene::Play
+            && guidance.level() >= 5
+            && let Some(here) = guidance.room()
+        {
+            let leaving = |route: Option<&[Step]>| {
+                route
+                    .and_then(|r| r.first())
+                    .filter(|s| !s.teleport)
+                    .map(|s| s.room.wrapping_sub(here))
+            };
+            let (piece, core) = (leaving(guidance.route()), leaving(guidance.core_route()));
+            let apart = if piece.is_some() && piece == core {
+                22.0
+            } else {
+                0.0
+            };
+            if let Some(step) = core {
+                self.border_arrow(canvas, step, "core", ROUTE, apart);
+            }
+            if let Some(step) = piece {
+                self.border_arrow(canvas, step, "item", PIECE, -apart);
             }
         }
 
@@ -359,6 +393,53 @@ impl Panel {
                 }
             }
         }
+        // Level 5 (#52): the routes, through the centres of the rooms
+        // walked, above the floor and walls and below the markers: to the
+        // core in orange and to the piece in pink. Where both take the same
+        // step they run side by side, thinner, so neither hides the other.
+        // A teleporter step jumps, so no line joins it; a step into or out
+        // of a room not yet visited is dashed.
+        if level >= 5
+            && let Some(here) = guidance.room()
+        {
+            let centre = |room: u16| {
+                let (x, y) = at(room);
+                (x + pitch / 2.0, y + pitch / 2.0)
+            };
+            let (piece, core) = (
+                walked_steps(here, guidance.route()),
+                walked_steps(here, guidance.core_route()),
+            );
+            for (steps, other, colour, side) in
+                [(&core, &piece, ROUTE, 1.0), (&piece, &core, PIECE, -1.0)]
+            {
+                for &(a, b) in steps {
+                    let shared = other.contains(&(a, b)) || other.contains(&(b, a));
+                    let (width, off) = if shared {
+                        (2.6 * unit, side * 1.8 * unit)
+                    } else {
+                        (3.0 * unit, 0.0)
+                    };
+                    // Across the step: down for one sideways, right for one
+                    // up or down.
+                    let (ox, oy) = if a.abs_diff(b) == 1 {
+                        (0.0, off)
+                    } else {
+                        (off, 0.0)
+                    };
+                    let ((ax, ay), (bx, by)) = (centre(a), centre(b));
+                    let dash = (!guidance.visited(a) || !guidance.visited(b)).then_some(3.0 * unit);
+                    stroke(
+                        canvas,
+                        (ax + ox, ay + oy),
+                        (bx + ox, by + oy),
+                        width,
+                        dash,
+                        colour,
+                    );
+                }
+            }
+        }
         for seen in guidance.codes().0 {
             let (x, y) = at(seen.room % rooms);
             let (cx, cy, r) = (x + pitch / 2.0, y + pitch / 2.0, 5.0 * unit);
@@ -392,7 +473,7 @@ impl Panel {
         // the floor.
         let steps = (pitch * canvas.scale / 16.0).floor().clamp(1.0, 4.0);
         let px = steps / canvas.scale;
-        for found in items {
+        for found in &items {
             let (x, y) = at(found.room);
             let colour = if found.piece {
                 PIECE
@@ -435,6 +516,61 @@ impl Panel {
                                 ink,
                             );
                         }
+                    }
+                }
+            }
+        }
+        // Level 5 (#52): the core's end of its route, ringed in the route's
+        // colour, since the map marks no core room otherwise; and what each
+        // route's first door still wants, ringed where it lies in the
+        // route's colour: the cards nothing carried answers, and the "?"
+        // cards and access cards that would stand in.
+        if level >= 5 {
+            if let Some(end) = guidance.core_route().and_then(|r| r.last()) {
+                let (x, y) = at(end.room);
+                let out = 2.0 * unit;
+                canvas.outline(
+                    x + out,
+                    y + out,
+                    pitch - 2.0 * out,
+                    pitch - 2.0 * out,
+                    3.0 * unit,
+                    2.5 * unit,
+                    None,
+                    ROUTE,
+                );
+            }
+            let doors = guidance.codes().1;
+            let [piece_door, core_door] = guidance.route_doors();
+            for (door, colour) in [(piece_door, PIECE), (core_door, ROUTE)] {
+                let Some(code) = door.and_then(|room| doors.iter().find(|c| c.room == room)) else {
+                    continue;
+                };
+                let wanted: Vec<Kind> = code
+                    .cards
+                    .iter()
+                    .zip(code.answered)
+                    .filter(|(_, lit)| !lit)
+                    .map(|(&card, _)| starquake::pickups::kind(card))
+                    .collect();
+                if wanted.is_empty() {
+                    continue;
+                }
+                for found in &items {
+                    let stands_in = matches!(found.kind, Kind::AnyChip | Kind::DoorCard);
+                    if stands_in || wanted.contains(&found.kind) {
+                        let (x, y) = at(found.room);
+                        let out = 3.0 * unit;
+                        canvas.outline(
+                            x - out,
+                            y - out,
+                            pitch + 2.0 * out,
+                            pitch + 2.0 * out,
+                            4.0 * unit,
+                            2.0 * unit,
+                            None,
+                            colour,
+                        );
                     }
                 }
             }
@@ -517,6 +653,17 @@ impl Panel {
             let text = String::from_utf8_lossy(&teleporter.code).into_owned();
             let x = right - chip_w;
             canvas.round_rect(x, y, chip_w, chip_h, 4.0, CODE_FILL);
+            // The teleporter a route jumps to next, outlined in its colour
+            // (#52), the other route's around it when both do.
+            let marks = [(guidance.route(), PIECE), (guidance.core_route(), ROUTE)]
+                .into_iter()
+                .filter(|(route, _)| {
+                    route
+                        .and_then(|r| r.iter().find(|s| s.teleport))
+                        .is_some_and(|s| s.room == teleporter.room)
+                })
+                .map(|(_, colour)| colour);
+            outlines(canvas, x, y, chip_w, chip_h, marks);
             let spans = [span(&text, 14.0, Weight::SemiBold, CODE)];
             let w = self.fonts.measure(&spans);
             self.fonts.text(
@@ -542,7 +689,23 @@ impl Panel {
             self.fonts
                 .text(Some(canvas), right - w, y, None, 1.0, &none);
         }
+        let route_doors = guidance.route_doors();
         for (i, door) in doors.iter().enumerate() {
+            // The first door a route passes, outlined in its colour (#52).
+            let marks = route_doors
+                .into_iter()
+                .zip([PIECE, ROUTE])
+                .filter(|(room, _)| *room == Some(door.room))
+                .map(|(_, colour)| colour);
+            let row_w = 3.0 * card + 2.0 * 3.0;
+            outlines(
+                canvas,
+                right - row_w - 3.0,
+                y - 3.0,
+                row_w + 6.0,
+                card + 6.0,
+                marks,
+            );
             let label = (i + 1).to_string();
             let number = [span(&label, 12.0, Weight::SemiBold, SOFT)];
             self.fonts
@@ -593,6 +756,92 @@ impl Panel {
                 }
             }
         }
+    }
+
+    /// Level 5 (#52): what the two lines' colours mean, each word over a
+    /// sample of its line, from `x` with the samples' bottom at `foot`:
+    /// "Item" for the route to a missing piece, with which of the nearest
+    /// it is when Tab has more than one to switch between, and "Core" for
+    /// the one to the core.
+    fn route_legend(&mut self, canvas: &mut Canvas, x: f32, foot: f32, guidance: &Guidance) {
+        let (which, count) = guidance.piece_choice();
+        let item = if count > 1 {
+            format!("Item {which}/{count}")
+        } else {
+            "Item".to_string()
+        };
+        let mut at = x;
+        for (text, colour) in [(item.as_str(), PIECE), ("Core", ROUTE)] {
+            let spans = [span(text, 12.0, Weight::SemiBold, SOFT)];
+            let w = self.fonts.measure(&spans).max(34.0);
+            self.fonts
+                .text(Some(canvas), at, foot - 21.0, None, 1.0, &spans);
+            canvas.round_rect(at, foot - 3.0, w, 3.0, 0.0, colour);
+            at += w + 18.0;
+        }
+    }
+
+    /// An arrow in the picture's border pointing the way a route leaves the
+    /// room (#52): `step` is the room number's change, 1 right, -1 left, 16
+    /// down and -16 up. A box in `colour` with `word` in it, which stays
+    /// level on every edge, and a head on the side it points to, so the
+    /// arrows are told apart without their colours; `shift` moves it along
+    /// the edge.
+    fn border_arrow(
+        &mut self,
+        canvas: &mut Canvas,
+        step: u16,
+        word: &str,
+        colour: Rgb,
+        shift: f32,
+    ) {
+        let border = (PICTURE_W - 768.0) / 2.0;
+        let spans = [span(word, 15.0, Weight::SemiBold, PANEL)];
+        let text_w = self.fonts.measure(&spans);
+        let (w, h, head) = (text_w + 16.0, 26.0, 14.0);
+        // The box's centre, and the way the head points.
+        let (cx, cy, dx, dy) = match step {
+            1 => (
+                PICTURE_W - border / 2.0 - head / 2.0,
+                WINDOW_H / 2.0 + shift,
+                1.0,
+                0.0,
+            ),
+            0xFFFF => (border / 2.0 + head / 2.0, WINDOW_H / 2.0 + shift, -1.0, 0.0),
+            16 => (
+                PICTURE_W / 2.0 + shift,
+                WINDOW_H - border / 2.0 - head / 2.0,
+                0.0,
+                1.0,
+            ),
+            0xFFF0 => (
+                PICTURE_W / 2.0 + shift,
+                border / 2.0 + head / 2.0,
+                0.0,
+                -1.0,
+            ),
+            _ => return,
+        };
+        canvas.round_rect(cx - w / 2.0, cy - h / 2.0, w, h, 4.0, colour);
+        // The head's base overlaps the box by a pixel, so no seam shows.
+        let (bx, by) = (cx + dx * (w / 2.0 - 1.0), cy + dy * (h / 2.0 - 1.0));
+        let spread = if dx == 0.0 { w / 2.0 } else { h / 2.0 + 6.0 };
+        canvas.triangle(
+            [
+                (bx + dx * (head + 1.0), by + dy * (head + 1.0)),
+                (bx - dy * spread, by + dx * spread),
+                (bx + dy * spread, by - dx * spread),
+            ],
+            colour,
+        );
+        self.fonts.text(
+            Some(canvas),
+            cx - text_w / 2.0,
+            cy - 10.0,
+            None,
+            1.0,
+            &spans,
+        );
     }
 
     /// How wide a spaced label is.
@@ -1253,6 +1502,31 @@ impl Panel {
     }
 }
 
+/// A route's outline around a code in the rail at (`x`, `y`), the other
+/// route's around it when both need the same one (#52).
+fn outlines(
+    canvas: &mut Canvas,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    colours: impl Iterator<Item = Rgb>,
+) {
+    for (i, colour) in colours.enumerate() {
+        let out = i as f32 * 4.0;
+        canvas.outline(
+            x - out,
+            y - out,
+            w + 2.0 * out,
+            h + 2.0 * out,
+            4.0 + out,
+            2.0,
+            None,
+            colour,
+        );
+    }
+}
+
 /// A game graphic, 16 by 16 in cells top-left, top-right, bottom-left and
 /// bottom-right, its set pixels `px` square from (`x`, `y`).
 fn draw_graphic(canvas: &mut Canvas, graphic: &[u8; 32], x: f32, y: f32, px: f32, colour: Rgb) {
@@ -1277,10 +1551,6 @@ fn draw_graphic(canvas: &mut Canvas, graphic: &[u8; 32], x: f32, y: f32, px: f32
 
 /// A straight line `width` wide from `a` to `b`, with square ends, dashed
 /// when `dash` gives the length of a dash and of a gap.
-#[allow(
-    dead_code,
-    reason = "unused once walls are cells (#92); the pad's marks and the routes draw with it"
-)]
 fn stroke(
     canvas: &mut Canvas,
     a: (f32, f32),
@@ -1475,6 +1745,7 @@ mod render_check {
                 openings[usize::from(room)].door = Some((7, 14));
                 DoorCode {
                     room,
+                    cards: [11, 12, 13],
                     graphics: [diamond; 3],
                     answered: [i == 0, false, i == 0],
                 }
@@ -1520,6 +1791,32 @@ mod render_check {
             ("level2", level2, Scene::Play),
             ("level2-many-codes", crowded, Scene::Play),
             ("level3", level3.clone(), Scene::Play),
+            (
+                "level5",
+                {
+                    let mut g = level3.clone();
+                    g.set_level(5);
+                    let here = g.room().unwrap();
+                    let walk = |rooms: &[u16]| -> Vec<Step> {
+                        rooms
+                            .iter()
+                            .map(|&room| Step {
+                                room,
+                                teleport: false,
+                            })
+                            .collect()
+                    };
+                    // Made-up routes: the piece's left and down out of the
+                    // map walked, the core's down, both leaving left first.
+                    let piece = walk(&[here - 1, here - 2, here + 14, here + 30]);
+                    let core = walk(&[here - 1, here + 15, here + 31, here + 47]);
+                    let door = g.doors_for_test().first().map(|d| d.room);
+                    g.set_routes(Some(piece), Some(core), [door, None]);
+                    g.set_piece_choice(Some(here + 30), (2, 3));
+                    g
+                },
+                Scene::Play,
+            ),
             (
                 "level6",
                 {
