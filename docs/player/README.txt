@@ -57,10 +57,13 @@ CONTROLS
   Down                 Build a platform.
   Alt, full stop or    Fire.
   comma
-  Gamepad              D-pad or left stick to move, any face or
-                       shoulder button to fire, Start to pause, Select
-                       for guidance (below). Works in every control
-                       method, over USB or Bluetooth.
+  Gamepad              D-pad or left stick to move, the bottom face
+                       button for down (A on an Xbox pad, B on a
+                       Switch one, the cross on a PlayStation one),
+                       the left one to fire, Start to pause, Select for
+                       guidance (below). The other buttons do nothing.
+                       Works in every control method, over USB or
+                       Bluetooth.
                        Some controllers need the right mode: an 8BitDo
                        in Switch mode is detected but sends no input,
                        so try one of its other modes.
@@ -87,6 +90,11 @@ gamepad, opens the guidance menu and pauses the game:
   Left and right       Change the guidance level or training mode.
   Enter, or A          End this game, or exit, after pressing twice.
   Esc, or B or Select  Close the menu.
+
+A and B are the pad's own letters, wherever its maker puts them: A is
+the bottom button on an Xbox pad and the right one on a Switch pad. A
+PlayStation pad uses the cross and the circle. The menu shows the
+letters or marks of the pad that is connected.
 
 Guidance has levels from 0, the original game, to 5; each adds to the
 ones below it. Turning it up, or training mode on, shows on that

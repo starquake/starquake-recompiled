@@ -96,7 +96,8 @@ impl FrontHost {
             std::thread::sleep(Duration::from_millis(20));
             let pad = self.pad.poll();
             let mut guidance = self.shared.guidance.lock().unwrap();
-            if pad.select || pad.east {
+            guidance.set_pad(pad.layout);
+            if pad.select || pad.cancel() {
                 guidance.back();
             }
             if pad.up {
@@ -111,7 +112,7 @@ impl FrontHost {
             if pad.right {
                 guidance.change(true);
             }
-            if pad.south {
+            if pad.confirm() {
                 guidance.enter();
                 if guidance.take(guidance::Action::Exit) {
                     self.shared.quit.store(true, Ordering::Relaxed);
@@ -272,6 +273,7 @@ impl Host for FrontHost {
         let mut pad = self.pad.poll();
         {
             let mut guidance = self.shared.guidance.lock().unwrap();
+            guidance.set_pad(pad.layout);
             if pad.select && !guidance.picker_open() {
                 guidance.open();
             }

@@ -2,10 +2,12 @@
 //!
 //! A Kempston interface is a joystick port: the game reads five bits and
 //! cannot tell what moved them, so a gamepad drives them exactly as the
-//! hardware would. Pause is the odd one out — on a Spectrum it is a key, not
-//! a joystick button — so Start presses `P` for convenience. Select opens
-//! the guidance picker (#1), where the D-pad works it, A does an action,
-//! and B or Select closes it.
+//! hardware would. The D-pad and the left stick move; the bottom face button
+//! is down and the left one fires, as platformers lay them out (#88), and
+//! the others do nothing in play. Pause is the odd one out — on a Spectrum
+//! it is a key, not a joystick button — so Start presses the pause key.
+//! Select opens the guidance picker (#1), where the D-pad works it, A does
+//! an action wherever the pad's maker puts A, and B or Select closes it.
 //!
 //! How the pad is attached is not this code's business, or `gilrs`'s. A
 //! Bluetooth controller the operating system has paired is an ordinary
@@ -13,6 +15,49 @@
 //! through the same platform API. Hot-plugging is handled either way, since
 //! `poll` drains the event queue before reading, which is where a pad that
 //! has just connected turns up.
+
+/// Which letters a pad's face buttons carry, from the maker it reports
+/// itself as (#88). The buttons are read by position — `gilrs` names them
+/// South, East, West and North whatever is printed on them — so this
+/// changes only the letters shown in a legend, and which button confirms.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Layout {
+    /// A on the bottom, B right, X left, Y top. The default: what most pads
+    /// for a computer are printed with, and what an unrecognised pad is
+    /// taken to be.
+    #[default]
+    Xbox,
+    /// A right, B bottom, X top, Y left.
+    Nintendo,
+    /// The cross at the bottom, the circle right, the square left, the
+    /// triangle on top.
+    PlayStation,
+}
+
+/// Nintendo's USB vendor: a Pro Controller, Joy-Cons, or a third-party pad
+/// in its Nintendo mode, which reports itself as one.
+const NINTENDO: u16 = 0x057E;
+/// Sony's.
+const PLAYSTATION: u16 = 0x054C;
+
+impl Layout {
+    /// The layout a pad reporting `vendor` carries.
+    pub fn of(vendor: Option<u16>) -> Layout {
+        match vendor {
+            Some(NINTENDO) => Layout::Nintendo,
+            Some(PLAYSTATION) => Layout::PlayStation,
+            _ => Layout::Xbox,
+        }
+    }
+
+    /// Whether the button that confirms is the right-hand one rather than
+    /// the bottom one: A is on the right of a Nintendo pad, and A confirms.
+    /// The cross confirms on a PlayStation pad, at the bottom as on an Xbox
+    /// one.
+    pub fn confirms_east(self) -> bool {
+        self == Layout::Nintendo
+    }
+}
 
 /// How far a stick must move before it counts as a direction.
 const DEADZONE: f32 = 0.5;
@@ -31,11 +76,33 @@ pub struct Pad {
     pub down: bool,
     pub left: bool,
     pub right: bool,
-    /// The bottom face button (A on an Xbox pad), which does the picker's
-    /// highlighted action.
+    /// The bottom face button (A on an Xbox pad).
     pub south: bool,
-    /// The right face button (B on an Xbox pad), which closes the picker.
+    /// The right face button (B on an Xbox pad).
     pub east: bool,
+    /// The letters the first connected pad carries.
+    pub layout: Layout,
+}
+
+impl Pad {
+    /// The press that does the picker's highlighted action: A, which is the
+    /// bottom button, or the right one on a pad whose A is there.
+    pub fn confirm(&self) -> bool {
+        if self.layout.confirms_east() {
+            self.east
+        } else {
+            self.south
+        }
+    }
+
+    /// The press that goes back: B, the other of the two.
+    pub fn cancel(&self) -> bool {
+        if self.layout.confirms_east() {
+            self.south
+        } else {
+            self.east
+        }
+    }
 }
 
 pub struct Gamepad {
@@ -74,6 +141,12 @@ impl Gamepad {
 
         let (mut bits, mut start) = (0u8, false);
         let mut now = [false; 7];
+        // The first pad listed decides the letters; the rest are read for
+        // what they are pressing.
+        let layout = gilrs
+            .gamepads()
+            .next()
+            .map_or(Layout::Xbox, |(_, first)| Layout::of(first.vendor_id()));
         for (_id, pad) in gilrs.gamepads() {
             use gilrs::{Axis, Button};
             let (x, y) = (pad.value(Axis::LeftStickX), pad.value(Axis::LeftStickY));
@@ -89,18 +162,14 @@ impl Gamepad {
             if pad.is_pressed(Button::DPadUp) || y > DEADZONE {
                 bits |= 0x08;
             }
-            // Any of the buttons under a thumb or finger fires.
-            let fire = [
-                Button::South,
-                Button::East,
-                Button::North,
-                Button::West,
-                Button::RightTrigger,
-                Button::LeftTrigger,
-                Button::RightTrigger2,
-                Button::LeftTrigger2,
-            ];
-            if fire.iter().any(|&b| pad.is_pressed(b)) {
+            // The bottom face button is down, which builds a platform or
+            // takes a lift down, and the left one fires, as a platformer
+            // lays them out (Shovel Knight's pad, for one). The others do
+            // nothing in play.
+            if pad.is_pressed(Button::South) {
+                bits |= 0x04;
+            }
+            if pad.is_pressed(Button::West) {
                 bits |= 0x10;
             }
             start |= pad.is_pressed(Button::Start);
@@ -123,8 +192,60 @@ impl Gamepad {
             right: pressed(4),
             south: pressed(5),
             east: pressed(6),
+            layout,
         };
         self.was = now;
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Layout, Pad};
+
+    #[test]
+    fn the_maker_decides_the_letters() {
+        assert_eq!(Layout::of(Some(0x057E)), Layout::Nintendo);
+        assert_eq!(Layout::of(Some(0x054C)), Layout::PlayStation);
+        assert_eq!(Layout::of(Some(0x045E)), Layout::Xbox, "Microsoft's");
+        assert_eq!(Layout::of(None), Layout::Xbox, "unknown: Xbox letters");
+    }
+
+    #[test]
+    fn a_confirms_wherever_it_is() {
+        let bottom = Pad {
+            south: true,
+            ..Pad::default()
+        };
+        let right = Pad {
+            east: true,
+            ..Pad::default()
+        };
+        for layout in [Layout::Xbox, Layout::PlayStation] {
+            assert!(Pad { layout, ..bottom }.confirm(), "{layout:?}");
+            assert!(Pad { layout, ..right }.cancel(), "{layout:?}");
+        }
+        let nintendo = Layout::Nintendo;
+        assert!(
+            Pad {
+                layout: nintendo,
+                ..right
+            }
+            .confirm()
+        );
+        assert!(
+            Pad {
+                layout: nintendo,
+                ..bottom
+            }
+            .cancel()
+        );
+        assert!(
+            !Pad {
+                layout: nintendo,
+                ..bottom
+            }
+            .confirm()
+        );
     }
 }
