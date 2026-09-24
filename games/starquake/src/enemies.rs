@@ -85,6 +85,11 @@ impl Game {
         if distance(e.x(), b.x()) >= 14 || distance(e.y(), b.y()) >= 11 {
             return None;
         }
+        // Training mode's no harm from enemies: touching one does nothing
+        // (#4).
+        if self.training.no_harm() {
+            return None;
+        }
         if e.0[GRAPHIC + 1] >= HARMLESS_GRAPHICS {
             let drain = &mut self.entities[0].0[0x18];
             *drain = drain.wrapping_add(10);

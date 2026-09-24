@@ -4,7 +4,7 @@
 //! Everything is drawn in logical pixels of the whole window: the picture
 //! takes the left `PICTURE_W`, the panel the rest.
 
-use starquake::game::Scene;
+use starquake::game::{Scene, Training};
 use starquake::map::{COLS, ROWS, Step};
 
 use super::gamepad::Layout;
@@ -22,6 +22,10 @@ pub const PICTURE_W: f32 = 960.0;
 /// card not yet answered by what is carried.
 const CARD_PIXEL: f32 = 1.5;
 const CODE_DIM: Rgb = [0x3e, 0x6a, 0x66];
+/// The picker's training rows (#4): a row's height, and where the rows
+/// end, from the picker's top: the heading, then five rows.
+const SWITCH_PITCH: f32 = 34.0;
+const TRAINING_END: f32 = 250.0 + 24.0 + 5.0 * SWITCH_PITCH + 8.0;
 /// Where the core's square and the codes' rail start (#91).
 const BLOCK_TOP: f32 = 70.0;
 /// A game pixel in the core's square, a slot's tile, and the gap between.
@@ -909,10 +913,27 @@ impl Panel {
                     BRIGHT,
                 )],
             );
-            y += 24.0;
+            // Which switches, one to a line under it (#4).
+            let on: Vec<&str> = Training::NAMES
+                .iter()
+                .zip(record.switches.0)
+                .filter(|(_, on)| *on)
+                .map(|(name, _)| *name)
+                .collect();
+            for (k, name) in on.iter().enumerate() {
+                self.fonts.text(
+                    Some(canvas),
+                    left + 18.0,
+                    y + 22.0 + k as f32 * 18.0,
+                    None,
+                    1.0,
+                    &[span(name, 13.0, Weight::Regular, SOFT)],
+                );
+            }
+            y += 24.0 + 18.0 * on.len() as f32;
         }
         if let Some(heroes) = guidance.heroes() {
-            self.heroes(canvas, left, y + 40.0, &heroes);
+            self.heroes(canvas, left, y + 28.0, &heroes);
         }
     }
 
@@ -921,7 +942,7 @@ impl Panel {
     fn heroes(&mut self, canvas: &mut Canvas, left: f32, top: f32, heroes: &Heroes) {
         self.spaced(canvas, left, top, "CORE OF HEROES");
         for (i, (name, level)) in heroes.names.iter().zip(heroes.levels).enumerate() {
-            let y = top + 26.0 + i as f32 * 26.0;
+            let y = top + 26.0 + i as f32 * 23.0;
             let colour = if heroes.this_game == Some(i) {
                 BRIGHT
             } else {
@@ -954,7 +975,7 @@ impl Panel {
 
     fn picker(&mut self, canvas: &mut Canvas, guidance: &Guidance) {
         canvas.shade(0.0, 0.0, WINDOW_W, WINDOW_H, DIM, 184);
-        // Two settings, then the actions, each taller while it waits for its
+        // The level and the switches, then the actions, each taller while it waits for its
         // second press.
         let actions: Vec<Setting> = guidance
             .rows()
@@ -969,7 +990,7 @@ impl Panel {
             }
         };
         let actions_h: f32 = actions.iter().map(|&r| action_h(r) + 4.0).sum::<f32>() - 4.0;
-        let (w, h) = (520.0, 372.0 + 8.0 + actions_h + 12.0 + 52.0);
+        let (w, h) = (520.0, TRAINING_END + 8.0 + actions_h + 12.0 + 52.0);
         let x = (WINDOW_W - w) / 2.0;
         let y = (WINDOW_H - h) / 2.0;
         canvas.round_rect(x, y, w, h, 12.0, BADGE_LINE);
@@ -1066,45 +1087,56 @@ impl Panel {
             &[span(ADDS[level as usize], 13.0, Weight::Regular, HINT_KEY)],
         );
 
-        // Training mode: off or on.
+        // Training mode (#4): five switches, a row each, off or on.
         let top = y + 250.0;
-        let focused = focus == Setting::Training;
-        self.setting_box(canvas, rx, top, rw, 106.0, focused, "TRAINING MODE");
-        self.arrows(canvas, rx, rw, top + 50.0, focused, training, !training);
-        let mid = rx + rw / 2.0;
-        for (label, chosen, cx, fill, text) in [
-            ("Off", !training, mid - 29.0, SWITCH_OFF, BRIGHT),
-            ("On", training, mid + 29.0, SWITCH_ON, ON_TEXT),
-        ] {
-            let spans = [span(
-                label,
-                15.0,
-                Weight::SemiBold,
-                if chosen { text } else { PAUSED },
-            )];
-            let tw = self.fonts.measure(&spans);
-            if chosen {
-                canvas.round_rect(cx - tw / 2.0 - 14.0, top + 36.0, tw + 28.0, 28.0, 6.0, fill);
+        self.spaced(canvas, rx + 16.0, top + 4.0, "TRAINING MODE");
+        for (i, name) in Training::NAMES.iter().enumerate() {
+            let row = Setting::Switch(i as u8);
+            let ry = top + 24.0 + i as f32 * SWITCH_PITCH;
+            let focused = focus == row;
+            if focused {
+                canvas.round_rect(rx, ry, rw, SWITCH_PITCH - 4.0, 8.0, ACCENT);
+                canvas.round_rect(
+                    rx + 2.0,
+                    ry + 2.0,
+                    rw - 4.0,
+                    SWITCH_PITCH - 8.0,
+                    6.0,
+                    SELECTED,
+                );
             }
-            self.fonts
-                .text(Some(canvas), cx - tw / 2.0, top + 41.0, None, 1.0, &spans);
+            let colour = if focused { TITLE } else { VALUE_DIM };
+            self.fonts.text(
+                Some(canvas),
+                rx + 16.0,
+                ry + 6.0,
+                None,
+                1.0,
+                &[span(name, 14.0, Weight::SemiBold, colour)],
+            );
+            let on = training.0[i];
+            let (label, fill, text) = if on {
+                ("On", SWITCH_ON, ON_TEXT)
+            } else {
+                ("Off", SWITCH_OFF, BRIGHT)
+            };
+            let spans = [span(label, 13.0, Weight::SemiBold, text)];
+            let tw = self.fonts.measure(&spans);
+            let bx = rx + rw - 16.0 - 44.0;
+            canvas.round_rect(bx, ry + 4.0, 44.0, 22.0, 6.0, fill);
+            self.fonts.text(
+                Some(canvas),
+                bx + (44.0 - tw) / 2.0,
+                ry + 7.0,
+                None,
+                1.0,
+                &spans,
+            );
         }
-        self.centred_in(
-            canvas,
-            rx,
-            rw,
-            top + 76.0,
-            &[span(
-                "Not built yet: energy will stop draining.",
-                13.0,
-                Weight::Regular,
-                HINT_KEY,
-            )],
-        );
 
         // The actions: pressed once, a row turns red and asks again.
-        let mut ay = y + 380.0;
-        canvas.round_rect(x + 1.0, y + 372.0, w - 2.0, 1.0, 0.0, RULE);
+        let mut ay = y + TRAINING_END + 8.0;
+        canvas.round_rect(x + 1.0, y + TRAINING_END, w - 2.0, 1.0, 0.0, RULE);
         for &row in &actions {
             let rh = action_h(row);
             let (label, again) = match row {
@@ -1185,18 +1217,20 @@ impl Panel {
                 LEVELS[level as usize]
             ));
         }
-        if training != was_training {
-            changes.push(format!(
-                "Training mode {} \u{2192} {}",
-                on_off(was_training),
-                on_off(training)
-            ));
+        for (i, name) in Training::NAMES.iter().enumerate() {
+            if training.0[i] != was_training.0[i] {
+                changes.push(format!(
+                    "{name} {} \u{2192} {}",
+                    on_off(was_training.0[i]),
+                    on_off(training.0[i])
+                ));
+            }
         }
         let mut shows = Vec::new();
         if level > record.highest {
             shows.push(format!("guidance up to level {level}"));
         }
-        if training && !record.training {
+        if record.switches.union(training) != record.switches {
             shows.push("that training mode was used".to_string());
         }
         let later = match shows.len() {
@@ -1214,8 +1248,8 @@ impl Panel {
                 format!("Back to level {was_level}"),
             ),
             (false, true) => (
-                "Keep training on".to_string(),
-                "Turn training off".to_string(),
+                "Keep the switches".to_string(),
+                "Undo the switches".to_string(),
             ),
             _ => ("Keep both changes".to_string(), "Undo both".to_string()),
         };
@@ -1911,6 +1945,18 @@ mod render_check {
                 Scene::Play,
             ),
             (
+                "picker-switches",
+                {
+                    let mut g = picker.clone();
+                    for _ in 0..4 {
+                        g.focus_down();
+                    }
+                    g.change(true);
+                    g
+                },
+                Scene::Play,
+            ),
+            (
                 "picker-training",
                 {
                     let mut g = picker.clone();
@@ -1962,7 +2008,7 @@ mod render_check {
                 },
                 Scene::Play,
             ),
-            ("score", record, Scene::GameOver),
+            ("score", record.clone(), Scene::GameOver),
             (
                 "score-heroes",
                 {
@@ -1974,6 +2020,22 @@ mod render_check {
                         ],
                         levels: [Some(3), Some(0), Some(5), None, None, None, None, None],
                         this_game: Some(0),
+                    }));
+                    g
+                },
+                Scene::GameOver,
+            ),
+            (
+                // The switches' lines and the table together (#4, #90).
+                "score-training-heroes",
+                {
+                    let mut g = record.clone();
+                    g.set_heroes(Some(Heroes {
+                        names: [
+                            *b"JAN", *b"SQ ", *b"BOB", *b"AAA", *b"BBB", *b"CCC", *b"DDD", *b"EEE",
+                        ],
+                        levels: [Some(3), Some(0), Some(5), None, None, None, None, None],
+                        this_game: None,
                     }));
                     g
                 },

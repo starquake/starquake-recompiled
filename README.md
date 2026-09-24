@@ -50,8 +50,10 @@ to the ones below it:
 | 6 | Everything | every code and the whole planet (#95) |
 
 Levels 0 to 3 show only what you could have written down yourself; 4 and up
-tell you things you could not have known. Training mode (#4) is still to
-come.
+tell you things you could not have known. Training mode (#4) is five
+switches in the same menu: full energy, full bridging platforms, full laser,
+endless lives and no harm from enemies, each obeyed by the game where it
+decides that thing, and named on the game's score.
 
 ## Status
 

@@ -157,7 +157,13 @@ the menu asks before keeping such a change. So far:
            planet's map, the rooms you have never entered drawn
            dimmer.
 
-Training mode is still to come.
+Training mode is five switches under the level in the same menu, each
+off or on: full energy, full bridging platforms and full laser each
+fill their bar and keep it full; endless lives keeps a death from
+costing one; no harm from enemies keeps them from draining energy or
+killing, and stops the patches and force fields that kill on touch.
+The score names the switches used, and a game played with any of them
+on is not kept in the high-score table.
 
 
 LEGAL

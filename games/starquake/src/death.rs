@@ -133,7 +133,10 @@ impl Game {
         if self.status.lives == 0 {
             return false;
         }
-        self.status.lives -= 1;
+        // Training mode's endless lives: the death takes none (#4).
+        if !self.training.endless_lives() {
+            self.status.lives -= 1;
+        }
         self.status.bars[0] = 0xFF;
         self.status.bars[1] |= 8;
         let b = &mut self.entities[0].0;

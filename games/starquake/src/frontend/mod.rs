@@ -383,6 +383,10 @@ impl Host for FrontHost {
         self.keeper.shown()
     }
 
+    fn training(&mut self) -> starquake::game::Training {
+        self.shared.guidance.lock().unwrap().training()
+    }
+
     fn frame(&mut self, game: &Game) -> (Input, u32) {
         if self.shared.quit.load(Ordering::Relaxed) {
             if self.bench {

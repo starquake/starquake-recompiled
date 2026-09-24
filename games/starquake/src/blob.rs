@@ -664,6 +664,9 @@ impl Game {
                 self.apply_bonus(bonus.graphic);
                 Ok(false)
             }
+            // A patch that kills on touch, unless training mode says no
+            // harm (#4).
+            6 if self.training.no_harm() => Ok(false),
             6 => Err(Outcome::Died(0x10)),
             0x0B => {
                 if self.status.inventory.iter().any(|&(g, _)| g == 0x10)
