@@ -1203,7 +1203,8 @@ impl Panel {
 
     /// The question over the picker when leaving it would add to the score
     /// note: exactly what changed since it opened, what the score will say,
-    /// and buttons named for what they do.
+    /// and one button named for keeping it, which takes two presses as the
+    /// picker's actions do (#122); Esc or B undoes the change.
     fn noted_with_score(&mut self, canvas: &mut Canvas, guidance: &Guidance, choice: Choice) {
         let (was_level, was_training) = guidance.opened();
         let (level, training) = (guidance.level(), guidance.training());
@@ -1242,17 +1243,13 @@ impl Panel {
             "This game's score will show {}. That stays, even if you {later} later.",
             shows.join(" and ")
         );
-        let (keep, undo) = match (level != was_level, training != was_training) {
-            (true, false) => (
-                format!("Keep level {level}"),
-                format!("Back to level {was_level}"),
-            ),
-            (false, true) => (
-                "Keep the switches".to_string(),
-                "Undo the switches".to_string(),
-            ),
-            _ => ("Keep both changes".to_string(), "Undo both".to_string()),
+        let keep = match (level != was_level, training != was_training) {
+            (true, false) => format!("Keep level {level}"),
+            (false, true) => "Keep the switches".to_string(),
+            _ => "Keep both changes".to_string(),
         };
+        let armed = choice == Choice::Armed;
+        let button_h = if armed { 54.0 } else { 40.0 };
 
         let w = 440.0;
         let x = (WINDOW_W - w) / 2.0;
@@ -1266,8 +1263,14 @@ impl Panel {
             1.5,
             &[span(&explanation, 13.0, Weight::Regular, HINT_KEY)],
         );
-        let h =
-            58.0 + 22.0 * changes.len() as f32 + 10.0 + explanation_h + 20.0 + 40.0 + 20.0 + 44.0;
+        let h = 58.0
+            + 22.0 * changes.len() as f32
+            + 10.0
+            + explanation_h
+            + 20.0
+            + button_h
+            + 20.0
+            + 44.0;
         let y = (WINDOW_H - h) / 2.0;
         canvas.round_rect(x, y, w, h, 12.0, BUTTON_LINE);
         canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0, 11.0, DIALOG);
@@ -1306,33 +1309,40 @@ impl Panel {
             &[span(&explanation, 13.0, Weight::Regular, HINT_KEY)],
         );
         let by = ly + explanation_h + 20.0;
-        let bw = (inner - 12.0) / 2.0;
-        for (i, (label, this)) in [(keep.as_str(), Choice::Use), (undo.as_str(), Choice::Undo)]
-            .into_iter()
-            .enumerate()
-        {
-            let bx = x + 24.0 + i as f32 * (bw + 12.0);
-            let chosen = choice == this;
-            if chosen {
-                canvas.round_rect(bx, by, bw, 40.0, 8.0, ACCENT);
-            } else {
-                canvas.round_rect(bx, by, bw, 40.0, 8.0, BUTTON_LINE);
-                canvas.round_rect(bx + 1.0, by + 1.0, bw - 2.0, 38.0, 7.0, DIALOG);
-            }
-            let spans = [span(
-                label,
-                14.0,
+        let (bx, bw) = (x + 24.0, inner);
+        if armed {
+            canvas.round_rect(bx, by, bw, button_h, 10.0, ACCENT);
+            canvas.round_rect(bx + 2.0, by + 2.0, bw - 4.0, button_h - 4.0, 8.0, SELECTED);
+        } else {
+            canvas.round_rect(bx, by, bw, button_h, 8.0, BUTTON_LINE);
+            canvas.round_rect(bx + 1.0, by + 1.0, bw - 2.0, button_h - 2.0, 7.0, DIALOG);
+        }
+        self.fonts.text(
+            Some(canvas),
+            bx + 16.0,
+            by + 11.0,
+            None,
+            1.0,
+            &[span(
+                &keep,
+                15.0,
                 Weight::SemiBold,
-                if chosen { DIALOG } else { VALUE_DIM },
-            )];
-            let tw = self.fonts.measure(&spans);
+                if armed { TITLE } else { VALUE_DIM },
+            )],
+        );
+        if armed {
             self.fonts.text(
                 Some(canvas),
-                bx + (bw - tw) / 2.0,
-                by + 12.0,
+                bx + 16.0,
+                by + 31.0,
                 None,
                 1.0,
-                &spans,
+                &[span(
+                    "Press Enter or A again to keep",
+                    12.0,
+                    Weight::Regular,
+                    HINT_KEY,
+                )],
             );
         }
         let foot = y + h - 44.0;
@@ -1342,9 +1352,8 @@ impl Panel {
             x + 24.0,
             foot + 12.0,
             &[
-                (&["\u{2190}", "\u{2192}"], "choose"),
-                (&["Enter", "/", "(A)"], "confirm"),
-                (&["Esc", "/", "(B)"], "back"),
+                (&["Enter", "/", "(A)"], "keep"),
+                (&["Esc", "/", "(B)"], "undo"),
             ],
         );
     }
@@ -2004,6 +2013,21 @@ mod render_check {
                     g.change(true);
                     g.change(true);
                     g.back();
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                // Pressed once, waiting for the second press (#122).
+                "picker-noted-armed",
+                {
+                    let mut g = Guidance::default();
+                    g.set_level(1);
+                    g.open();
+                    g.change(true);
+                    g.change(true);
+                    g.back();
+                    g.enter();
                     g
                 },
                 Scene::Play,

@@ -111,7 +111,8 @@ Guidance has levels from 0, the original game, to 6; each adds to the
 ones below it. Levels 1 to 3 show only what you could have written
 down yourself; 4 and up tell you things you could not have known.
 Turning it up, or training mode on, shows on that game's score, so
-the menu asks before keeping such a change. So far:
+the menu asks before keeping such a change: Enter or A twice keeps it,
+Esc or B undoes it. So far:
 
   Level 1  Codes and the core: the codes of the teleports you have
            entered, in a column at the panel's right, and under them
