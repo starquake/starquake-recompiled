@@ -88,6 +88,8 @@ pub struct Pad {
     pub south: bool,
     /// The right face button (B on an Xbox pad).
     pub east: bool,
+    /// The top face button (Y on an Xbox pad): the next piece's route.
+    pub north: bool,
     /// The letters the first connected pad carries.
     pub layout: Layout,
 }
@@ -130,7 +132,7 @@ pub struct Gamepad {
     /// Whether Select, the four directions and the bottom face button were
     /// down at the last poll,
     /// to tell a press from a hold.
-    was: [bool; 7],
+    was: [bool; 8],
     /// Joystick bits, and Start, kept from the game until they are let go:
     /// what was held as the picker closed (#88).
     held_back: u8,
@@ -157,7 +159,7 @@ impl Gamepad {
     fn none() -> Gamepad {
         Gamepad {
             gilrs: None,
-            was: [false; 7],
+            was: [false; 8],
             held_back: 0,
             start_held_back: false,
             hold_back_next: false,
@@ -195,7 +197,7 @@ impl Gamepad {
         while gilrs.next_event().is_some() {}
 
         let (mut dirs, mut buttons, mut start) = (0u8, 0u8, false);
-        let mut now = [false; 7];
+        let mut now = [false; 8];
         // The first pad listed decides the letters; the rest are read for
         // what they are pressing.
         let layout = gilrs
@@ -220,8 +222,8 @@ impl Gamepad {
             // The bottom face button is down, which builds a platform, the
             // right one up, which picks up or swaps an item and boards the
             // hover platform, and the left one fires, as a platformer lays
-            // them out (Shovel Knight's pad, for one). The top one does
-            // nothing in play.
+            // them out (Shovel Knight's pad, for one). The top one switches
+            // level 5's route to the next piece, as Tab does (#52).
             if pad.is_pressed(Button::South) {
                 buttons |= 0x04;
             }
@@ -239,6 +241,7 @@ impl Gamepad {
             now[4] |= pad.is_pressed(Button::DPadRight) || x > DEADZONE;
             now[5] |= pad.is_pressed(Button::South);
             now[6] |= pad.is_pressed(Button::East);
+            now[7] |= pad.is_pressed(Button::North);
         }
         let pressed = |i: usize| now[i] && !self.was[i];
         let mut result = Pad {
@@ -253,6 +256,7 @@ impl Gamepad {
             right: pressed(4),
             south: pressed(5),
             east: pressed(6),
+            north: pressed(7),
             layout,
         };
         self.was = now;

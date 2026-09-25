@@ -8,6 +8,7 @@ mod input;
 mod overlay;
 mod panel;
 mod prompt;
+mod routes;
 mod scores;
 pub mod tape;
 mod text;
@@ -89,6 +90,12 @@ struct FrontHost {
     /// The high-score table kept between runs (#90), and where.
     keeper: scores::Keeper,
     scores_path: Option<std::path::PathBuf>,
+    /// The planet as a graph for level 5's routes (#52), read on the first
+    /// frame that needs it.
+    graph: Option<starquake::map::Graph>,
+    /// The last routes found and what they were found from, since BLOB
+    /// stays in one place for many frames.
+    routes: Option<(RouteKey, Routes)>,
 }
 
 /// "End this game" (#125): holds A, S, D, F and G, the original's own way
@@ -112,6 +119,20 @@ fn end_game(scene: Scene, play_work: bool, paused: bool, input: &mut Input) -> b
     }
     true
 }
+
+/// What level 5's routes are found from: where BLOB is, the booths whose
+/// codes are known, the missing pieces, and whether one is carried.
+type RouteKey = (
+    starquake::map::Place,
+    Vec<u16>,
+    Vec<starquake::pickups::Item>,
+    bool,
+);
+/// The routes to the nearest pieces, and to the core.
+type Routes = (
+    Vec<Vec<starquake::map::Step>>,
+    Option<Vec<starquake::map::Step>>,
+);
 
 impl FrontHost {
     /// Holds the game between frames while the guidance picker is open,
@@ -261,11 +282,59 @@ fn door_codes(game: &Game) -> Vec<guidance::DoorCode> {
             let answered = starquake::screens::answered(&door.cards, slots);
             guidance::DoorCode {
                 room: door.room,
+                cards: door.cards,
                 graphics: door.cards.map(|c| game.assets.graphic32(c)),
                 answered: std::array::from_fn(|i| answered[i]),
             }
         })
         .collect()
+}
+
+/// Level 5's routes (#52), from where BLOB stands: to the chosen of the
+/// nearest missing pieces, which Tab switches between, and to the core
+/// while a piece it needs is carried; with the first door each passes, for
+/// the rail to outline.
+fn set_routes(
+    guidance: &mut guidance::Guidance,
+    graph: &starquake::map::Graph,
+    cache: &mut Option<(RouteKey, Routes)>,
+    game: &Game,
+) {
+    let (x, y) = (game.entities[0].x(), game.entities[0].y());
+    let here = game.room;
+    let start = graph.place(here, x, y);
+    let booths: Vec<u16> = guidance.codes().0.iter().map(|t| t.room).collect();
+    let carrying = guidance.core().iter().any(|h| h.carried);
+    let key = (start, booths, game.missing_pieces(), carrying);
+    if cache.as_ref().is_none_or(|(k, _)| *k != key) {
+        let found = routes::routes(
+            graph,
+            start,
+            &key.1,
+            &key.2,
+            carrying,
+            starquake::cores::CORE_ROOM,
+        );
+        *cache = Some((key, found));
+    }
+    let Some((_, (nearest, core))) = cache.as_ref() else {
+        return;
+    };
+    let core = core.clone();
+    let ends: Vec<u16> = nearest
+        .iter()
+        .map(|r| r.last().map_or(here, |s| s.room))
+        .collect();
+    let switch = guidance.take_switch();
+    let (which, chosen) = routes::choose(&ends, guidance.chosen_piece(), switch);
+    let count = u8::try_from(ends.len()).unwrap_or(u8::MAX);
+    guidance.set_piece_choice(
+        chosen,
+        (u8::try_from(which).map_or(0, |w| w + 1).min(count), count),
+    );
+    let door = |route: Option<&Vec<starquake::map::Step>>| graph.first_door(here, x, y, route?);
+    let doors = [door(nearest.get(which)), door(core.as_ref())];
+    guidance.set_routes(nearest.get(which).cloned(), core, doors);
 }
 
 /// Every security door on the planet for level 6 (#95): those seen first,
@@ -285,6 +354,7 @@ fn every_door(
             let answered = starquake::screens::answered(&cards, slots);
             guidance::DoorCode {
                 room,
+                cards,
                 graphics: cards.map(|c| game.assets.graphic32(c)),
                 answered: std::array::from_fn(|i| answered[i]),
             }
@@ -364,6 +434,10 @@ impl Host for FrontHost {
                     let every = every_door(game, guidance.openings(), &seen);
                     guidance.set_doors(seen);
                     guidance.set_every(game.all_teleporters(), every);
+                    if guidance.level() >= 5 {
+                        let graph = self.graph.get_or_insert_with(|| game.graph());
+                        set_routes(&mut guidance, graph, &mut self.routes, game);
+                    }
                 }
                 Scene::GameOver => guidance.set_room(None),
                 // The game-over screens are done: the title screen starts
@@ -427,6 +501,9 @@ impl Host for FrontHost {
             guidance.set_pad(pad.layout);
             if pad.select && !guidance.picker_open() {
                 guidance.open();
+            }
+            if pad.north && !guidance.picker_open() {
+                guidance.request_switch();
             }
         }
         if self.shared.guidance.lock().unwrap().picker_open() {
@@ -559,6 +636,8 @@ fn play_game(
         scene_seen: Scene::Loading,
         keeper,
         scores_path,
+        graph: None,
+        routes: None,
     };
     // The frame counter runs throughout, which is what seeds each new game.
     game.run(&mut host);

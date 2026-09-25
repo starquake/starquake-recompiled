@@ -49,7 +49,7 @@ const SHOT_RIGHT: u16 = 0xE8B4;
 const SHOT_LEFT: u16 = 0xE974;
 const HOVER_GRAPHIC: u16 = 0xAFC8;
 /// Attribute of lift cells and other special floor.
-const SPECIAL_CELL: u8 = 0x64;
+pub(crate) const SPECIAL_CELL: u8 = 0x64;
 const CHEOPS: u8 = 0x19;
 
 /// Screens that take over the game until the player is done with them.
