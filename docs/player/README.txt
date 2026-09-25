@@ -114,7 +114,12 @@ Turning it up, or training mode on, shows on that game's score, so
 the menu asks before keeping such a change. So far:
 
   Level 1  Codes and the core: the codes of the teleporters you have
-           seen, in a column at the panel's right, and the core's nine
+           seen, in a column at the panel's right, and under them each
+           security door's three key code cards once its screen has
+           shown them, numbered; a card stays dim until something you
+           carry answers it: that card, a "?" card for one missing, or
+           the access card for all three. The map shows each door's
+           number where it stands. And the core's nine
            slots at its top left in the game's own pictures: bright
            while still wanted, dim once delivered, outlined while you
            carry that piece.

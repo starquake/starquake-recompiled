@@ -51,6 +51,16 @@ pub struct Found {
     pub seen: bool,
 }
 
+/// A security door whose code is shown (#94): its room, the three key code
+/// cards it asks for in the game's own graphics, and which of them what is
+/// carried answers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DoorCode {
+    pub room: u16,
+    pub graphics: [[u8; 32]; 3],
+    pub answered: [bool; 3],
+}
+
 /// One of the core's nine slots, for the square at the panel's top left
 /// (#91): the piece it takes, in the game's own graphic, whether it is still
 /// wanted, and whether that piece is being carried.
@@ -139,6 +149,8 @@ pub struct Guidance {
     core: Vec<Hole>,
     /// The items lying out on the planet, in the game being played.
     items: Vec<Found>,
+    /// The security doors whose codes have been shown, in the order seen.
+    doors: Vec<DoorCode>,
     /// Bumped on every change, so a watcher can tell something changed.
     version: u64,
 }
@@ -200,6 +212,18 @@ impl Guidance {
     pub fn set_heroes(&mut self, heroes: Option<Heroes>) {
         if self.heroes != heroes {
             self.heroes = heroes;
+            self.version += 1;
+        }
+    }
+
+    /// The security doors whose codes have been shown this game.
+    pub fn doors(&self) -> &[DoorCode] {
+        &self.doors
+    }
+
+    pub fn set_doors(&mut self, doors: Vec<DoorCode>) {
+        if self.doors != doors {
+            self.doors = doors;
             self.version += 1;
         }
     }
@@ -343,6 +367,7 @@ impl Guidance {
             || self.pieces != empty
             || !self.core.is_empty()
             || !self.items.is_empty()
+            || !self.doors.is_empty()
         {
             self.teleporters.clear();
             self.visited.clear();
@@ -350,6 +375,7 @@ impl Guidance {
             self.pieces = empty;
             self.core.clear();
             self.items.clear();
+            self.doors.clear();
             self.version += 1;
         }
     }

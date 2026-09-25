@@ -55,6 +55,7 @@ impl Game {
     /// there, which means the file was not Starquake.
     pub fn new_game(&mut self, method: u8) {
         self.teleporters_seen.clear();
+        self.doors_seen.clear();
         let ram = self.assets.clone();
         let ram = &ram.ram;
 
