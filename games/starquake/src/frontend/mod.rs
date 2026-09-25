@@ -502,6 +502,9 @@ impl Host for FrontHost {
             if pad.select && !guidance.picker_open() {
                 guidance.open();
             }
+            if pad.north && !guidance.picker_open() {
+                guidance.request_switch();
+            }
         }
         if self.shared.guidance.lock().unwrap().picker_open() {
             pad = self.hold_for_picker();
