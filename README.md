@@ -103,7 +103,7 @@ original's.
 | `games/starquake` | The game (library) and the playable program (`frontend` feature: pixels, winit, cpal). |
 | `tools/sq-verify` | Differential tests against the original (development only). |
 | `crates/zx-runtime` | Reference ZX Spectrum/Z80 interpreter that runs the original for comparison (development only; not part of the game). |
-| `crates/zx-core` | Z80 decoder, `.z80` loader, PNG writer. |
+| `crates/zx-core` | Z80 decoder, `.tap` loader, PNG writer. |
 | `crates/zx-recomp` | Tracing and disassembly-listing tool used for reverse engineering (development only). |
 | `docs/re` | Reverse-engineering notes. |
 | `docs/player` | The guide for players: where to put the tape, and the controls. A release archive carries this folder. |
@@ -111,7 +111,7 @@ original's.
 
 ## Verification
 
-With `starquake.z80` and `48.rom` in `assets/`:
+With `starquake.tap` and `48.rom` in `assets/`:
 
 ```sh
 cargo run --release -p sq-verify
@@ -162,12 +162,14 @@ the highlight had been flashing about 8% fast. The tape's loader puts the stack
 there too (`CLEAR 24103`), so the music player waits on the picture six times
 in every half-cycle.
 
-The checks read the `.z80` snapshot and `48.rom`, which are needed only for
-development: the reference interpreter needs a running machine to compare
-against. The tape and the snapshot hold the same program; `sq-verify tape`
-compares them and reports that they differ only in the bytes the game itself
-writes while running (control method, keys, random-number state and such),
-with no difference in any instruction.
+The checks read the tape and `48.rom`, the ROM needed only for development:
+the reference interpreter needs a running machine to compare against. The
+original starts from the tape where the ROM's loader returns into it
+(`layout::ENTRY_PC`), runs its own start-up and title tune on the real ROM,
+and every check starts from its menu. Until starquake-recompiled#117 the
+checks ran a `.z80` snapshot instead, which differed from the tape in one byte
+of code (`D91A`, a damaged `JR NZ`); the rewrite had copied it and the checks,
+running the same bytes, agreed. Nothing reads a snapshot now.
 
 `starquake --headless FRAMES DIR` plays with random input and writes
 screenshots, for testing without a window.

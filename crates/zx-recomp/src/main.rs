@@ -50,8 +50,8 @@ fn run() -> Result<(), String> {
     let assets = assets.unwrap_or_else(|| PathBuf::from("assets"));
     let inputs = Inputs::load(&cfg, &assets)?;
     println!(
-        "snapshot {} (sha1 {})",
-        cfg.game.snapshot, inputs.snapshot_sha1
+        "tape {} (sha1 {})",
+        cfg.game.tape, inputs.tape_sha1
     );
 
     let start = std::time::Instant::now();
@@ -112,7 +112,7 @@ fn run() -> Result<(), String> {
     let analysis = analysis::analyze(
         &cfg,
         &inputs.memory(),
-        inputs.snapshot.pc,
+        inputs.start.pc,
         inputs.rom.is_some(),
         &traced.trace,
         &extra,

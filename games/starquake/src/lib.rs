@@ -2,7 +2,7 @@
 //!
 //! This crate contains no data from the original game. All graphics, maps
 //! and text are read at startup from the player's own copy of the game (a
-//! `.z80` snapshot), see [`assets`].
+//! `.tap` tape), see [`assets`].
 
 pub mod assets;
 pub mod blob;

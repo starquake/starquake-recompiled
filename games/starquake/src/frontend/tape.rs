@@ -214,7 +214,7 @@ fn keep_in(dir: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
 }
 
 /// The game's memory and loading screen from a file named on the command
-/// line: a tape, a zip holding one, or (for development) a `.z80` snapshot.
+/// line: a tape, or a zip holding one.
 ///
 /// # Errors
 ///

@@ -3,7 +3,7 @@
 //! It runs the original headless and works out what its code does, so the
 //! rewrite can be written from a readable listing rather than from raw bytes:
 //!
-//! 1. Load the user's snapshot (and ROM) and check them against the hashes
+//! 1. Load the user's tape (and ROM) and check them against the hashes
 //!    in the game config.
 //! 2. Trace: run the game headless in the interpreter with scripted input,
 //!    recording executed code, jump targets and self-modifying code.
@@ -29,8 +29,9 @@ pub use config::Config;
 
 /// The user-supplied files a build works from.
 pub struct Inputs {
-    pub snapshot: Snapshot,
-    pub snapshot_sha1: String,
+    /// The machine as the tape's program starts.
+    pub start: Snapshot,
+    pub tape_sha1: String,
     pub rom: Option<Vec<u8>>,
     pub rom_sha1: Option<String>,
 }
@@ -57,23 +58,20 @@ fn check_hash(what: &str, actual: &str, expected: Option<&str>) -> Result<(), St
 }
 
 impl Inputs {
-    /// Reads the snapshot and ROM the configuration names, from `assets`.
+    /// Reads the tape and ROM the configuration names, from `assets`.
     ///
     /// # Errors
     ///
     /// If either file is missing or unreadable, its SHA-1 does not match the
-    /// one the configuration pins, or the snapshot will not parse.
+    /// one the configuration pins, or the tape will not parse.
     pub fn load(cfg: &Config, assets: &Path) -> Result<Inputs, String> {
-        let snap_path = assets.join(&cfg.game.snapshot);
-        let snap_bytes = read(&snap_path, "snapshot")?;
-        let snapshot_sha1 = sha1_hex(&snap_bytes);
-        check_hash(
-            "snapshot",
-            &snapshot_sha1,
-            cfg.game.snapshot_sha1.as_deref(),
-        )?;
-        let snapshot = zx_core::snapshot::load_z80(&snap_bytes)
-            .map_err(|e| format!("{}: {e}", snap_path.display()))?;
+        let tape_path = assets.join(&cfg.game.tape);
+        let tape_bytes = read(&tape_path, "tape")?;
+        let tape_sha1 = sha1_hex(&tape_bytes);
+        check_hash("tape", &tape_sha1, cfg.game.tape_sha1.as_deref())?;
+        let tape = zx_core::tape::load_tap(&tape_bytes)
+            .map_err(|e| format!("{}: {e}", tape_path.display()))?;
+        let start = Snapshot::from_tape(&tape, cfg.game.entry_pc, cfg.game.entry_sp);
 
         let (rom, rom_sha1) = match &cfg.game.rom {
             Some(name) => {
@@ -91,16 +89,16 @@ impl Inputs {
             None => (None, None),
         };
         Ok(Inputs {
-            snapshot,
-            snapshot_sha1,
+            start,
+            tape_sha1,
             rom,
             rom_sha1,
         })
     }
 
-    /// Memory image the analysis starts from: RAM from the snapshot, plus the ROM.
+    /// Memory image the analysis starts from: RAM from the tape, plus the ROM.
     pub fn memory(&self) -> Vec<u8> {
-        let mut mem = self.snapshot.memory();
+        let mut mem = self.start.memory();
         if let Some(rom) = &self.rom {
             mem[..0x4000].copy_from_slice(rom);
         }

@@ -1,8 +1,17 @@
 //! Where the original program keeps its state.
 //!
-//! The initial game state is taken from the player's snapshot, and the
+//! The initial game state is taken from the player's tape, and the
 //! verification tool reads the reference machine through the same map, so
 //! the addresses live in one place.
+
+/// Where the program starts once the tape has loaded. Its last block covers
+/// all of RAM, the stack included, and the ROM's loader returns through the
+/// address that block leaves on the stack: here. ZX Sidekick's `entry` check
+/// finds it by running the real loader on this same tape
+/// (zx-sidekick/zx-sidekick, `games/starquake/starquake/src/facts.rs`).
+pub const ENTRY_PC: u16 = 0x5E24;
+/// The stack pointer at that moment.
+pub const ENTRY_SP: u16 = 0x5E20;
 
 pub const ROOM: usize = 0xD2C8;
 pub const RNG: usize = 0xDAC0;

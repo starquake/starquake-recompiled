@@ -75,35 +75,26 @@ impl Game {
             let base = crate::display::attr_index(x, y);
             let narrow = x & 7 == 0;
             let short = y.wrapping_add(1) & 7 == 0;
-            let mut mask = 0xF8u8;
-            let paint = |g: &mut Game, i: usize, mask: u8| {
+            let paint = |g: &mut Game, i: usize| {
                 let a = &mut g.display.mem[BITMAP_LEN + i];
                 if *a & 0x20 == 0 {
-                    *a = (*a & mask) | ink;
+                    *a = (*a & 0xF8) | ink;
                 }
             };
 
-            paint(self, base, mask);
-            paint(self, base + 1, mask);
+            paint(self, base);
+            paint(self, base + 1);
             if !narrow {
-                paint(self, base + 2, mask);
-                // In this version of the game the check for this cell is a
-                // stray RST 38: it runs the ROM's interrupt routine (one
-                // extra frame count), always paints the cell, and leaves the
-                // mask one higher for the rest of the sprite.
-                self.frames = self.frames.wrapping_add(1);
-                self.work.interrupt_calls += 1;
-                mask += 1;
-                let a = &mut self.display.mem[BITMAP_LEN + base + 34];
-                *a = (*a & mask) | ink;
+                paint(self, base + 2);
+                paint(self, base + 34);
             }
-            paint(self, base + 33, mask);
-            paint(self, base + 32, mask);
+            paint(self, base + 33);
+            paint(self, base + 32);
             if !short {
-                paint(self, base + 64, mask);
-                paint(self, base + 65, mask);
+                paint(self, base + 64);
+                paint(self, base + 65);
                 if !narrow {
-                    paint(self, base + 66, mask);
+                    paint(self, base + 66);
                 }
             }
         }

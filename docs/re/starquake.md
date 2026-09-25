@@ -2,8 +2,9 @@
 
 Working notes for the rewrite. Everything here is a description in our own
 words of how the original program works; no original code or data is
-reproduced. Addresses refer to the 48K snapshot with SHA-1
-`8cf0722b752f7fe1651734b32a240e714525e480`.
+reproduced. Addresses refer to the program on the tape with SHA-1
+`65450d6f33692c2c2868c0b497037f2cfd0ef3bd`, which starts at `5E24` with the
+stack at `5E20` once the ROM's loader has run.
 
 Status legend: **confirmed** (verified by running the original), **read**
 (understood from the disassembly), **guess**.
@@ -141,10 +142,6 @@ y is snapped to the character grid on arrival.
 
 ## Quirks the rewrite reproduces
 
-- `D91A`: in this dump the check for one sprite-colour cell is `RST 38`
-  instead of `JR NZ`. It runs the ROM interrupt routine mid-frame (one extra
-  `FRAMES` count), always paints that cell, and leaves the colour mask at
-  `F9` for the rest of the sprite.
 - Behaviour-6 (stationary) enemies fall into a subroutine's `RET` when they
   turn, which ends the whole enemy update for that frame.
 - Removing a pickup's colour records from the restore list removes four
