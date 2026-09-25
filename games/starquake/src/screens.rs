@@ -382,12 +382,14 @@ impl Game {
         self.print_text(at::TELEPORT_DASHES);
         self.request_effect(7);
         self.random_ink();
+        self.booth = true;
         for i in 0..5 {
             let k = self.ask_key(host, |k| k >= 0x0A);
             self.typed_code[i] = k;
             self.print_bytes(&[k, b' ']);
             self.request_effect(0x11);
         }
+        self.booth = false;
         let ram = self.assets.clone();
         let ram = &ram.ram;
         for j in 0..15 {
