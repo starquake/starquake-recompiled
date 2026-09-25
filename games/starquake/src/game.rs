@@ -111,6 +111,10 @@ pub struct Game {
     /// go on (#89). Not part of the original's state: nothing in the game
     /// reads it; the window shows a notice while it is set.
     pub paused: bool,
+    /// Whether the title screen and its menu are waiting for a choice, for
+    /// a frontend that lets a pad start a game there (#110). Not part of the
+    /// original's state: nothing in the game reads it.
+    pub on_title: bool,
     /// What the frame's work has done so far, which is how long it took the
     /// original (see [`crate::sound::Work`]).
     pub work: crate::sound::Work,
@@ -263,6 +267,7 @@ impl Game {
             play_work: false,
             pad: crate::controls::PadMeaning::default(),
             paused: false,
+            on_title: false,
             work: crate::sound::Work::default(),
             work_at_effect: None,
             music: Vec::new(),
