@@ -79,6 +79,12 @@ fn distance(a: u8, b: u8) -> u8 {
 }
 
 impl Game {
+    /// Whether BLOB is riding the hover platform, for a frontend that maps
+    /// a pad's directions differently then (#88).
+    pub fn on_hover_platform(&self) -> bool {
+        self.blob(b::STATE) == HOVERING
+    }
+
     fn blob(&self, f: usize) -> u8 {
         self.entities[0].0[f]
     }

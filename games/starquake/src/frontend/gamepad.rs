@@ -2,9 +2,10 @@
 //!
 //! A Kempston interface is a joystick port: the game reads five bits and
 //! cannot tell what moved them, so a gamepad drives them exactly as the
-//! hardware would. The D-pad and the left stick move; the bottom face button
-//! is down and the left one fires, as platformers lay them out (#88), and
-//! the others do nothing in play. Pause is the odd one out — on a Spectrum
+//! hardware would. The D-pad and the left stick move left and right, and up
+//! and down only on the hover platform; the bottom face button is down
+//! (a platform), the right one up (an item), and the left one fires, as
+//! platformers lay them out (#88); the top one does nothing in play. Pause is the odd one out — on a Spectrum
 //! it is a key, not a joystick button — so Start presses the pause key.
 //! Select opens the guidance picker (#1), where the D-pad works it, A does
 //! an action wherever the pad's maker puts A, and B or Select closes it.
@@ -65,8 +66,14 @@ const DEADZONE: f32 = 0.5;
 /// What the pads are asking for this frame.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Pad {
-    /// The Kempston bits.
+    /// The Kempston bits: the D-pad's and the stick's (`dirs`) and the face
+    /// buttons' together.
     pub bits: u8,
+    /// The Kempston bits of the D-pad and the stick alone, so that up and
+    /// down on them can be left out while BLOB walks (#88), and of the face
+    /// buttons alone.
+    pub dirs: u8,
+    pub buttons: u8,
     /// Start is held: pause.
     pub start: bool,
     /// Pressed since the last poll, for the picker: each is one press, not
@@ -160,6 +167,8 @@ impl Gamepad {
         self.held_back &= pad.bits;
         self.start_held_back &= pad.start;
         pad.bits &= !self.held_back;
+        pad.dirs &= !self.held_back;
+        pad.buttons &= !self.held_back;
         pad.start &= !self.start_held_back;
     }
 
@@ -172,7 +181,7 @@ impl Gamepad {
         // this is also where hot-plugged pads arrive.
         while gilrs.next_event().is_some() {}
 
-        let (mut bits, mut start) = (0u8, false);
+        let (mut dirs, mut buttons, mut start) = (0u8, 0u8, false);
         let mut now = [false; 7];
         // The first pad listed decides the letters; the rest are read for
         // what they are pressing.
@@ -184,26 +193,30 @@ impl Gamepad {
             use gilrs::{Axis, Button};
             let (x, y) = (pad.value(Axis::LeftStickX), pad.value(Axis::LeftStickY));
             if pad.is_pressed(Button::DPadRight) || x > DEADZONE {
-                bits |= 0x01;
+                dirs |= 0x01;
             }
             if pad.is_pressed(Button::DPadLeft) || x < -DEADZONE {
-                bits |= 0x02;
+                dirs |= 0x02;
             }
             if pad.is_pressed(Button::DPadDown) || y < -DEADZONE {
-                bits |= 0x04;
+                dirs |= 0x04;
             }
             if pad.is_pressed(Button::DPadUp) || y > DEADZONE {
-                bits |= 0x08;
+                dirs |= 0x08;
             }
-            // The bottom face button is down, which builds a platform or
-            // takes a lift down, and the left one fires, as a platformer
-            // lays them out (Shovel Knight's pad, for one). The others do
+            // The bottom face button is down, which builds a platform, the
+            // right one up, which picks up or swaps an item and boards the
+            // hover platform, and the left one fires, as a platformer lays
+            // them out (Shovel Knight's pad, for one). The top one does
             // nothing in play.
             if pad.is_pressed(Button::South) {
-                bits |= 0x04;
+                buttons |= 0x04;
+            }
+            if pad.is_pressed(Button::East) {
+                buttons |= 0x08;
             }
             if pad.is_pressed(Button::West) {
-                bits |= 0x10;
+                buttons |= 0x10;
             }
             start |= pad.is_pressed(Button::Start);
             now[0] |= pad.is_pressed(Button::Select);
@@ -216,7 +229,9 @@ impl Gamepad {
         }
         let pressed = |i: usize| now[i] && !self.was[i];
         let mut result = Pad {
-            bits,
+            bits: dirs | buttons,
+            dirs,
+            buttons,
             start,
             select: pressed(0),
             up: pressed(1),
