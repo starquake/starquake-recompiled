@@ -96,7 +96,8 @@ impl FrontHost {
             std::thread::sleep(Duration::from_millis(20));
             let pad = self.pad.poll();
             let mut guidance = self.shared.guidance.lock().unwrap();
-            if pad.select || pad.east {
+            guidance.set_pad(pad.layout);
+            if pad.select || pad.cancel() {
                 guidance.back();
             }
             if pad.up {
@@ -111,7 +112,7 @@ impl FrontHost {
             if pad.right {
                 guidance.change(true);
             }
-            if pad.south {
+            if pad.confirm() {
                 guidance.enter();
                 if guidance.take(guidance::Action::Exit) {
                     self.shared.quit.store(true, Ordering::Relaxed);
@@ -119,6 +120,9 @@ impl FrontHost {
             }
         }
         self.next_frame = Instant::now();
+        // The button that closed the picker is still down: the game does
+        // not see it until it is let go.
+        self.pad.hold_back_held();
         gamepad::Pad::default()
     }
 
@@ -272,6 +276,7 @@ impl Host for FrontHost {
         let mut pad = self.pad.poll();
         {
             let mut guidance = self.shared.guidance.lock().unwrap();
+            guidance.set_pad(pad.layout);
             if pad.select && !guidance.picker_open() {
                 guidance.open();
             }
@@ -302,7 +307,15 @@ impl Host for FrontHost {
                 input.keys[1] &= !0x1F;
             }
         }
-        game.controls.press(&mut input, pad.bits);
+        // The D-pad's up and down only fly the hover platform: walking,
+        // building a platform and picking up an item are the face buttons'
+        // (#88), so a wobble on the stick does neither.
+        let bits = if game.scene == Scene::Play && !game.on_hover_platform() {
+            pad.dirs & 0x03 | pad.buttons
+        } else {
+            pad.bits
+        };
+        game.controls.press(&mut input, bits);
         if pad.start {
             game.controls.press_pause(&mut input);
         }

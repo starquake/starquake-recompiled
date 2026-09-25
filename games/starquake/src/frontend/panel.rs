@@ -7,6 +7,7 @@
 use starquake::game::{Scene, SeenTeleporter};
 use starquake::map::{AROUND, COLS, ROWS};
 
+use super::gamepad::Layout;
 use super::guidance::{Choice, Guidance, LEVELS, Setting};
 use super::text::{Canvas, Fonts, Rgb, Span, Weight};
 
@@ -66,18 +67,22 @@ const ADDS: [&str; 6] = [
 
 pub struct Panel {
     fonts: Fonts,
+    /// The letters the connected pad carries, as of the last draw (#88).
+    pad: Layout,
 }
 
 impl Panel {
     pub fn new() -> Panel {
         Panel {
             fonts: Fonts::load(),
+            pad: Layout::Xbox,
         }
     }
 
     /// Draws the overlay: the panel, and the picker over everything when it
     /// is open.
     pub fn draw(&mut self, canvas: &mut Canvas, guidance: &Guidance, scene: Scene) {
+        self.pad = guidance.pad();
         let left = PICTURE_W + 24.0;
         let width = WINDOW_W - PICTURE_W;
         canvas.round_rect(PICTURE_W, 0.0, width, WINDOW_H, 0.0, PANEL);
@@ -802,8 +807,9 @@ impl Panel {
 
     /// A row of key hints: each group's keys, then what they do. A `/`
     /// between two keys is drawn as text, for a keyboard key and the
-    /// controller button that does the same; a key written `(A)` is a
-    /// controller's face button, drawn round like one. Arrows are drawn bare:
+    /// controller button that does the same; a key written `(A)` or `(B)`
+    /// is the pad's confirming or cancelling button, drawn round and as
+    /// the connected pad has it printed (#88). Arrows are drawn bare:
     /// they mean the arrow keys and the D-pad alike, and an outline would
     /// make them read as keys only.
     fn hints(&mut self, canvas: &mut Canvas, mut x: f32, y: f32, groups: &[(&[&str], &str)]) {
@@ -831,12 +837,32 @@ impl Panel {
         }
     }
 
-    /// A controller button's letter in a small circle at (`x`, `y`); returns
-    /// its width.
+    /// A controller button in a small circle at (`x`, `y`), as the
+    /// connected pad has it printed; returns its width. A and B keep their
+    /// letters on an Xbox pad and a Nintendo one alike (what changes is the
+    /// button under each); a PlayStation pad has the cross and the circle.
     fn pad_button(&mut self, canvas: &mut Canvas, x: f32, y: f32, button: &str) -> f32 {
         let d = 20.0;
         canvas.round_rect(x, y, d, d, d / 2.0, BUTTON_LINE);
         canvas.round_rect(x + 1.0, y + 1.0, d - 2.0, d - 2.0, d / 2.0 - 1.0, DIALOG);
+        if self.pad == Layout::PlayStation && matches!(button, "A" | "B") {
+            let (cx, cy, r) = (x + d / 2.0, y + d / 2.0, d * 0.24);
+            if button == "A" {
+                for (dx, dy) in [(1.0, 1.0), (1.0, -1.0)] {
+                    stroke(
+                        canvas,
+                        (cx - r * dx, cy - r * dy),
+                        (cx + r * dx, cy + r * dy),
+                        1.8,
+                        None,
+                        HINT_KEY,
+                    );
+                }
+            } else {
+                canvas.outline(cx - r, cy - r, 2.0 * r, 2.0 * r, r, 1.8, None, HINT_KEY);
+            }
+            return d;
+        }
         let spans = [span(button, 11.0, Weight::SemiBold, HINT_KEY)];
         let tw = self.fonts.measure(&spans);
         self.fonts

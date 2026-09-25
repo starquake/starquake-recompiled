@@ -5,6 +5,7 @@
 //! the window changes it from the keyboard and draws it, and the game thread
 //! changes it from a gamepad and holds the game while the picker is open.
 
+use super::gamepad::Layout;
 use starquake::game::SeenTeleporter;
 use starquake::map::Openings;
 use starquake::pickups::RoomSet;
@@ -89,6 +90,8 @@ pub struct Guidance {
     /// The rooms holding a core piece still needed, for level 3 (#3), in
     /// the game being played or just ended.
     pieces: RoomSet,
+    /// The letters the connected pad carries, for the legends (#88).
+    pad: Layout,
     /// Bumped on every change, so a watcher can tell something changed.
     version: u64,
 }
@@ -114,6 +117,19 @@ impl Guidance {
 
     pub fn version(&self) -> u64 {
         self.version
+    }
+
+    /// The letters the connected pad carries.
+    pub fn pad(&self) -> Layout {
+        self.pad
+    }
+
+    /// Notes the pad's letters, redrawing the legends when they change.
+    pub fn set_pad(&mut self, layout: Layout) {
+        if self.pad != layout {
+            self.pad = layout;
+            self.version += 1;
+        }
     }
 
     pub fn focus(&self) -> Setting {
