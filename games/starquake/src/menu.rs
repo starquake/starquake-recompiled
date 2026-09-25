@@ -124,7 +124,14 @@ impl Game {
 
     /// The title screen and the menu under it. Returns what to do next.
     pub fn menu(&mut self, host: &mut dyn Host) -> Start {
+        let start = self.menu_choice(host);
+        self.on_title = false;
+        start
+    }
+
+    fn menu_choice(&mut self, host: &mut dyn Host) -> Start {
         loop {
+            self.on_title = true;
             self.title_screen(host);
             // The highlight flashes between these two colours.
             let mut ink = 7u8;
@@ -152,12 +159,14 @@ impl Game {
                     let key = key_code(&self.assets.ram, &self.input);
                     match key {
                         b'Q' => {
+                            self.on_title = false;
                             if self.quit_confirmed(host) {
                                 return Start::Quit;
                             }
                             break 'menu;
                         }
                         b'6' => {
+                            self.on_title = false;
                             self.define_keys(host);
                             self.control_method = 5;
                             break 'menu;

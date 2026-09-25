@@ -80,7 +80,12 @@ struct FrontHost {
     scene: Scene,
     /// "End this game" was chosen and the game has not yet ended.
     abandon: bool,
+    /// Whether a pad is starting a game from the title screen (#110).
+    starting: bool,
 }
+
+/// The Spectrum's 0 key: port 0xEFFE, bit 0.
+const ZERO_KEY: (u8, u8) = (0xEF, 0);
 
 impl FrontHost {
     /// Holds the game between frames while the guidance picker is open,
@@ -308,24 +313,37 @@ impl Host for FrontHost {
                 input.keys[1] &= !0x1F;
             }
         }
-        // The pad splits up's and down's meanings (#112): the D-pad's up
-        // and down board and fly; the button for up picks up, the button
-        // for down builds.
-        input.pad = pad.meaning();
-        // While the game is paused, A or B dismisses the notice as it would
-        // any dialog (#89), and does nothing else: its press reaches the
-        // game as a move only, so it neither builds nor picks up in the
-        // frame play goes on, and it is held back until let go.
-        if game.paused && pad.buttons & 0x0C != 0 {
-            input.pad.up_moves_only = true;
-            input.pad.up_picks_only = false;
-            input.pad.down_moves_only = true;
-            input.pad.down_builds_only = false;
-            self.pad.hold_back_held();
-        }
-        game.controls.press(&mut input, pad.bits);
-        if pad.start {
-            game.controls.press_pause(&mut input);
+        // On the title screen, Start or fire on a pad is the 0 key, which
+        // starts a game (#110): alone, since the menu reads one key held at
+        // a time. What is still held as play begins is kept from the game
+        // until it is let go, so it is not a pause or a shot.
+        if game.on_title && (pad.start || pad.bits & 0x10 != 0) {
+            input.press_key(ZERO_KEY);
+            self.starting = true;
+        } else {
+            if std::mem::take(&mut self.starting) {
+                self.pad.hold_back_held();
+            }
+            // The pad splits up's and down's meanings (#112): the D-pad's up
+            // and down board and fly; the button for up picks up, the button
+            // for down builds.
+            input.pad = pad.meaning();
+            // While the game is paused, A or B dismisses the notice as it
+            // would any dialog (#89), and does nothing else: its press
+            // reaches the game as a move only, so it neither builds nor
+            // picks up in the frame play goes on, and it is held back until
+            // let go.
+            if game.paused && pad.buttons & 0x0C != 0 {
+                input.pad.up_moves_only = true;
+                input.pad.up_picks_only = false;
+                input.pad.down_moves_only = true;
+                input.pad.down_builds_only = false;
+                self.pad.hold_back_held();
+            }
+            game.controls.press(&mut input, pad.bits);
+            if pad.start {
+                game.controls.press_pause(&mut input);
+            }
         }
 
         let now = Instant::now();
@@ -385,6 +403,7 @@ fn play_game(
         bench: std::env::var_os("SQ_BENCH").is_some(),
         scene: Scene::Loading,
         abandon: false,
+        starting: false,
     };
     // The frame counter runs throughout, which is what seeds each new game.
     game.run(&mut host);
