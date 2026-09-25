@@ -94,11 +94,13 @@ pub enum Setting {
     Exit,
 }
 
-/// The answers to "Noted with your score".
+/// Where "This will show on your score" stands (#122): asked, or pressed
+/// once and waiting for the second press that keeps the change, as the
+/// picker's actions wait.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Choice {
-    Use,
-    Undo,
+    Asked,
+    Armed,
 }
 
 /// What the picker was asked to do, once confirmed.
@@ -358,7 +360,7 @@ impl Guidance {
         self.opened
     }
 
-    /// The question, if it is up, and the highlighted answer.
+    /// The question, if it is up, and whether it has been pressed once.
     pub fn asking(&self) -> Option<Choice> {
         self.asking
     }
@@ -523,22 +525,22 @@ impl Guidance {
         self.version += 1;
     }
 
-    /// Esc, B or Select. With the question up, back to the picker.
-    /// Otherwise leave it.
+    /// Esc, B or Select. With the question up, the change is undone and
+    /// the picker closes (#122). Otherwise leave it.
     pub fn back(&mut self) {
         if self.asking.is_some() {
-            self.asking = None;
-            self.version += 1;
+            (self.level, self.training) = self.opened;
+            self.close();
         } else {
             self.leave();
         }
     }
 
-    /// Leaves the picker, asking first if that would add to the record,
-    /// with Undo highlighted so a reflex press changes nothing.
+    /// Leaves the picker, asking first if that would add to the record. It
+    /// takes two presses to keep, so a reflex press changes nothing.
     fn leave(&mut self) {
         if self.raises_record() {
-            self.asking = Some(Choice::Undo);
+            self.asking = Some(Choice::Asked);
             self.armed = None;
             self.version += 1;
         } else {
@@ -559,17 +561,22 @@ impl Guidance {
         self.version += 1;
     }
 
-    /// Enter or A. With the question up, it takes the highlighted answer.
-    /// On a setting it leaves the picker, as Esc does. On an action the
-    /// first press asks for a second, and the second requests the action
-    /// and closes the picker.
+    /// Enter or A. With the question up, the first press asks for a second
+    /// and the second keeps the change (#122). On a setting it leaves the
+    /// picker, as Esc does. On an action the first press asks for a second,
+    /// and the second requests the action and closes the picker.
     pub fn enter(&mut self) {
-        if let Some(choice) = self.asking {
-            if choice == Choice::Undo {
-                (self.level, self.training) = self.opened;
+        match self.asking {
+            Some(Choice::Asked) => {
+                self.asking = Some(Choice::Armed);
+                self.version += 1;
+                return;
             }
-            self.close();
-            return;
+            Some(Choice::Armed) => {
+                self.close();
+                return;
+            }
+            None => {}
         }
         let action = match self.focus {
             Setting::Level | Setting::Switch(_) => {
@@ -606,6 +613,7 @@ impl Guidance {
 
     fn move_focus(&mut self, by: isize) {
         if self.asking.is_some() {
+            self.disarm();
             return;
         }
         let rows = self.rows();
@@ -614,6 +622,15 @@ impl Guidance {
         self.focus = rows[to];
         self.armed = None;
         self.version += 1;
+    }
+
+    /// With the question pressed once, anything but a second Enter or A
+    /// takes it back to asking (#122).
+    fn disarm(&mut self) {
+        if self.asking == Some(Choice::Armed) {
+            self.asking = Some(Choice::Asked);
+            self.version += 1;
+        }
     }
 
     /// Takes the confirmed action, if there is one and it is `which`.
@@ -629,9 +646,8 @@ impl Guidance {
     /// Left and right in the picker: the highlighted setting down or up a
     /// step, in effect at once. It is recorded when the picker closes.
     pub fn change(&mut self, up: bool) {
-        if let Some(choice) = &mut self.asking {
-            *choice = if up { Choice::Undo } else { Choice::Use };
-            self.version += 1;
+        if self.asking.is_some() {
+            self.disarm();
             return;
         }
         let max = LEVELS.len() as u8 - 1;
@@ -764,22 +780,22 @@ mod tests {
     }
 
     #[test]
-    fn raising_asks_with_undo_highlighted() {
+    fn raising_asks_and_one_press_keeps_nothing_yet() {
         let mut g = Guidance::default();
         g.open();
         g.change(true);
         g.change(true);
         g.back();
         assert!(g.picker_open());
-        assert_eq!(g.asking(), Some(Choice::Undo));
+        assert_eq!(g.asking(), Some(Choice::Asked));
         g.enter();
-        assert!(!g.picker_open());
-        assert_eq!(g.level(), 0, "undone");
+        assert!(g.picker_open(), "one press only asks again");
+        assert_eq!(g.asking(), Some(Choice::Armed));
         assert_eq!(g.record(), Record::default());
     }
 
     #[test]
-    fn use_it_keeps_and_records() {
+    fn a_second_press_keeps_and_records() {
         let mut g = Guidance::default();
         g.open();
         g.focus_down();
@@ -787,26 +803,48 @@ mod tests {
         g.enter();
         assert_eq!(
             g.asking(),
-            Some(Choice::Undo),
+            Some(Choice::Asked),
             "Enter on a setting asks too"
         );
-        g.change(false);
-        assert_eq!(g.asking(), Some(Choice::Use));
         g.enter();
+        g.enter();
+        assert!(!g.picker_open());
         assert!(g.training().any());
         assert!(g.record().training);
     }
 
     #[test]
-    fn back_from_the_question_returns_to_the_picker() {
+    fn back_from_the_question_undoes_and_closes() {
         let mut g = Guidance::default();
         g.open();
         g.change(true);
         g.back();
+        g.enter();
         g.back();
-        assert!(g.picker_open());
+        assert!(!g.picker_open());
         assert_eq!(g.asking(), None);
-        assert_eq!(g.level(), 1, "still changed");
+        assert_eq!(g.level(), 0, "undone");
+        assert_eq!(g.record(), Record::default());
+    }
+
+    #[test]
+    fn anything_else_takes_a_first_press_back() {
+        let mut g = Guidance::default();
+        g.open();
+        g.change(true);
+        g.back();
+        for step in [
+            |g: &mut Guidance| g.change(true),
+            |g: &mut Guidance| g.change(false),
+            |g: &mut Guidance| g.focus_up(),
+            |g: &mut Guidance| g.focus_down(),
+        ] {
+            g.enter();
+            assert_eq!(g.asking(), Some(Choice::Armed));
+            step(&mut g);
+            assert_eq!(g.asking(), Some(Choice::Asked), "disarmed");
+            assert_eq!(g.level(), 1, "and nothing else changed");
+        }
     }
 
     #[test]
