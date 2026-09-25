@@ -2,10 +2,11 @@
 //!
 //! A Kempston interface is a joystick port: the game reads five bits and
 //! cannot tell what moved them, so a gamepad drives them exactly as the
-//! hardware would. The D-pad and the left stick move left and right, and up
-//! and down only on the hover platform; the bottom face button is down
-//! (a platform), the right one up (an item), and the left one fires, as
-//! platformers lay them out (#88); the top one does nothing in play. Pause is the odd one out — on a Spectrum
+//! hardware would. The D-pad and the left stick move; up boards and flies the
+//! hover platform, down flies it down, and neither builds. The bottom face
+//! button is down but only builds, the right one up but only picks up
+//! (#112), and the left one fires, as platformers lay them out (#88); the
+//! top one does nothing in play. Pause is the odd one out — on a Spectrum
 //! it is a key, not a joystick button — so Start presses the pause key.
 //! Select opens the guidance picker (#1), where the D-pad works it, A does
 //! an action wherever the pad's maker puts A, and B or Select closes it.
@@ -92,6 +93,18 @@ pub struct Pad {
 }
 
 impl Pad {
+    /// Which of up's and down's meanings this press carries (#112): up or
+    /// down from the D-pad or the stick alone, or from its button alone.
+    pub fn meaning(&self) -> starquake::controls::PadMeaning {
+        let (dirs, buttons) = (self.dirs, self.buttons);
+        starquake::controls::PadMeaning {
+            up_moves_only: dirs & 8 != 0 && buttons & 8 == 0,
+            up_picks_only: buttons & 8 != 0 && dirs & 8 == 0,
+            down_builds_only: buttons & 4 != 0 && dirs & 4 == 0,
+            down_moves_only: dirs & 4 != 0 && buttons & 4 == 0,
+        }
+    }
+
     /// The press that does the picker's highlighted action: A, which is the
     /// bottom button, or the right one on a pad whose A is there.
     pub fn confirm(&self) -> bool {
@@ -279,6 +292,32 @@ mod tests {
         let mut down_again = held(0x04);
         pad.hold_back(&mut down_again);
         assert_eq!(down_again.bits, 0x04, "pressed again after letting go");
+    }
+
+    #[test]
+    fn the_d_pad_moves_and_the_buttons_act() {
+        let pad = |dirs: u8, buttons: u8| Pad {
+            bits: dirs | buttons,
+            dirs,
+            buttons,
+            ..Pad::default()
+        };
+        let up = pad(8, 0).meaning();
+        assert!(up.up_moves_only && !up.up_picks_only, "D-pad up flies");
+        let b = pad(0, 8).meaning();
+        assert!(b.up_picks_only && !b.up_moves_only, "B picks up");
+        let a = pad(0, 4).meaning();
+        assert!(a.down_builds_only, "A builds, never flies down");
+        let d = pad(4, 0).meaning();
+        assert!(
+            d.down_moves_only && !d.down_builds_only,
+            "D-pad down flies, never builds"
+        );
+        let both = pad(8, 8).meaning();
+        assert!(
+            !both.up_moves_only && !both.up_picks_only,
+            "both: the original's up"
+        );
     }
 
     #[test]

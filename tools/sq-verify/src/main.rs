@@ -1089,6 +1089,8 @@ fn input_of(machine: &Zx) -> starquake::controls::Input {
     starquake::controls::Input {
         keys: machine.keys,
         kempston: machine.kempston,
+        // The original has no gamepad: up and down mean both.
+        pad: starquake::controls::PadMeaning::default(),
     }
 }
 

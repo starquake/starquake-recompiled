@@ -8,6 +8,9 @@ pub struct Input {
     pub keys: [u8; 8],
     /// Kempston joystick (bit 0 right, 1 left, 2 down, 3 up, 4 fire).
     pub kempston: u8,
+    /// Which of up's and down's meanings a gamepad's press carries (#112).
+    /// Not part of what the original reads: all off, it is the original.
+    pub pad: PadMeaning,
 }
 
 impl Default for Input {
@@ -15,8 +18,28 @@ impl Default for Input {
         Input {
             keys: [0xFF; 8],
             kempston: 0,
+            pad: PadMeaning::default(),
         }
     }
+}
+
+/// In the original, up means both picking up an item and boarding or
+/// flying the hover platform, and down both building a platform and flying
+/// down. A gamepad splits them (#112): the D-pad's up and down only board
+/// and fly; the button that is up only picks up, the button that is down
+/// only builds. The game obeys these where it decides each (`Game::touch`,
+/// `Game::touch_marker`, `Game::hovering`, `Game::build_platform`). All
+/// off, up and down mean both.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PadMeaning {
+    /// Up comes from the D-pad alone: it boards and flies, never picks up.
+    pub up_moves_only: bool,
+    /// Up comes from its button alone: it picks up, never boards or flies.
+    pub up_picks_only: bool,
+    /// Down comes from its button alone: it builds, never flies down.
+    pub down_builds_only: bool,
+    /// Down comes from the D-pad alone: it flies down, never builds.
+    pub down_moves_only: bool,
 }
 
 impl Input {

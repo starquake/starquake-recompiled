@@ -57,16 +57,17 @@ CONTROLS
   Down                 Build a platform.
   Alt, full stop or    Fire.
   comma
-  Gamepad              D-pad or left stick to move left and right,
-                       and up and down on the hover platform. The
-                       bottom face button is down (build a platform),
-                       the right one up (pick up or swap an item, or
-                       board the hover platform), the left one fires.
-                       A and B are wherever the pad's maker puts them:
-                       on an Xbox pad down is A and up is B, on a
-                       Switch pad down is B and up is A, on a
-                       PlayStation pad the cross and the circle. Start
-                       pauses, Select opens guidance (below). Works in
+  Gamepad              D-pad or left stick to move. Up boards the
+                       hover platform and flies it up, down flies it
+                       down; neither picks up or builds.
+                       The bottom face button only builds a platform,
+                       the right one only picks up or swaps an item,
+                       and the left one fires. A and B are wherever
+                       the pad's maker puts them: on an Xbox pad the
+                       platform is A and the item B, on a Switch pad
+                       the other way round, on a PlayStation pad the
+                       cross and the circle. Start pauses, Select
+                       opens guidance (below). Works in
                        every control method, over USB or Bluetooth.
                        Some controllers need the right mode: an 8BitDo
                        in Switch mode is detected but sends no input,
