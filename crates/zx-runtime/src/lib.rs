@@ -6,6 +6,7 @@
 //! anything that was not compiled (or whose bytes have since changed).
 
 pub mod bus;
+pub mod coverage;
 pub mod interp;
 pub mod keys;
 pub use zx_core::png;

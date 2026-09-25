@@ -1,0 +1,4 @@
+# The coverage every sq-verify run must reach (#121): its own counts,
+# recorded when a change raises them. Counts only; no game data.
+instructions run 5504
+branch directions taken 1123

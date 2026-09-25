@@ -10,6 +10,7 @@ publish.workspace = true
 starquake = { path = "../../games/starquake", default-features = false }
 zx-core.workspace = true
 zx-runtime.workspace = true
+zx-recomp.workspace = true
 
 [lints]
 workspace = true
