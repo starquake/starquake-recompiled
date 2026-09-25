@@ -135,6 +135,9 @@ pub struct Guidance {
     teleporters: Vec<SeenTeleporter>,
     /// Every room's openings, for the map (#2). Empty until they are found.
     openings: Vec<Openings>,
+    /// The game's own letters, from the space up, read from the tape once,
+    /// for the codes and the doors' numbers (#126).
+    font: Option<Box<starquake::printer::Font>>,
     /// The rooms visited in the game being played, or just ended; empty on
     /// the title screen.
     visited: Vec<bool>,
@@ -399,6 +402,17 @@ impl Guidance {
     /// Whether the openings have been found yet.
     pub fn has_openings(&self) -> bool {
         !self.openings.is_empty()
+    }
+
+    /// The game's own letters, once the tape has been read.
+    pub fn font(&self) -> Option<&starquake::printer::Font> {
+        self.font.as_deref()
+    }
+
+    /// Takes the game's letters, once.
+    pub fn set_font(&mut self, font: &starquake::printer::Font) {
+        self.font = Some(Box::new(*font));
+        self.version += 1;
     }
 
     /// Takes every room's openings, found once.

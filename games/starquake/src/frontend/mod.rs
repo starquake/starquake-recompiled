@@ -437,6 +437,14 @@ impl Host for FrontHost {
             let openings = game.all_openings();
             self.shared.guidance.lock().unwrap().set_openings(openings);
         }
+        // The game's letters, for the panel's codes and numbers (#126).
+        if self.shared.guidance.lock().unwrap().font().is_none() {
+            self.shared
+                .guidance
+                .lock()
+                .unwrap()
+                .set_font(&game.assets.font);
+        }
         {
             let mut guidance = self.shared.guidance.lock().unwrap();
             match game.scene {
