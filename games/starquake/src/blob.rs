@@ -79,12 +79,6 @@ fn distance(a: u8, b: u8) -> u8 {
 }
 
 impl Game {
-    /// Whether BLOB is riding the hover platform, for a frontend that maps
-    /// a pad's directions differently then (#88).
-    pub fn on_hover_platform(&self) -> bool {
-        self.blob(b::STATE) == HOVERING
-    }
-
     fn blob(&self, f: usize) -> u8 {
         self.entities[0].0[f]
     }
@@ -150,7 +144,9 @@ impl Game {
     }
 
     fn build_platform(&mut self) {
-        if self.blob(b::PLATFORM_HELD) != 0 || self.status.bars[1] == 0 {
+        // A pad's D-pad down only flies the hover platform down (#112).
+        if self.blob(b::PLATFORM_HELD) != 0 || self.status.bars[1] == 0 || self.pad.down_moves_only
+        {
             return;
         }
         self.set_blob(b::PLATFORM_HELD, 1);
@@ -300,7 +296,15 @@ impl Game {
 
     /// Riding the hover platform: free movement in all directions.
     fn hovering(&mut self) {
-        let input = self.blob(b::INPUT);
+        // A pad's button for up picks up and its button for down builds:
+        // neither flies (#112).
+        let mut input = self.blob(b::INPUT);
+        if self.pad.up_picks_only {
+            input &= !8;
+        }
+        if self.pad.down_builds_only {
+            input &= !4;
+        }
         let free = |g: &mut Game, vertical: bool| {
             let a = g.collide(0, vertical);
             g.set_blob(Y, g.blob(Y).wrapping_sub(8));
@@ -588,7 +592,8 @@ impl Game {
             self.set_blob(b::DRAIN, 0);
             self.reduce_bar(0, 4);
         }
-        if self.blob(b::INPUT) == 8 {
+        // A pad's D-pad up boards and flies, and never picks up (#112).
+        if self.blob(b::INPUT) == 8 && !self.pad.up_moves_only {
             if self.blob(b::PICKUP_HELD) == 0 {
                 self.set_blob(b::PICKUP, 1);
                 self.set_blob(b::PICKUP_HELD, 1);
@@ -675,7 +680,8 @@ impl Game {
             }
             0x0C => {
                 self.reset_shot();
-                let state = if self.blob(b::LAST_INPUT) & 8 != 0 {
+                // A pad's button for up picks up and never boards (#112).
+                let state = if self.blob(b::LAST_INPUT) & 8 != 0 && !self.pad.up_picks_only {
                     HOVERING
                 } else {
                     WALKING
@@ -744,6 +750,7 @@ impl Game {
 
     /// One frame of BLOB (after the display work).
     pub fn blob_control(&mut self, input: &Input) -> Outcome {
+        self.pad = input.pad;
         self.entities[5].0[COLOUR] = 7;
         self.set_blob(b::FIRE, 0);
         if input.keyboard(0xFD) & 0x1F == 0 {

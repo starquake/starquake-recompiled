@@ -104,6 +104,9 @@ pub struct Game {
     /// the start of such a frame on the frame's work, in silence, before
     /// the sound (see [`Game::frame_sound`]).
     pub play_work: bool,
+    /// Which of up's and down's meanings the frame's gamepad press carries
+    /// (#112). Not part of the original's state.
+    pub pad: crate::controls::PadMeaning,
     /// What the frame's work has done so far, which is how long it took the
     /// original (see [`crate::sound::Work`]).
     pub work: crate::sound::Work,
@@ -254,6 +257,7 @@ impl Game {
             scene: Scene::Loading,
             teleporters_seen: Vec::new(),
             play_work: false,
+            pad: crate::controls::PadMeaning::default(),
             work: crate::sound::Work::default(),
             work_at_effect: None,
             music: Vec::new(),
