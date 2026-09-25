@@ -7,13 +7,13 @@ ignored by git):
 | File | What | Needed by |
 |------|------|-----------|
 | `starquake.tap` | Starquake (Bubble Bus, 1985), `.tap` tape, SHA-1 `65450d6f33692c2c2868c0b497037f2cfd0ef3bd` | the game |
-| `starquake.z80` | The same game as a 48K `.z80` snapshot, SHA-1 `8cf0722b752f7fe1651734b32a240e714525e480` | development tools only |
 | `48.rom` | ZX Spectrum 48K ROM, SHA-1 `5ea7c2b824672e914525d1d5c419d71b84a426a2` | development tools only (the reference interpreter) |
 | `tests.in`, `tests.expected` | The Fuse project's Z80 test corpus | development tools only (the processor conformance test) |
 
-**Only `starquake.tap` is needed to play.** The other two are used by
-`sq-verify`, which compares the rewrite against the original; you can ignore
-them unless you are working on the code.
+**Only `starquake.tap` is needed to play.** The ROM is used by `sq-verify`,
+which runs the original from the same tape and compares the rewrite against
+it, and the corpus by the processor test; you can ignore them unless you are
+working on the code.
 
 ## Where to get them
 
@@ -59,10 +59,13 @@ other check still runs.
 
 The game reads all graphics, maps and text from the tape when it starts, and
 refuses to run without it or with a different dump. The tape also carries the
-loading screen, which the game shows before its own title screen; a snapshot
-has no loading screen, having been saved long after it was overwritten.
+loading screen, which the game shows before its own title screen.
 
-A tape is the better source: it is the program exactly as it shipped, where a
-snapshot is somebody's machine part-way through a game, carrying whatever
-control keys and random-number state it had at the time. `sq-verify tape`
-compares the two and reports where they differ.
+A tape is the program exactly as it shipped, where a snapshot is somebody's
+machine part-way through a game, carrying whatever it had at the time. The
+`.z80` snapshot this project was first checked against carried one damaged
+byte in the game's code (`D91A`), which the rewrite copied and the checks,
+running the same snapshot, agreed with: lifts could not be boarded walking
+right, and green scenery turned white under BLOB
+(starquake-recompiled#117). Nothing reads a snapshot now; `sq-verify` and
+`zx-recomp` start the original from the tape too.

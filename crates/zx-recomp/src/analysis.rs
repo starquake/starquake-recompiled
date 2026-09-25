@@ -1,7 +1,7 @@
 //! Code discovery and block formation.
 //!
 //! Entry points come from the trace, the config, the runtime's miss log and
-//! the snapshot's PC. From those, recursive descent follows every statically
+//! the tape's entry point. From those, recursive descent follows every statically
 //! known branch, call and return address. Each entry point then becomes a
 //! block: a straight run of instructions ending at an unconditional control
 //! transfer or where another entry point begins.
@@ -33,7 +33,7 @@ pub struct Block {
 }
 
 pub struct Analysis {
-    /// Memory image code was compiled from: the snapshot with the ROM, with
+    /// Memory image code was compiled from: the tape's program with the ROM, with
     /// code bytes as they were when the trace executed them.
     pub image: Vec<u8>,
     pub rom_loaded: bool,
@@ -87,13 +87,13 @@ impl Ctx<'_> {
 
 pub fn analyze(
     cfg: &Config,
-    snapshot_memory: &[u8],
-    snapshot_pc: u16,
+    start_memory: &[u8],
+    start_pc: u16,
     rom_loaded: bool,
     trace: &Trace,
     extra_entries: &[u16],
 ) -> Analysis {
-    let mut image = snapshot_memory.to_vec();
+    let mut image = start_memory.to_vec();
     let mut stats = Stats::default();
     for (pc, entry) in trace.executed.iter().enumerate() {
         if let Some((len, bytes)) = entry {
@@ -123,7 +123,7 @@ pub fn analyze(
         }
     }
     stats.traced_entries = entries.len();
-    entries.insert(snapshot_pc);
+    entries.insert(start_pc);
     if rom_loaded {
         entries.insert(0x0038);
     }

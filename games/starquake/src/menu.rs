@@ -93,7 +93,7 @@ impl Game {
                     self.print_key_names(names);
                 }
                 _ => {
-                    // Whatever the player last defined, not what the snapshot
+                    // Whatever the player last defined, not what the tape
                     // happened to have saved.
                     let names = self.udk;
                     self.print_text(at::KEYBOARD);

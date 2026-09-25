@@ -13,7 +13,7 @@ default = ["frontend"]
 frontend = ["dep:pixels", "dep:winit", "dep:cpal", "dep:gilrs", "dep:windows-sys", "dep:zip", "dep:fontdue", "dep:rfd"]
 
 [dependencies]
-# Only the snapshot loader and SHA-1; no emulation.
+# Only the tape loader and SHA-1; no emulation.
 zx-core.workspace = true
 pixels = { version = "0.17", optional = true }
 winit = { version = "0.30", optional = true }

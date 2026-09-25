@@ -329,9 +329,6 @@ pub struct Work {
     pub collisions: u32,
     /// Vertical collision tests (`D2F4`).
     pub vertical_collisions: u32,
-    /// The stray `RST 38` in sprite colouring, which runs the ROM's whole
-    /// interrupt routine.
-    pub interrupt_calls: u32,
     /// Characters printed through the ROM.
     pub characters: u32,
     /// Character cells XORed onto the screen (`DB3B`).
@@ -342,15 +339,14 @@ pub struct Work {
 
 impl Work {
     /// The fitted prices, in the order of the fields.
-    const PRICES: [u32; 6] = [1_574, 175, 965, 2_742, 1_586, 264];
+    const PRICES: [u32; 5] = [1_574, 175, 2_742, 1_586, 264];
 
     /// The counts, in the order of the fields.
     #[must_use]
-    pub fn counts(&self) -> [u32; 6] {
+    pub fn counts(&self) -> [u32; 5] {
         [
             self.collisions,
             self.vertical_collisions,
-            self.interrupt_calls,
             self.characters,
             self.cells,
             self.proximity_checks,
@@ -372,10 +368,10 @@ impl Work {
 /// in T-states from the frame boundary: the interrupt, then sprites,
 /// colours, platforms, sparkles, force fields, BLOB and the enemies at their
 /// plainest. Fitted with [`Work`]'s prices.
-pub const WORK_T: u32 = 36_110;
+pub const WORK_T: u32 = 35_480;
 /// When BLOB's first blocking effect starts in a frame whose work before it
 /// counted nothing (it is BLOB who asks for them, after the display work).
-pub const WORK_BEFORE_EFFECTS_T: u32 = 31_640;
+pub const WORK_BEFORE_EFFECTS_T: u32 = 31_185;
 
 /// A frame's sound, laid out in time.
 pub struct FrameSound {

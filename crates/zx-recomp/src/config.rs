@@ -1,7 +1,8 @@
 //! Per-game recompiler configuration (the `<game>.toml` file).
 //!
 //! The config holds everything game-specific except the game itself: file
-//! names and hashes of the user-supplied snapshot and ROM, analysis hints,
+//! names and hashes of the user-supplied tape and ROM, where the tape's
+//! program starts, analysis hints,
 //! and the scripted input used to trace the game.
 
 use serde::Deserialize;
@@ -20,10 +21,14 @@ pub struct Config {
 #[serde(deny_unknown_fields)]
 pub struct Game {
     pub name: String,
-    /// Snapshot file name, looked up in the assets directory.
-    pub snapshot: String,
-    /// Expected SHA-1 of the snapshot file. Builds fail on a mismatch.
-    pub snapshot_sha1: Option<String>,
+    /// Tape file name (`.tap`), looked up in the assets directory.
+    pub tape: String,
+    /// Expected SHA-1 of the tape. Builds fail on a mismatch.
+    pub tape_sha1: Option<String>,
+    /// Where the ROM's loader returns into the program once the tape has
+    /// loaded, and the stack pointer then.
+    pub entry_pc: u16,
+    pub entry_sp: u16,
     /// 48K ROM file name. Without it, ROM code cannot run.
     pub rom: Option<String>,
     pub rom_sha1: Option<String>,

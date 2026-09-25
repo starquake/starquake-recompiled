@@ -7,21 +7,16 @@ use std::path::Path;
 
 use zx_core::sha1::sha1_hex;
 
-/// SHA-1 of the supported files: the `.tap` tape the game loads from, and
-/// the `.z80` snapshot the verification tool uses.
+/// SHA-1 of the supported tape, the only file the game or its checks load.
 pub const TAPE_SHA1: &str = "65450d6f33692c2c2868c0b497037f2cfd0ef3bd";
-pub const SNAPSHOT_SHA1: &str = "8cf0722b752f7fe1651734b32a240e714525e480";
 
-/// Reads the player's own copy of the game — a `.tap` tape or a `.z80`
-/// snapshot — into a memory image, along with the picture a tape painted
-/// while it loaded.
-/// Reads the player's own copy of the game, from a `.tap` tape or a `.z80`
-/// snapshot, and returns its memory and the tape's loading picture.
+/// Reads the player's own copy of the game, a `.tap` tape, and returns its
+/// memory and the picture it painted while it loaded.
 ///
 /// # Errors
 ///
-/// If the file cannot be read, has an extension that is neither, or does
-/// not parse as the format its extension claims.
+/// If the file cannot be read, is not the supported tape, or does not parse
+/// as one.
 pub fn read_game(path: &Path) -> Result<(Vec<u8>, Option<Vec<u8>>), String> {
     let bytes = std::fs::read(path).map_err(|e| {
         format!(
@@ -31,27 +26,14 @@ pub fn read_game(path: &Path) -> Result<(Vec<u8>, Option<Vec<u8>>), String> {
         )
     })?;
     let hash = sha1_hex(&bytes);
-    let want = |expected: &str| -> Result<(), String> {
-        if hash == expected {
-            Ok(())
-        } else {
-            Err(format!(
-                "{} has SHA-1 {hash}; this version supports only {expected}",
-                path.display()
-            ))
-        }
-    };
-    if path
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("tap"))
-    {
-        want(TAPE_SHA1)?;
-        let tape = zx_core::tape::load_tap(&bytes)?;
-        Ok((tape.memory(), tape.loading_screen))
-    } else {
-        want(SNAPSHOT_SHA1)?;
-        Ok((zx_core::snapshot::load_z80(&bytes)?.memory(), None))
+    if hash != TAPE_SHA1 {
+        return Err(format!(
+            "{} has SHA-1 {hash}; this version supports only the tape {TAPE_SHA1}",
+            path.display()
+        ));
     }
+    let tape = zx_core::tape::load_tap(&bytes)?;
+    Ok((tape.memory(), tape.loading_screen))
 }
 
 /// Whether `bytes` are the tape this version supports.

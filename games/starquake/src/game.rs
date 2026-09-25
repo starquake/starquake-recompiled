@@ -233,9 +233,8 @@ pub struct Game {
 
 impl Game {
     /// Reads the game state out of a memory image of the original program:
-    /// the player's snapshot at startup, or the reference machine when
+    /// the player's tape at startup, or the reference machine when
     /// verifying.
-    /// Builds the game's state from the memory the original starts with.
     ///
     /// # Panics
     ///

@@ -2,7 +2,10 @@
 //! interpreter and the corresponding rewritten Rust from the same starting
 //! state, then compares the resulting states.
 //!
-//! Usage: `sq-verify [ASSETS_DIR]` (needs `starquake.z80` and `48.rom`).
+//! Usage: `sq-verify [ASSETS_DIR]` (needs `starquake.tap` and `48.rom`).
+//!
+//! The original starts from the player's tape, as the ROM's loader leaves
+//! it (`layout::ENTRY_PC`), and the rewrite from the same memory.
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -13,14 +16,20 @@ use starquake::layout as at;
 use zx_runtime::Zx;
 
 struct Env {
-    snap: zx_core::Snapshot,
-    rom: Vec<u8>,
+    /// The original at its menu, the title tune played out, having run from
+    /// the tape's entry with the real ROM: every check starts from here.
+    start: Zx,
     assets: Rc<Assets>,
+    /// The player's tape, as loaded.
+    tape: zx_core::tape::Tape,
 }
+
+/// The title screen and menu, where the program's start-up ends.
+const MENU: u16 = 0x5E81;
 
 impl Env {
     fn machine(&self) -> Zx {
-        Zx::new(&self.snap, Some(&self.rom))
+        self.start.clone()
     }
 
     fn game(&self, z: &Zx) -> Game {
@@ -302,7 +311,7 @@ fn check_room_prelude(env: &Env) -> bool {
     let mut r = Rng(0x5EED);
     for case in 0..cases {
         let mut z = env.machine();
-        // Vary everything the panel shows. Case 0 is the snapshot as-is.
+        // Vary everything the panel shows. Case 0 is the menu as reached.
         if case > 0 {
             for i in 0..6 {
                 z.mem[at::SCORE + i] = r.byte() % 10;
@@ -354,7 +363,7 @@ fn check_room_build(env: &Env) -> bool {
     let base = new_game_machine(env);
     let mut hangs = 0;
     for room in 0..starquake::assets::ROOM_COUNT as u16 {
-        let mut z = Zx::new(&env.snap, Some(&env.rom));
+        let mut z = env.machine();
         z.mem.copy_from_slice(&base.mem[..]);
         z.mem[0x4000..0x5B00].fill(0);
         z.mem[0x5B20..0x5BC0].fill(0);
@@ -414,7 +423,7 @@ fn check_room_entry(env: &Env) -> bool {
     let chains = 120;
     let mut cases = 0;
     for chain in 0..chains {
-        let mut z = Zx::new(&env.snap, Some(&env.rom));
+        let mut z = env.machine();
         z.mem.copy_from_slice(&base.mem[..]);
         let pick = |r: &mut Rng| loop {
             let room = (r.byte() as u16) << 1 | (r.byte() & 1) as u16;
@@ -934,6 +943,40 @@ fn check_end_while_paused(env: &Env, states: &[Zx]) -> bool {
         ));
     }
     report("ending a paused game (#125)", &failures, 1)
+}
+
+/// The lift in room 244's right-hand shaft, walked into from the left
+/// (#117). The original, run on the tape, lifts BLOB from (200, 39) to the
+/// top of the shaft at (200, 111); the rewrite used to leave him standing at
+/// its foot, having painted the lift cell under him white with the
+/// snapshot's damaged sprite colouring.
+fn check_lift(env: &Env) -> bool {
+    use starquake::entities::field::{X, Y};
+    let mut failures = Vec::new();
+    let mut g = env.game(&new_game_machine(env));
+    g.room = 244;
+    g.entry_reason = 0;
+    g.enter_room();
+    g.entities[0].0[X] = 180;
+    g.entities[0].0[Y] = 39;
+    let input = starquake::controls::Input {
+        kempston: 0x01,
+        ..Default::default()
+    };
+    for _ in 0..150 {
+        g.play_frame(&input);
+    }
+    let at = (g.entities[0].0[X], g.entities[0].0[Y]);
+    if g.room != 244 || at != (200, 111) {
+        failures.push((
+            "room 244, walking right from (180, 39)".into(),
+            vec![format!(
+                "BLOB at {at:?} in room {}, the original at (200, 111)",
+                g.room
+            )],
+        ));
+    }
+    report("lift boarded walking right (#117)", &failures, 1)
 }
 
 /// The core room: walking in carrying pieces that fit holes in the core.
@@ -1707,7 +1750,7 @@ fn render(env: &Env, out: &str) {
     save(&g, "screen-title.png");
 
     // The title screen after the player has defined their own keys: the
-    // menu should list those, not the ones the snapshot was saved with.
+    // menu should list those, not the ones the tape was saved with.
     let mut g = env.game(&base);
     g.control_method = 5;
     g.udk = *b"QWERT";
@@ -1969,8 +2012,8 @@ fn check_sound_work(env: &Env) -> bool {
     const ITERATIONS: usize = 3000;
     let mut z = play_machine(env);
     let mut r = Rng(0x50FD);
-    let mut tone_rows: Vec<([u32; 6], u32)> = Vec::new();
-    let mut effect_rows: Vec<([u32; 6], u32)> = Vec::new();
+    let mut tone_rows: Vec<([u32; 5], u32)> = Vec::new();
+    let mut effect_rows: Vec<([u32; 5], u32)> = Vec::new();
     for i in 0..ITERATIONS {
         if i % 6 == 0 {
             z.kempston = r.byte() & 0x1F;
@@ -2017,7 +2060,6 @@ fn check_sound_work(env: &Env) -> bool {
     let names = [
         "collision",
         "vertical collision",
-        "RST 38",
         "character",
         "cell",
         "proximity check",
@@ -2049,14 +2091,13 @@ fn check_sound_work(env: &Env) -> bool {
             residual[residual.len() * 9 / 10]
         );
     }
-    let price = |c: &[u32; 6]| {
+    let price = |c: &[u32; 5]| {
         let work = starquake::sound::Work {
             collisions: c[0],
             vertical_collisions: c[1],
-            interrupt_calls: c[2],
-            characters: c[3],
-            cells: c[4],
-            proximity_checks: c[5],
+            characters: c[2],
+            cells: c[3],
+            proximity_checks: c[4],
         };
         work.t()
     };
@@ -2136,9 +2177,9 @@ fn effects(env: &Env) {
 fn keys(env: &Env) {
     use starquake::controls::Input;
     let base = new_game_machine(env);
-    // Where the operands live, and what they hold in the raw snapshot (what
-    // the game itself starts from) versus after the original's own new-game.
-    let raw = env.snap.memory();
+    // Where the operands live, and what they hold on the tape (what the game
+    // itself starts from) versus after the original's own new-game.
+    let raw = env.tape.memory();
     let addrs: [(&str, usize); 12] = [
         ("pause port  C55C", 0xC55C),
         ("pause bit   C55F", 0xC55F),
@@ -2153,7 +2194,7 @@ fn keys(env: &Env) {
         ("key4 port   C5A6", 0xC5A6),
         ("key4 bit    C5AA", 0xC5AA),
     ];
-    println!("operand bytes:        snapshot   after original new-game");
+    println!("operand bytes:        tape       after original new-game");
     for (name, a) in addrs {
         println!("  {name}   {:#04x}       {:#04x}", raw[a], base.mem[a]);
     }
@@ -2219,75 +2260,6 @@ fn keys(env: &Env) {
     }
 }
 
-/// Compares the tape's memory with the snapshot's, so the addresses every
-/// other check relies on can be trusted to mean the same thing in both.
-fn tape(env: &Env, dir: &std::path::Path) {
-    // Everything below the program is screen and system variables; what
-    // matters is whether the game's own code and data are the same bytes.
-    const PROGRAM: usize = 0x5E00;
-
-    let bytes = match std::fs::read(dir.join("starquake.tap")) {
-        Ok(b) => b,
-        Err(e) => {
-            println!("no starquake.tap in {}: {e}", dir.display());
-            return;
-        }
-    };
-    let t = match zx_core::tape::load_tap(&bytes) {
-        Ok(t) => t,
-        Err(e) => {
-            println!("tape: {e}");
-            return;
-        }
-    };
-    let tape = t.memory();
-    let snap = env.snap.memory();
-    println!(
-        "tape: loading screen {}, ram {} bytes",
-        if t.loading_screen.is_some() {
-            "yes"
-        } else {
-            "no"
-        },
-        t.ram.len()
-    );
-    // Report the runs that differ, so state can be told from code.
-    let mut runs: Vec<(usize, usize)> = Vec::new();
-    let mut at = 0x4000;
-    while at < 0x10000 {
-        if tape[at] == snap[at] {
-            at += 1;
-        } else {
-            let start = at;
-            while at < 0x10000 && tape[at] != snap[at] {
-                at += 1;
-            }
-            runs.push((start, at));
-        }
-    }
-    let differing: usize = runs.iter().map(|(a, b)| b - a).sum();
-    println!("differing bytes: {differing} in {} runs", runs.len());
-    let below: usize = runs
-        .iter()
-        .filter(|(a, _)| *a < PROGRAM)
-        .map(|(a, b)| b - a)
-        .sum();
-    let above: Vec<(usize, usize)> = runs
-        .iter()
-        .copied()
-        .filter(|(a, _)| *a >= PROGRAM)
-        .collect();
-    let above_bytes: usize = above.iter().map(|(a, b)| b - a).sum();
-    println!("  below {PROGRAM:#06x} (screen and system variables): {below} bytes");
-    println!(
-        "  at or above {PROGRAM:#06x} (the program): {above_bytes} bytes in {} runs",
-        above.len()
-    );
-    for (a, b) in above.iter().take(30) {
-        println!("    {:#06x}..{:#06x}  {} bytes", a, b, b - a);
-    }
-}
-
 /// How fast the original's menu loop actually goes round. The loop has no
 /// wait in it, so its speed is however long one redraw of the options takes,
 /// and that is what sets how fast the highlight flashes.
@@ -2347,11 +2319,47 @@ fn main() {
         }
         None => PathBuf::from("assets"),
     };
-    let snap_bytes = std::fs::read(dir.join("starquake.z80")).expect("read starquake.z80");
+    let tape_bytes = std::fs::read(dir.join("starquake.tap")).expect("read starquake.tap");
+    assert!(
+        starquake::assets::is_supported_tape(&tape_bytes),
+        "starquake.tap is not the supported tape (SHA-1 {})",
+        starquake::assets::TAPE_SHA1
+    );
     let rom = std::fs::read(dir.join("48.rom")).expect("read 48.rom");
-    let snap = zx_core::snapshot::load_z80(&snap_bytes).expect("parse snapshot");
-    let assets = Rc::new(Assets::from_memory(&snap.memory()));
-    let env = Env { snap, rom, assets };
+    let tape = zx_core::tape::load_tap(&tape_bytes).expect("parse starquake.tap");
+    let mut start = Zx::new(
+        &zx_core::MachineState::from_tape(&tape, at::ENTRY_PC, at::ENTRY_SP),
+        Some(&rom),
+    );
+    // The program's own start-up runs on the real ROM, up to its menu, and
+    // the menu sets its font (`CHARS`), draws the title screen and plays the
+    // title tune with interrupts off. Every check starts once the tune has
+    // played out and the menu waits for a key, interrupts on.
+    assert!(
+        start.run_until(MENU, 500),
+        "the tape's program did not reach its menu at {MENU:04x}"
+    );
+    let mut misses = zx_runtime::Misses::default();
+    let mut frames = 0;
+    while !start.iff1 {
+        assert!(frames < 2_000, "the title tune did not end");
+        start.run_frame(zx_runtime::no_code, &mut misses);
+        frames += 1;
+    }
+    for _ in 0..10 {
+        start.run_frame(zx_runtime::no_code, &mut misses);
+    }
+    assert_eq!(
+        u16::from_le_bytes([start.mem[0x5C36], start.mem[0x5C37]]),
+        0xACD4,
+        "the menu set the game's font"
+    );
+    let assets = Rc::new(Assets::from_memory(&tape.memory()));
+    let env = Env {
+        start,
+        assets,
+        tape,
+    };
 
     if args.first().map(String::as_str) == Some("sound") {
         let ok = check_beeps(&env) & check_tone(&env) & check_sound_work(&env);
@@ -2364,11 +2372,6 @@ fn main() {
 
     if args.first().map(String::as_str) == Some("menu") {
         menu_rate(&env);
-        return;
-    }
-
-    if args.first().map(String::as_str) == Some("tape") {
-        tape(&env, &dir);
         return;
     }
 
@@ -2431,6 +2434,7 @@ fn main() {
     ok &= guarded("main loop (A523)", || check_loop(&env, &states));
     ok &= guarded("death sequence (C350)", || check_death(&env, &states));
     ok &= guarded("game over screen (6730)", || check_game_over(&env, &states));
+    ok &= guarded("lift boarded walking right (#117)", || check_lift(&env));
     ok &= guarded("ending a paused game (#125)", || {
         check_end_while_paused(&env, &states)
     });
