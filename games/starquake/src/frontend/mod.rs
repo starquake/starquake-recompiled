@@ -204,6 +204,25 @@ impl FrontHost {
     }
 }
 
+/// The core's nine slots as the game has them (#91): each slot's piece, in
+/// its graphic, still wanted while its top bit is set (a delivered slot
+/// holds its own number), and carried while it is wanted and that graphic is
+/// in the inventory.
+fn core_holes(game: &Game) -> Vec<guidance::Hole> {
+    game.core_slots
+        .iter()
+        .map(|&slot| {
+            let graphic = slot & 0x7F;
+            let open = slot >= 0x80;
+            guidance::Hole {
+                graphic: game.assets.graphic32(graphic),
+                open,
+                carried: open && game.status.inventory.iter().any(|&(g, _)| g == graphic),
+            }
+        })
+        .collect()
+}
+
 impl Host for FrontHost {
     fn heroes(&mut self, table: &[u8], new: Option<usize>) {
         let mut guidance = self.shared.guidance.lock().unwrap();
@@ -270,6 +289,7 @@ impl Host for FrontHost {
                     guidance.set_room(Some(game.room));
                     guidance.set_unvisited(&game.unvisited_rooms);
                     guidance.set_pieces(&game.missing_piece_rooms());
+                    guidance.set_core(&core_holes(game));
                 }
                 Scene::GameOver => guidance.set_room(None),
                 // The game-over screens are done: the title screen starts

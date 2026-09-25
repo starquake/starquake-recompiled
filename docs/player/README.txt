@@ -107,23 +107,32 @@ the bottom button on an Xbox pad and the right one on a Switch pad. A
 PlayStation pad uses the cross and the circle. The menu shows the
 letters or marks of the pad that is connected.
 
-Guidance has levels from 0, the original game, to 5; each adds to the
-ones below it. Turning it up, or training mode on, shows on that
-game's score, so the menu asks before keeping such a change. So far:
+Guidance has levels from 0, the original game, to 6; each adds to the
+ones below it. Levels 1 to 3 show only what you could have written
+down yourself; 4 and up tell you things you could not have known.
+Turning it up, or training mode on, shows on that game's score, so
+the menu asks before keeping such a change. So far:
 
-  Level 1  The codes of the teleporters you have seen.
-  Level 2  A map of the rooms you have visited. Walls are lines, and
+  Level 1  Codes and the core: the codes of the teleporters you have
+           seen, in a column at the panel's right, and the core's nine
+           slots at its top left in the game's own pictures: bright
+           while still wanted, dim once delivered, outlined while you
+           carry that piece.
+  Level 2  The map you have walked: the rooms you have visited. Walls are lines, and
            a gap in one is a way on; the square is where you are and
            the diamonds are the teleporters you have seen. A line
            inside a room divides it: the ways on either side of it do
            not meet, and a dashed one is a security door. A way on
            can still need a lift.
-  Level 3  The rooms holding a core piece the core still needs, marked
-           in pink on the map, including rooms you have not reached.
+  Level 3  What you have seen: the rooms you have walked through
+           that hold a core piece the core still needs, marked in pink.
            There are usually two of each piece; either will do, and
            while you carry one the other is not marked.
+  Level 4  What you have not: the same in rooms you have not reached,
+           outlined.
 
-Levels 4 and 5 and training mode are still to come.
+Levels 5 (routes) and 6 (every code and the whole planet), and
+training mode, are still to come.
 
 
 LEGAL
