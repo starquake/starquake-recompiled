@@ -1022,6 +1022,64 @@ fn check_effect_pictures(env: &Env) -> bool {
     report("pictures under blocking effects (#116)", &failures, 1)
 }
 
+/// Types a code into a booth, a key a frame with a frame let go between,
+/// and notes, frame by frame, whether the game said a booth was reading.
+struct BoothTyping {
+    keys: Vec<(u8, u8)>,
+    frame: usize,
+    booth: Vec<bool>,
+}
+
+impl starquake::host::Host for BoothTyping {
+    fn frame(&mut self, game: &Game) -> (starquake::controls::Input, u32) {
+        self.booth.push(game.booth);
+        self.frame += 1;
+        let mut input = starquake::controls::Input::default();
+        if self.frame.is_multiple_of(2)
+            && let Some(&key) = self.keys.get(self.frame / 2 - 1)
+        {
+            input.press_key(key);
+        }
+        (input, game.frame_sound().frames)
+    }
+}
+
+/// `Game::booth` is set on every frame a booth reads its five letters, and
+/// off once the booth is done, so a window can let a pad type them (#80).
+fn check_booth_flag(env: &Env) -> bool {
+    let mut failures = Vec::new();
+    let mut g = env.game(&new_game_machine(env));
+    let all = g.all_teleporters();
+    let keys = all[1]
+        .code
+        .iter()
+        .map(|&c| starquake::controls::key_position(&g.assets.ram, c).expect("a letter key"))
+        .collect();
+    g.room = all[0].room;
+    let mut host = BoothTyping {
+        keys,
+        frame: 0,
+        booth: Vec::new(),
+    };
+    g.run_modal(starquake::blob::Modal::TeleportBooth, &mut host);
+    let b = &host.booth;
+    match (b.iter().position(|&x| x), b.iter().rposition(|&x| x)) {
+        (Some(first), Some(last)) => {
+            if b[first..=last].iter().any(|&x| !x) || g.booth {
+                failures.push((
+                    "booth".into(),
+                    vec!["set outside the code's reading".into()],
+                ));
+            }
+        }
+        _ => failures.push(("booth".into(), vec!["never set".into()])),
+    }
+    if g.room != all[1].room {
+        failures.push(("booth".into(), vec![format!("ended in room {}", g.room)]));
+    }
+    report("a booth says it reads a code (#80)", &failures, 1)
+}
+
 /// The core room: walking in carrying pieces that fit holes in the core.
 /// The original is run from the room entry to where it leaves for room 198.
 fn check_core_room(env: &Env) -> bool {
@@ -2478,6 +2536,9 @@ fn main() {
     ok &= guarded("death sequence (C350)", || check_death(&env, &states));
     ok &= guarded("game over screen (6730)", || check_game_over(&env, &states));
     ok &= guarded("lift boarded walking right (#117)", || check_lift(&env));
+    ok &= guarded("a booth says it reads a code (#80)", || {
+        check_booth_flag(&env)
+    });
     ok &= guarded("pictures under blocking effects (#116)", || {
         check_effect_pictures(&env)
     });

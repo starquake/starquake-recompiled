@@ -1,6 +1,7 @@
 //! Window, input and sound.
 
 mod audio;
+mod booth;
 mod gamepad;
 mod guidance;
 pub mod headless;
@@ -90,6 +91,10 @@ struct FrontHost {
     /// The high-score table kept between runs (#90), and where.
     keeper: scores::Keeper,
     scores_path: Option<std::path::PathBuf>,
+    /// A code entered with a pad in a booth, still to be typed (#80), and
+    /// whether its first letter is down this frame.
+    typing: std::collections::VecDeque<u8>,
+    typing_down: bool,
     /// The planet as a graph for level 5's routes (#52), read on the first
     /// frame that needs it.
     graph: Option<starquake::map::Graph>,
@@ -375,6 +380,65 @@ fn every_door(
     seen.iter().copied().chain(rest).collect()
 }
 
+impl FrontHost {
+    /// A booth reading a code (#80): the first pad press there opens the
+    /// slots, and from then on the pad works them. Once the booth is done
+    /// they go, with anything not yet typed.
+    fn booth_entry(&mut self, game: &Game, pad: &gamepad::Pad) {
+        let mut guidance = self.shared.guidance.lock().unwrap();
+        if !game.booth {
+            guidance.set_code_entry(None);
+            self.typing.clear();
+            self.typing_down = false;
+            return;
+        }
+        let pressed = pad.up
+            || pad.down
+            || pad.left
+            || pad.right
+            || pad.south
+            || pad.east
+            || pad.west
+            || pad.north;
+        let entry = match guidance.code_entry() {
+            // The press that opens the slots does nothing else.
+            None if pressed => Some(booth::Entry::default()),
+            None => None,
+            Some(mut e) => {
+                if pad.up {
+                    e.step(true);
+                }
+                if pad.down {
+                    e.step(false);
+                }
+                if pad.left {
+                    e.move_to(false);
+                }
+                if pad.right {
+                    e.move_to(true);
+                }
+                if pad.cancel() {
+                    e.clear();
+                }
+                // The codes the panel lists are level 1's (#50), every one at
+                // level 6: picking from them is help, so from level 1 only.
+                if pad.west && guidance.level() >= 1 {
+                    let seen: Vec<[u8; 5]> = guidance.codes().0.iter().map(|t| t.code).collect();
+                    e.next_seen(&seen);
+                }
+                if pad.confirm()
+                    && let Some(code) = e.enter()
+                {
+                    self.typing.extend(code);
+                    self.typing_down = false;
+                }
+                Some(e)
+            }
+        };
+        guidance.set_code_entry(entry);
+    }
+}
+
 impl Host for FrontHost {
     fn heroes(&mut self, table: &[u8], new: Option<usize>) {
         let mut guidance = self.shared.guidance.lock().unwrap();
@@ -537,7 +601,21 @@ impl Host for FrontHost {
         if self.shared.guidance.lock().unwrap().picker_open() {
             pad = self.hold_for_picker();
         }
+        self.booth_entry(game, &pad);
         let mut input = *self.shared.input.lock().unwrap();
+        // A code entered with a pad (#80), typed on the keys the booth reads:
+        // a letter down one frame and let go the next, as the booth waits for
+        // each key to be let go before it reads the next.
+        if game.booth
+            && let Some(&letter) = self.typing.front()
+        {
+            if self.typing_down {
+                self.typing.pop_front();
+            } else if let Some(key) = starquake::controls::key_position(&game.assets.ram, letter) {
+                input.press_key(key);
+            }
+            self.typing_down = !self.typing_down;
+        }
         if self
             .shared
             .guidance
@@ -664,6 +742,8 @@ fn play_game(
         scene_seen: Scene::Loading,
         keeper,
         scores_path,
+        typing: std::collections::VecDeque::new(),
+        typing_down: false,
         graph: None,
         routes: None,
     };

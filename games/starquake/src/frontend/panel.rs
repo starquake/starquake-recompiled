@@ -240,7 +240,83 @@ impl Panel {
             self.picker(canvas, guidance);
         } else if guidance.paused() {
             self.paused(canvas);
+        } else if let Some(entry) = guidance.code_entry() {
+            let can_pick = guidance.level() >= 1 && !guidance.codes().0.is_empty();
+            self.code_entry(canvas, &entry, can_pick);
         }
+    }
+
+    /// Typing a teleport code with a pad (#80): five slots over the foot of
+    /// the booth's picture, the one up and down change outlined, and what
+    /// each button does. X, the codes seen, only from level 1 and when there
+    /// are some.
+    fn code_entry(&mut self, canvas: &mut Canvas, entry: &super::booth::Entry, can_pick: bool) {
+        let (slot_w, slot_h, gap) = (48.0, 56.0, 10.0);
+        let slots_w = 5.0 * slot_w + 4.0 * gap;
+        let (w, h) = (460.0, 182.0);
+        let x = (PICTURE_W - w) / 2.0;
+        let y = WINDOW_H - h - 36.0;
+        canvas.round_rect(x, y, w, h, 12.0, BADGE_LINE);
+        canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0, 11.0, DIALOG);
+        let title = if entry.entered {
+            "Entering the code"
+        } else {
+            "Enter the code"
+        };
+        self.fonts.text(
+            Some(canvas),
+            x + 24.0,
+            y + 18.0,
+            None,
+            1.0,
+            &[span(title, 17.0, Weight::SemiBold, BRIGHT)],
+        );
+        let sx = x + (w - slots_w) / 2.0;
+        let sy = y + 52.0;
+        for (i, slot) in entry.slots.iter().enumerate() {
+            let bx = sx + i as f32 * (slot_w + gap);
+            let here = i == entry.at && !entry.entered;
+            if here {
+                canvas.round_rect(bx, sy, slot_w, slot_h, 8.0, ACCENT);
+                canvas.round_rect(
+                    bx + 2.0,
+                    sy + 2.0,
+                    slot_w - 4.0,
+                    slot_h - 4.0,
+                    6.0,
+                    SELECTED,
+                );
+            } else {
+                canvas.round_rect(bx, sy, slot_w, slot_h, 8.0, BUTTON_LINE);
+                canvas.round_rect(bx + 1.0, sy + 1.0, slot_w - 2.0, slot_h - 2.0, 7.0, DIALOG);
+            }
+            let (text, colour) = match slot {
+                Some(c) => (char::from(*c).to_string(), TITLE),
+                None => ("\u{2013}".to_string(), QUIET),
+            };
+            let spans = [span(&text, 26.0, Weight::SemiBold, colour)];
+            let tw = self.fonts.measure(&spans);
+            self.fonts.text(
+                Some(canvas),
+                bx + (slot_w - tw) / 2.0,
+                sy + 12.0,
+                None,
+                1.0,
+                &spans,
+            );
+        }
+        let foot = y + h - 44.0;
+        canvas.round_rect(x + 1.0, foot, w - 2.0, 1.0, 0.0, RULE);
+        let mut groups: Vec<(&[&str], &str)> = vec![
+            (&["\u{2191}", "\u{2193}"], "letter"),
+            (&["\u{2190}", "\u{2192}"], "place"),
+            (&["(A)"], "enter"),
+            (&["(B)"], "clear"),
+        ];
+        if can_pick {
+            groups.push((&["(X)"], "seen code"));
+        }
+        self.hints(canvas, x + 24.0, foot + 12.0, &groups);
     }
 
     /// The notice while the game is held by its pause key (#89): the picture
@@ -2004,6 +2080,26 @@ mod render_check {
                     g.change(true);
                     g.change(true);
                     g.back();
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                // A teleport code with a pad (#80): two letters in, the
+                // third being chosen, X offered since codes have been seen.
+                "booth-code",
+                {
+                    let mut g = Guidance::default();
+                    g.set_level(1);
+                    explore(&mut g, 6);
+                    let mut e = super::super::booth::Entry::default();
+                    e.step(true);
+                    e.move_to(true);
+                    for _ in 0..6 {
+                        e.step(true);
+                    }
+                    e.move_to(true);
+                    g.set_code_entry(Some(e));
                     g
                 },
                 Scene::Play,

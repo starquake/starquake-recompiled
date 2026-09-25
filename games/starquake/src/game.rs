@@ -180,6 +180,10 @@ pub struct Game {
     /// a frontend that lets a pad start a game there (#110). Not part of the
     /// original's state: nothing in the game reads it.
     pub on_title: bool,
+    /// Whether a teleport's booth is reading a code, for a frontend that
+    /// lets a pad type it (#80). Not part of the original's state: nothing
+    /// in the game reads it.
+    pub booth: bool,
     /// What the frame's work has done so far, which is how long it took the
     /// original (see [`crate::sound::Work`]).
     pub work: crate::sound::Work,
@@ -335,6 +339,7 @@ impl Game {
             pad: crate::controls::PadMeaning::default(),
             paused: false,
             on_title: false,
+            booth: false,
             work: crate::sound::Work::default(),
             work_at_effect: None,
             music: Vec::new(),
