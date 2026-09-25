@@ -70,7 +70,7 @@ impl Host for Headless {
                 "ran {} frames; room {}, lives {}, score {:?}",
                 self.frame, game.room, game.status.lives, game.status.score
             );
-            println!("blocking effects during play (frames lost = picture frozen):");
+            println!("blocking effects during play (frames they stretch the frame by):");
             let mut total = 0;
             for id in 0..64 {
                 if self.tally[id] > 0 {

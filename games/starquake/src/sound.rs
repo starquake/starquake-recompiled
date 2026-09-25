@@ -380,6 +380,10 @@ pub struct FrameSound {
     /// How many 50 Hz frames went by: more than one when the effects ran
     /// past the boundary.
     pub frames: u32,
+    /// When each blocking effect plays, as (start, end) in T-states from
+    /// the frame boundary, in the order they were asked for: while one
+    /// plays, the screen shows [`Game::effect_pictures`]' picture for it.
+    pub effect_spans: Vec<(u32, u32)>,
 }
 
 impl Game {
@@ -401,9 +405,11 @@ impl Game {
         } else {
             0
         };
+        let mut effect_spans = Vec::with_capacity(self.effects.len());
         for &id in &self.effects {
             let (e, end) = beep(ram, id, t);
             edges.extend(e);
+            effect_spans.push((t, end));
             t = end;
         }
         if !self.music.is_empty() {
@@ -415,7 +421,11 @@ impl Game {
                     .map(|&(at, level)| (base + at, level))
                     .take_while(|&(at, _)| at < frames * FRAME_T),
             );
-            return FrameSound { edges, frames };
+            return FrameSound {
+                edges,
+                frames,
+                effect_spans,
+            };
         }
         let tone_at = match (self.play_work, self.effects.is_empty()) {
             (true, true) => work,
@@ -433,16 +443,18 @@ impl Game {
         FrameSound {
             edges,
             frames: 1 + tone_at / FRAME_T,
+            effect_spans,
         }
     }
 
     /// Asks for a blocking sound effect, noting how far the frame's work had
-    /// got if it is the first.
+    /// got if it is the first, and the picture it plays over.
     pub fn request_effect(&mut self, id: u8) {
         if self.effects.is_empty() {
             self.work_at_effect = Some(self.work);
         }
         self.effects.push(id);
+        self.effect_pictures.push(self.display.clone());
     }
 
     fn load_effect(&mut self, id: u8) {

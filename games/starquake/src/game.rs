@@ -143,6 +143,11 @@ pub struct Game {
     pub enemy_cursor: [u8; 2],
     /// Blocking sound effects requested since the frontend last looked.
     pub effects: Vec<u8>,
+    /// The picture as it stood when each of those effects was asked for
+    /// (#116). The original's beeper holds the program while it plays, so
+    /// that picture is what the screen shows for the effect's length; a
+    /// frontend shows each in turn. Not part of the original's state.
+    pub effect_pictures: Vec<crate::display::Display>,
     /// Tone to play for the rest of this frame (see [`Game::sound_tick`]).
     pub tone: Option<u8>,
     /// The teleporters whose booths have been entered this game, in the
@@ -320,6 +325,7 @@ impl Game {
             sound: bytes(at::SOUND, 8).try_into().unwrap(),
             enemy_cursor: bytes(at::ENEMY_CURSOR, 2).try_into().unwrap(),
             effects: Vec::new(),
+            effect_pictures: Vec::new(),
             tone: None,
             scene: Scene::Loading,
             teleporters_seen: Vec::new(),
