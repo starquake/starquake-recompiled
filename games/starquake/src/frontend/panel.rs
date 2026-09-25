@@ -594,21 +594,34 @@ impl Panel {
             // The middle of the door's tile, four cells by three.
             let cx = x + (f32::from(col) + 2.0) / 32.0 * pitch;
             let cy = y + (f32::from(row) + 1.5) / 18.0 * pitch;
-            let r = 6.5;
-            canvas.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, ITEM_EDGE);
-            canvas.round_rect(
-                cx - r + 1.0,
-                cy - r + 1.0,
-                2.0 * r - 2.0,
-                2.0 * r - 2.0,
-                r - 1.0,
-                CODE_FILL,
-            );
             let label = (i + 1).to_string();
-            let spans = [span(&label, 10.0, Weight::SemiBold, CODE)];
-            let w = self.fonts.measure(&spans);
-            self.fonts
-                .text(Some(canvas), cx - w / 2.0, cy - 7.0, None, 1.0, &spans);
+            if let Some(font) = guidance.font() {
+                // In the game's own letters, as ZX Sidekick draws it (#126):
+                // a light tile with a dark rim and the digits knocked out of
+                // it, a screen pixel a pixel of the letters.
+                let px = canvas.scale.round().max(1.0) / canvas.scale;
+                let (w, h) = ((label.len() as f32 * 8.0 + 2.0) * px, 10.0 * px);
+                let snap = |v: f32| (v * canvas.scale).round() / canvas.scale;
+                let (bx, by) = (snap(cx - w / 2.0), snap(cy - h / 2.0));
+                canvas.round_rect(bx - px, by - px, w + 2.0 * px, h + 2.0 * px, 0.0, PANEL);
+                canvas.round_rect(bx, by, w, h, 0.0, CODE);
+                game_text(canvas, font, label.as_bytes(), bx + px, by + px, px, PANEL);
+            } else {
+                let r = 6.5;
+                canvas.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, ITEM_EDGE);
+                canvas.round_rect(
+                    cx - r + 1.0,
+                    cy - r + 1.0,
+                    2.0 * r - 2.0,
+                    2.0 * r - 2.0,
+                    r - 1.0,
+                    CODE_FILL,
+                );
+                let spans = [span(&label, 10.0, Weight::SemiBold, CODE)];
+                let w = self.fonts.measure(&spans);
+                self.fonts
+                    .text(Some(canvas), cx - w / 2.0, cy - 7.0, None, 1.0, &spans);
+            }
         }
     }
 
@@ -637,10 +650,16 @@ impl Panel {
         } else {
             (20.0, 3.0, 2.0, 1.0, 3.0)
         };
-        let chip_w = self
-            .fonts
-            .measure(&[span("MMMMM", 14.0, Weight::SemiBold, CODE)])
-            + 16.0;
+        // The codes in the game's own letters once the tape is read (#126).
+        let letter = code_pixel(canvas);
+        let chip_w = match guidance.font() {
+            Some(_) => 5.0 * 8.0 * letter + 14.0,
+            None => {
+                self.fonts
+                    .measure(&[span("MMMMM", 14.0, Weight::SemiBold, CODE)])
+                    + 16.0
+            }
+        };
         let card = 16.0 * px + 4.0;
         let door_w = 14.0 + 3.0 * card + 2.0 * 3.0;
         let width = chip_w.max(door_w).max(self.spaced_width("TELEPORTS"));
@@ -668,16 +687,29 @@ impl Panel {
                 })
                 .map(|(_, colour)| colour);
             outlines(canvas, x, y, chip_w, chip_h, marks);
-            let spans = [span(&text, 14.0, Weight::SemiBold, CODE)];
-            let w = self.fonts.measure(&spans);
-            self.fonts.text(
-                Some(canvas),
-                x + (chip_w - w) / 2.0,
-                y + text_y,
-                None,
-                1.0,
-                &spans,
-            );
+            if let Some(font) = guidance.font() {
+                let w = teleporter.code.len() as f32 * 8.0 * letter;
+                game_text(
+                    canvas,
+                    font,
+                    &teleporter.code,
+                    x + (chip_w - w) / 2.0,
+                    y + (chip_h - 8.0 * letter) / 2.0,
+                    letter,
+                    CODE,
+                );
+            } else {
+                let spans = [span(&text, 14.0, Weight::SemiBold, CODE)];
+                let w = self.fonts.measure(&spans);
+                self.fonts.text(
+                    Some(canvas),
+                    x + (chip_w - w) / 2.0,
+                    y + text_y,
+                    None,
+                    1.0,
+                    &spans,
+                );
+            }
             y += chip_h + gap;
         }
         if seen.is_empty() {
@@ -711,9 +743,21 @@ impl Panel {
                 marks,
             );
             let label = (i + 1).to_string();
-            let number = [span(&label, 12.0, Weight::SemiBold, SOFT)];
-            self.fonts
-                .text(Some(canvas), right - door_w, y + 7.0, None, 1.0, &number);
+            if let Some(font) = guidance.font() {
+                game_text(
+                    canvas,
+                    font,
+                    label.as_bytes(),
+                    right - door_w,
+                    y + (card - 8.0 * letter) / 2.0,
+                    letter,
+                    SOFT,
+                );
+            } else {
+                let number = [span(&label, 12.0, Weight::SemiBold, SOFT)];
+                self.fonts
+                    .text(Some(canvas), right - door_w, y + 7.0, None, 1.0, &number);
+            }
             for (k, graphic) in door.graphics.iter().enumerate() {
                 let x = right - 3.0 * card - 2.0 * 3.0 + k as f32 * (card + 3.0);
                 canvas.round_rect(x, y, card, card, 3.0, CODE_FILL);
@@ -1561,6 +1605,55 @@ fn outlines(
     }
 }
 
+/// How many layout units a pixel of the game's letters is in the rail
+/// (#126): half a pixel of the game's picture, rounded down to whole screen
+/// pixels so every one is the same size, as ZX Sidekick draws them.
+fn code_pixel(canvas: &Canvas) -> f32 {
+    (canvas.scale * 1.5).floor().max(1.0) / canvas.scale
+}
+
+/// Draws `text` in the game's own letters (#126), `px` layout units a pixel,
+/// its top left at (`x`, `y`) snapped to whole screen pixels so the letters
+/// stay sharp. A byte outside the font's 96 letters draws nothing.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "where, how big, what and in which letters and colour"
+)]
+fn game_text(
+    canvas: &mut Canvas,
+    font: &starquake::printer::Font,
+    text: &[u8],
+    x: f32,
+    y: f32,
+    px: f32,
+    colour: Rgb,
+) {
+    let snap = |v: f32| (v * canvas.scale).round() / canvas.scale;
+    let (x, y) = (snap(x), snap(y));
+    for (k, &letter) in text.iter().enumerate() {
+        let Some(glyph) = usize::from(letter)
+            .checked_sub(0x20)
+            .and_then(|i| font.get(i))
+        else {
+            continue;
+        };
+        for (r, bits) in glyph.iter().enumerate() {
+            for c in 0..8 {
+                if bits & (0x80 >> c) != 0 {
+                    canvas.round_rect(
+                        x + (k * 8 + c) as f32 * px,
+                        y + r as f32 * px,
+                        px,
+                        px,
+                        0.0,
+                        colour,
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// A game graphic, 16 by 16 in cells top-left, top-right, bottom-left and
 /// bottom-right, its set pixels `px` square from (`x`, `y`).
 fn draw_graphic(canvas: &mut Canvas, graphic: &[u8; 32], x: f32, y: f32, px: f32, colour: Rgb) {
@@ -1789,6 +1882,45 @@ mod render_check {
         g.set_doors(doors);
     }
 
+    #[test]
+    fn letters_outside_the_font_draw_nothing() {
+        let mut pixels = vec![0u8; 64 * 16 * 4];
+        let mut canvas = Canvas {
+            pixels: &mut pixels,
+            width: 64,
+            height: 16,
+            scale: 1.0,
+        };
+        let font = [[0xFF; 8]; 96];
+        game_text(
+            &mut canvas,
+            &font,
+            &[0x00, 0x1F, 0x80, 0xFF],
+            0.0,
+            0.0,
+            1.0,
+            CODE,
+        );
+        assert!(pixels.iter().all(|&b| b == 0), "nothing drawn");
+    }
+
+    #[test]
+    fn a_letter_is_its_glyph_a_pixel_a_bit() {
+        let mut pixels = vec![0u8; 16 * 8 * 4];
+        let mut canvas = Canvas {
+            pixels: &mut pixels,
+            width: 16,
+            height: 8,
+            scale: 1.0,
+        };
+        let mut font = [[0u8; 8]; 96];
+        font[usize::from(b'A' - 0x20)] = [0x80, 0, 0, 0, 0, 0, 0, 0x01];
+        game_text(&mut canvas, &font, b"A", 0.0, 0.0, 1.0, CODE);
+        let lit = |x: usize, y: usize| pixels[(y * 16 + x) * 4 + 3] != 0;
+        assert!(lit(0, 0) && lit(7, 7), "the glyph's two bits");
+        assert!(!lit(1, 0) && !lit(8, 0), "and nothing else");
+    }
+
     /// Draws the panel in a few states, over a grey stand-in for the
     /// picture, to PNGs in the folder `SQ_PANEL_PNG` names, for comparing
     /// with the mockups without a window. Does nothing when it is not set.
@@ -1871,6 +2003,18 @@ mod render_check {
                         doors.push(DoorCode { room, ..doors[1] });
                     }
                     g.set_every(every, doors);
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                // The codes and numbers in the game's letters (#126), with a
+                // stand-in font of solid blocks: where they go and how big.
+                "level6-letters",
+                {
+                    let mut g = level3.clone();
+                    g.set_level(6);
+                    g.set_font(&[[0xFF; 8]; 96]);
                     g
                 },
                 Scene::Play,
@@ -2043,7 +2187,17 @@ mod render_check {
             ),
         ];
         let mut panel = Panel::new();
-        for (name, guidance, scene) in cases {
+        // With `SQ_TAPE` naming the player's tape, every case is drawn in the
+        // game's own letters, for looking at, never for committing.
+        let letters = std::env::var_os("SQ_TAPE").map(|tape| {
+            let (memory, _) =
+                starquake::assets::read_game(std::path::Path::new(&tape)).expect("read the tape");
+            starquake::assets::Assets::from_memory(&memory).font
+        });
+        for (name, mut guidance, scene) in cases {
+            if let Some(font) = &letters {
+                guidance.set_font(font);
+            }
             let scale = 2.0;
             let (w, h) = ((WINDOW_W * scale) as usize, (WINDOW_H * scale) as usize);
             let mut pixels = vec![0u8; w * h * 4];
