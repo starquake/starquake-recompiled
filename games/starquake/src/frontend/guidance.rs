@@ -23,6 +23,17 @@ pub const LEVELS: [&str; 6] = [
     "Arrow, whole map",
 ];
 
+/// The CORE OF HEROES table as the panel lists it beside the game's own
+/// screen (#90): each entry's initials, the guidance level its game had
+/// (`None` for the tape's own entries), and which entry the last game put
+/// in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Heroes {
+    pub names: [[u8; 3]; 8],
+    pub levels: [Option<u8>; 8],
+    pub this_game: Option<usize>,
+}
+
 /// How much help one game has had: the highest level in use at any point,
 /// and whether training mode was ever on. It only ever rises within a game.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -94,6 +105,8 @@ pub struct Guidance {
     pad: Layout,
     /// Whether the game is held by its pause key, for the notice (#89).
     paused: bool,
+    /// The high-score table, while the CORE OF HEROES screen shows it.
+    heroes: Option<Heroes>,
     /// Bumped on every change, so a watcher can tell something changed.
     version: u64,
 }
@@ -143,6 +156,18 @@ impl Guidance {
     pub fn set_pad(&mut self, layout: Layout) {
         if self.pad != layout {
             self.pad = layout;
+            self.version += 1;
+        }
+    }
+
+    /// The high-score table, while the CORE OF HEROES screen shows it.
+    pub fn heroes(&self) -> Option<Heroes> {
+        self.heroes
+    }
+
+    pub fn set_heroes(&mut self, heroes: Option<Heroes>) {
+        if self.heroes != heroes {
+            self.heroes = heroes;
             self.version += 1;
         }
     }

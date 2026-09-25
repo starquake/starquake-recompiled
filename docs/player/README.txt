@@ -85,6 +85,11 @@ At the title screen, 1 to 5 choose how to play, 6 defines your own
 keys, 0 starts the game and Q quits. Any key stops the tune. On a
 gamepad, Start or the fire button starts the game.
 
+The high-score table, the CORE OF HEROES, is kept between runs in
+high-scores.txt, in the folder the tape is kept in. Beside it the panel
+shows how much guidance each entry's game had. A game played with
+training mode on is shown in the table and then left out of it.
+
 
 GUIDANCE
 --------

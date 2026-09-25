@@ -15,6 +15,20 @@ pub trait Host {
     /// frame and how many 50 Hz frames passed (more than one if the sound
     /// overran).
     fn frame(&mut self, game: &Game) -> (Input, u32);
+
+    /// The CORE OF HEROES table is about to be shown after a game: `table`
+    /// as the game keeps it (eight entries of ten bytes: three initials,
+    /// six score digits, the percentage), and `new`, the entry this game
+    /// put in, if it made one. A host that keeps the table between runs
+    /// saves it here (#90). Nothing by default.
+    fn heroes(&mut self, _table: &[u8], _new: Option<usize>) {}
+
+    /// The table has been shown: a table to put back in place of the game's,
+    /// or `None` to leave it. A host puts back the one from before a game
+    /// that is not to be kept, such as one played with training mode.
+    fn heroes_shown(&mut self) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 /// A host that shows and plays nothing and always reports the same input.
