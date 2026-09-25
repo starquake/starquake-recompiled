@@ -307,7 +307,15 @@ impl Host for FrontHost {
                 input.keys[1] &= !0x1F;
             }
         }
-        game.controls.press(&mut input, pad.bits);
+        // The D-pad's up and down only fly the hover platform: walking,
+        // building a platform and picking up an item are the face buttons'
+        // (#88), so a wobble on the stick does neither.
+        let bits = if game.scene == Scene::Play && !game.on_hover_platform() {
+            pad.dirs & 0x03 | pad.buttons
+        } else {
+            pad.bits
+        };
+        game.controls.press(&mut input, bits);
         if pad.start {
             game.controls.press_pause(&mut input);
         }
