@@ -56,6 +56,21 @@ pub fn step(z: &mut Zx) {
         z.charge(c);
     }
     execute(z, &d, pc, next);
+    if crate::coverage::on() {
+        use Instr::{Call, Djnz, Jp, Jr, Ret};
+        let mut bits = crate::coverage::RAN;
+        if matches!(
+            d.instr,
+            Jp(Some(_), _) | Jr(Some(_), _) | Call(Some(_), _) | Ret(Some(_)) | Djnz(_)
+        ) {
+            bits |= if z.pc == next {
+                crate::coverage::NOT_TAKEN
+            } else {
+                crate::coverage::TAKEN
+            };
+        }
+        crate::coverage::mark(pc, bits);
+    }
 }
 
 /// Carries out the instruction. The timing has already been charged, cycle by

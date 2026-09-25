@@ -122,6 +122,15 @@ the rewritten code from the same starting state (thousands of states, from
 real play and from a tour of the map), then compares the resulting screen
 and game state byte for byte.
 
+A check only covers the original's code its states reach, so every run
+also counts which of the original's instructions ran and which ways its
+conditional branches went, and fails if either falls below the floor in
+`tools/sq-verify/coverage-floor.txt` (starquake-recompiled#121). At the
+last count: 5,504 instructions and 1,123 branch directions.
+`cargo run --release -p sq-verify -- coverage` also lists, block by block,
+the code no check reaches, into `.scratch/coverage.txt`, for writing the
+checks that are missing.
+
 One check is different, because what it checks is not in the original: *map
 openings* plays the rewrite on from the same states under random joystick
 input and checks that every edge BLOB leaves a room through is one the

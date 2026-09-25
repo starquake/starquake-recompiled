@@ -2348,6 +2348,131 @@ fn menu_rate(env: &Env) {
     );
 }
 
+/// The coverage this run must reach: the counts of the last recorded run,
+/// in `coverage-floor.txt` (#121). Coverage only ever grows: a change that
+/// drops it drops a check of the original, which is called out, never
+/// hidden by lowering the floor to match.
+const FLOOR: &str = include_str!("../coverage-floor.txt");
+
+/// Where the program starts: coverage below it is the ROM's, not the game's.
+const PROGRAM: u16 = 0x5E00;
+
+/// The original's instructions that ran, and its conditional branches' two
+/// directions taken, across the whole run, against the recorded floor.
+fn check_coverage_floor() -> bool {
+    let (ran, directions) = zx_runtime::coverage::totals(PROGRAM);
+    let floor = |name: &str| {
+        FLOOR
+            .lines()
+            .find_map(|l| l.strip_prefix(name)?.trim().parse::<usize>().ok())
+            .unwrap_or(0)
+    };
+    let (min_ran, min_dirs) = (floor("instructions run"), floor("branch directions taken"));
+    println!(
+        "coverage: {ran} instructions of the original run, {directions} branch directions taken (floor {min_ran}, {min_dirs})"
+    );
+    let mut failures = Vec::new();
+    if ran < min_ran || directions < min_dirs {
+        failures.push((
+            "coverage".into(),
+            vec![format!(
+                "below the floor: {ran} of {min_ran} instructions, {directions} of {min_dirs} directions"
+            )],
+        ));
+    }
+    report("coverage of the original (#121)", &failures, 1)
+}
+
+/// `sq-verify coverage`: the original's code as `zx-recomp` finds it from
+/// the tape, against what this run's checks ran, block by block, into
+/// `.scratch/coverage.txt` (#121). It names addresses only; the listing to
+/// read a gap against is `zx-recomp --listing`. Never committed.
+fn coverage_report(analysis: &zx_recomp::analysis::Analysis) {
+    use zx_core::Instr::{Call, Djnz, Jp, Jr, Ret};
+    use zx_runtime::coverage::{NOT_TAKEN, RAN, TAKEN};
+    let map = zx_runtime::coverage::map();
+    let mut found = 0;
+    let mut ran = 0;
+    let (mut branches, mut both, mut one) = (0, 0, 0);
+    let mut unrun = Vec::new();
+    let mut half = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for block in analysis.blocks.iter().filter(|b| b.start >= PROGRAM) {
+        let mut block_ran = 0;
+        for i in &block.instrs {
+            if !seen.insert(i.addr) {
+                continue;
+            }
+            found += 1;
+            let m = map[usize::from(i.addr)];
+            if m & RAN != 0 {
+                ran += 1;
+                block_ran += 1;
+            }
+            if matches!(
+                i.d.instr,
+                Jp(Some(_), _) | Jr(Some(_), _) | Call(Some(_), _) | Ret(Some(_)) | Djnz(_)
+            ) {
+                branches += 1;
+                match (m & TAKEN != 0, m & NOT_TAKEN != 0) {
+                    (true, true) => both += 1,
+                    (false, false) => {}
+                    _ => {
+                        one += 1;
+                        half.push((i.addr, if m & TAKEN != 0 { "taken" } else { "not taken" }));
+                    }
+                }
+            }
+        }
+        if block_ran == 0 && !block.instrs.is_empty() {
+            unrun.push((block.start, block.instrs.len()));
+        }
+    }
+    unrun.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    let mut out = format!(
+        "The original's code from {PROGRAM:04x} up, as zx-recomp finds it from the tape,\n\
+         against what sq-verify's checks ran (#121). The analysis also decodes some\n\
+         data as code (tables and graphics reached through a misread jump), so the\n\
+         totals below overstate the code there is, and a block never run may be data.\n\n\
+         instructions: {ran} of {found} run ({:.1}%)\n\
+         conditional branches: {branches}; both ways {both}, one way only {one}, never {}\n\n\
+         blocks never run, largest first (start, instructions):\n",
+        100.0 * ran as f64 / found.max(1) as f64,
+        branches - both - one
+    );
+    for (start, n) in &unrun {
+        out.push_str(&format!("  {start:04x}  {n}\n"));
+    }
+    out.push_str("\nbranches taken one way only (address, the way taken):\n");
+    for (a, way) in &half {
+        out.push_str(&format!("  {a:04x}  {way}\n"));
+    }
+    let _ = std::fs::create_dir_all(".scratch");
+    match std::fs::write(".scratch/coverage.txt", &out) {
+        Ok(()) => println!(
+            "coverage report: {ran} of {found} instructions run, {both} of {branches} branches both ways; .scratch/coverage.txt"
+        ),
+        Err(e) => println!("coverage report not written: {e}"),
+    }
+}
+
+/// The original's code found from the tape by `zx-recomp`, for the report.
+/// Its trace runs the original too, so this comes before recording starts.
+fn analyse(dir: &std::path::Path) -> zx_recomp::analysis::Analysis {
+    let cfg = zx_recomp::Config::parse(include_str!("../../re/starquake.toml"))
+        .expect("tools/re/starquake.toml");
+    let inputs = zx_recomp::Inputs::load(&cfg, dir).expect("the tape and the ROM");
+    let traced = zx_recomp::tracer::run(&cfg.trace, &inputs, |_, _| {}).expect("trace");
+    zx_recomp::analysis::analyze(
+        &cfg,
+        &inputs.memory(),
+        inputs.start.pc,
+        inputs.rom.is_some(),
+        &traced.trace,
+        &[],
+    )
+}
+
 fn main() {
     let mut args = std::env::args().skip(1).collect::<Vec<_>>();
     let dir = match args.iter().position(|a| a == "--assets") {
@@ -2362,6 +2487,10 @@ fn main() {
         }
         None => PathBuf::from("assets"),
     };
+    let coverage = args.first().map(String::as_str) == Some("coverage");
+    let analysis = coverage.then(|| analyse(&dir));
+    // Everything from here, the program's start-up included, counts (#121).
+    zx_runtime::coverage::start();
     let tape_bytes = std::fs::read(dir.join("starquake.tap")).expect("read starquake.tap");
     assert!(
         starquake::assets::is_supported_tape(&tape_bytes),
@@ -2516,6 +2645,10 @@ fn main() {
         let both: Vec<Zx> = states.iter().chain(&tour).cloned().collect();
         check_map_openings(&env, &both)
     });
+    ok &= guarded("coverage of the original (#121)", check_coverage_floor);
+    if let Some(analysis) = &analysis {
+        coverage_report(analysis);
+    }
     if !ok {
         std::process::exit(1);
     }
