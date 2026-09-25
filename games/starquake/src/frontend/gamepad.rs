@@ -111,6 +111,12 @@ pub struct Gamepad {
     /// down at the last poll,
     /// to tell a press from a hold.
     was: [bool; 7],
+    /// Joystick bits, and Start, kept from the game until they are let go:
+    /// what was held as the picker closed (#88).
+    held_back: u8,
+    start_held_back: bool,
+    /// Whether the next poll starts holding back whatever is down.
+    hold_back_next: bool,
 }
 
 impl Gamepad {
@@ -118,16 +124,43 @@ impl Gamepad {
         match gilrs::Gilrs::new() {
             Ok(gilrs) => Gamepad {
                 gilrs: Some(gilrs),
-                was: [false; 7],
+                ..Gamepad::none()
             },
             Err(e) => {
                 eprintln!("no gamepad support: {e}");
-                Gamepad {
-                    gilrs: None,
-                    was: [false; 7],
-                }
+                Gamepad::none()
             }
         }
+    }
+
+    /// No pad support at all.
+    fn none() -> Gamepad {
+        Gamepad {
+            gilrs: None,
+            was: [false; 7],
+            held_back: 0,
+            start_held_back: false,
+            hold_back_next: false,
+        }
+    }
+
+    /// From the next poll, keeps whatever is held then from the game until
+    /// each is let go: the button that closed the picker is not also a
+    /// platform, a shot or a pause (#88), as ZX Sidekick has it
+    /// (zx-sidekick/zx-sidekick#25).
+    pub fn hold_back_held(&mut self) {
+        self.hold_back_next = true;
+    }
+
+    fn hold_back(&mut self, pad: &mut Pad) {
+        if std::mem::take(&mut self.hold_back_next) {
+            self.held_back = pad.bits;
+            self.start_held_back = pad.start;
+        }
+        self.held_back &= pad.bits;
+        self.start_held_back &= pad.start;
+        pad.bits &= !self.held_back;
+        pad.start &= !self.start_held_back;
     }
 
     /// What every connected pad together is asking for.
@@ -182,7 +215,7 @@ impl Gamepad {
             now[6] |= pad.is_pressed(Button::East);
         }
         let pressed = |i: usize| now[i] && !self.was[i];
-        let result = Pad {
+        let mut result = Pad {
             bits,
             start,
             select: pressed(0),
@@ -195,13 +228,14 @@ impl Gamepad {
             layout,
         };
         self.was = now;
+        self.hold_back(&mut result);
         result
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Layout, Pad};
+    use super::{Gamepad, Layout, Pad};
 
     #[test]
     fn the_maker_decides_the_letters() {
@@ -209,6 +243,27 @@ mod tests {
         assert_eq!(Layout::of(Some(0x054C)), Layout::PlayStation);
         assert_eq!(Layout::of(Some(0x045E)), Layout::Xbox, "Microsoft's");
         assert_eq!(Layout::of(None), Layout::Xbox, "unknown: Xbox letters");
+    }
+
+    #[test]
+    fn what_closed_the_picker_is_kept_from_the_game_until_let_go() {
+        let mut pad = Gamepad::none();
+        let held = |bits: u8| Pad {
+            bits,
+            ..Pad::default()
+        };
+        pad.hold_back_held();
+        let mut down = held(0x04);
+        pad.hold_back(&mut down);
+        assert_eq!(down.bits, 0, "the bottom button that closed it");
+        let mut down_and_left = held(0x04 | 0x02);
+        pad.hold_back(&mut down_and_left);
+        assert_eq!(down_and_left.bits, 0x02, "a new press gets through");
+        let mut let_go = held(0);
+        pad.hold_back(&mut let_go);
+        let mut down_again = held(0x04);
+        pad.hold_back(&mut down_again);
+        assert_eq!(down_again.bits, 0x04, "pressed again after letting go");
     }
 
     #[test]

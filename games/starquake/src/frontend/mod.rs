@@ -120,6 +120,9 @@ impl FrontHost {
             }
         }
         self.next_frame = Instant::now();
+        // The button that closed the picker is still down: the game does
+        // not see it until it is let go.
+        self.pad.hold_back_held();
         gamepad::Pad::default()
     }
 
