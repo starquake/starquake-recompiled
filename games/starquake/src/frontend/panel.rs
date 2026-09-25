@@ -5,7 +5,7 @@
 //! takes the left `PICTURE_W`, the panel the rest.
 
 use starquake::game::{Scene, SeenTeleporter};
-use starquake::map::{AROUND, COLS, ROWS};
+use starquake::map::{COLS, ROWS};
 
 use super::gamepad::Layout;
 use super::guidance::{Choice, Guidance, Heroes, Hole, LEVELS, Setting};
@@ -305,12 +305,25 @@ impl Panel {
             if !open.right {
                 canvas.round_rect(x + pitch - overhang, y - overhang, line, long, 0.0, WALL);
             }
-            // Walls inside, from the centre out; a door's is dashed.
-            let centre = (x + pitch / 2.0, y + pitch / 2.0);
-            for wall in open.walls.into_iter().flatten() {
-                let to = edge_point(x, y, pitch, wall.to);
-                let dash = wall.door.then_some(2.5 * unit);
-                stroke(canvas, centre, to, line, dash, WALL);
+            // Walls inside, where they stand in the room (#92): its 32 by 18
+            // cells stretched over the square, a door's or a pad's every
+            // other cell.
+            let d = open.divides;
+            let (cw, ch) = (pitch / 32.0, pitch / 18.0);
+            for r in 0..18 {
+                for c in 0..32 {
+                    if !d.wall(r, c) || (d.door(r, c) && (r + c) % 2 == 1) {
+                        continue;
+                    }
+                    canvas.round_rect(
+                        x + c as f32 * cw,
+                        y + r as f32 * ch,
+                        cw.max(1.0),
+                        ch.max(1.0),
+                        0.0,
+                        WALL,
+                    );
+                }
             }
         }
         for seen in guidance.teleporters() {
@@ -1082,25 +1095,12 @@ impl Panel {
     }
 }
 
-/// The point on the edge of the room square at (`x`, `y`) that a place on a
-/// room's edge (`map::Wall::to`) stands for. The room is 32 cells by 18 and
-/// its square is not, so each edge is stretched to fit.
-fn edge_point(x: f32, y: f32, pitch: f32, to: u8) -> (f32, f32) {
-    let (top, side) = (32.0, 18.0);
-    let t = f32::from(to % AROUND);
-    if t < top {
-        (x + t / top * pitch, y)
-    } else if t < top + side {
-        (x + pitch, y + (t - top) / side * pitch)
-    } else if t < 2.0 * top + side {
-        (x + pitch - (t - top - side) / top * pitch, y + pitch)
-    } else {
-        (x, y + pitch - (t - 2.0 * top - side) / side * pitch)
-    }
-}
-
 /// A straight line `width` wide from `a` to `b`, with square ends, dashed
 /// when `dash` gives the length of a dash and of a gap.
+#[allow(
+    dead_code,
+    reason = "unused once walls are cells (#92); the pad's marks and the routes draw with it"
+)]
 fn stroke(
     canvas: &mut Canvas,
     a: (f32, f32),
@@ -1148,7 +1148,7 @@ fn span(text: &str, size: f32, weight: Weight, colour: Rgb) -> Span<'_> {
 #[cfg(test)]
 mod render_check {
     use super::*;
-    use starquake::map::{Openings, Wall};
+    use starquake::map::{Divides, Openings};
     use starquake::pickups::RoomSet;
 
     /// A made-up exploration, like the mockup's: a random walk over the
@@ -1195,16 +1195,27 @@ mod render_check {
         let visited: Vec<usize> = (0..openings.len())
             .filter(|&r| !unvisited.contains(r as u16))
             .collect();
-        let wall = |to, door| Some(Wall { to, door });
-        let shapes = [
-            [wall(16, false), wall(66, false)],
-            [wall(32, false), wall(82, false)],
-            [wall(41, true), wall(91, true)],
-        ];
+        // Walls inside a few rooms along the walk: a bar down the middle, a
+        // bar across, and a door's bar.
+        let down = |door: bool| {
+            let mut d = Divides::default();
+            for row in 0..18 {
+                d.cells[row] = 0b11 << 15;
+                if door {
+                    d.doors[row] = d.cells[row];
+                }
+            }
+            d
+        };
+        let across = {
+            let mut d = Divides::default();
+            d.cells[8] = u32::MAX;
+            d.cells[9] = u32::MAX;
+            d
+        };
+        let shapes = [down(false), across, down(true)];
         for (k, room) in visited.iter().step_by(9).enumerate() {
-            let [a, b] = shapes[k % shapes.len()];
-            openings[*room].walls[0] = a;
-            openings[*room].walls[1] = b;
+            openings[*room].divides = shapes[k % shapes.len()];
         }
         g.set_openings(openings);
         g.set_unvisited(&unvisited);

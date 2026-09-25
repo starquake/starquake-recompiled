@@ -120,10 +120,11 @@ the menu asks before keeping such a change. So far:
            carry that piece.
   Level 2  The map you have walked: the rooms you have visited. Walls are lines, and
            a gap in one is a way on; the square is where you are and
-           the diamonds are the teleporters you have seen. A line
-           inside a room divides it: the ways on either side of it do
-           not meet, and a dashed one is a security door. A way on
-           can still need a lift.
+           the diamonds are the teleporters you have seen. A wall
+           inside a room is drawn where it stands and divides it: the
+           ways on either side of it do not meet. A dotted one is a
+           security door or a teleport pad, which opens with the right
+           item. A way on can still need a lift.
   Level 3  What you have seen: the rooms you have walked through
            that hold a core piece the core still needs, marked in pink.
            There are usually two of each piece; either will do, and
