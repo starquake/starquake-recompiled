@@ -142,6 +142,10 @@ impl Game {
 
     /// Reduces bar `index` by `amount` and redraws its end.
     pub fn reduce_bar(&mut self, index: usize, amount: u8) {
+        // Training mode's Full switch for this bar holds it (#4).
+        if self.training.full(index) {
+            return;
+        }
         let v = self.status.bars[index].saturating_sub(amount);
         self.status.bars[index] = v;
         let col = 16 + ((v >> 5) & 3);

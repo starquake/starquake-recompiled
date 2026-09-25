@@ -201,6 +201,7 @@ mod tests {
     const PLAYED: Record = Record {
         highest: 3,
         training: false,
+        switches: starquake::game::Training([false; 5]),
     };
 
     #[test]
@@ -224,6 +225,7 @@ mod tests {
         let top = Record {
             highest: (LEVELS.len() - 1) as u8,
             training: false,
+            switches: starquake::game::Training::default(),
         };
         let saved = keeper.heroes(&second, Some(1), top).unwrap().clone();
         assert_eq!(saved.levels[1], Some(top.highest));
@@ -241,6 +243,7 @@ mod tests {
         let training = Record {
             highest: 0,
             training: true,
+            switches: starquake::game::Training([true, false, false, false, false]),
         };
         assert!(
             keeper.heroes(&now, Some(0), training).is_none(),

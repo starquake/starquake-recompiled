@@ -29,6 +29,12 @@ pub trait Host {
     fn heroes_shown(&mut self) -> Option<Vec<u8>> {
         None
     }
+
+    /// Training mode's switches for the frame to come (#4). All off by
+    /// default, which is the original game.
+    fn training(&mut self) -> crate::game::Training {
+        crate::game::Training::default()
+    }
 }
 
 /// A host that shows and plays nothing and always reports the same input.
@@ -91,6 +97,21 @@ impl Game {
         self.work_at_effect = None;
         self.input = input;
         self.frames = self.frames.wrapping_add(frames) & 0xFF_FFFF;
+        let training = host.training();
+        // A Full switch fills its bar as it goes on, in play, where the
+        // status panel shows it.
+        if self.scene == crate::game::Scene::Play {
+            let filled = (0..3).filter(|&i| training.full(i) && !self.training.full(i));
+            let mut drawn = false;
+            for i in filled {
+                self.status.bars[i] = 0x7F;
+                drawn = true;
+            }
+            if drawn {
+                self.draw_status();
+            }
+        }
+        self.training = training;
     }
 
     /// Waits for `n` frames with nothing happening (the original's HALT loops).

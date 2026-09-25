@@ -26,6 +26,52 @@ pub enum Scene {
     GameOver,
 }
 
+/// Training mode's five switches (#4), named as the game's manual names
+/// the bars. The game obeys them where it decides each thing: a Full switch
+/// keeps its bar from going down (`Game::reduce_bar`) and fills it as it
+/// goes on; endless lives keeps a death from taking one; no harm from
+/// enemies keeps touching one from draining energy or killing, and stops
+/// the patches and force fields that kill on touch. Not part of the
+/// original's state: all off, the game is the original.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Training(pub [bool; 5]);
+
+impl Training {
+    /// The switches' names, in order.
+    pub const NAMES: [&str; 5] = [
+        "Full energy",
+        "Full bridging platforms",
+        "Full laser",
+        "Endless lives",
+        "No harm from enemies",
+    ];
+
+    /// Whether any switch is on.
+    pub fn any(self) -> bool {
+        self.0.iter().any(|&on| on)
+    }
+
+    /// Whether bar `index` (0 energy, 1 bridging platforms, 2 laser) is
+    /// kept full.
+    pub fn full(self, index: usize) -> bool {
+        index < 3 && self.0[index]
+    }
+
+    pub fn endless_lives(self) -> bool {
+        self.0[3]
+    }
+
+    pub fn no_harm(self) -> bool {
+        self.0[4]
+    }
+
+    /// The switches on in either.
+    #[must_use]
+    pub fn union(self, other: Training) -> Training {
+        Training(std::array::from_fn(|i| self.0[i] || other.0[i]))
+    }
+}
+
 /// A security door whose screen has shown its code: the room it is in and
 /// the three key code cards it asks for, by graphic (#94).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -108,6 +154,8 @@ pub struct Game {
     /// in the order they were seen, for a frontend that shows them (#94).
     /// Not part of the original's state: nothing in the game reads it.
     pub doors_seen: Vec<SeenDoor>,
+    /// Training mode's switches, as the host last gave them (#4).
+    pub training: Training,
     /// Which part of the program is running, for a frontend that shows
     /// something beside it. Not part of the original's state: nothing in
     /// the game reads it.
@@ -277,6 +325,7 @@ impl Game {
             scene: Scene::Loading,
             teleporters_seen: Vec::new(),
             doors_seen: Vec::new(),
+            training: Training::default(),
             play_work: false,
             pad: crate::controls::PadMeaning::default(),
             paused: false,
@@ -356,5 +405,33 @@ fn objects_from_memory(mem: &[u8]) -> RoomObjects {
             (pos, (teleport_entry - 1 - at::TELEPORTERS) / 2)
         }),
         kind12: (kind12 != 0).then_some((kind12 as u8, (kind12 >> 8) as u8)),
+    }
+}
+
+#[cfg(test)]
+mod training_tests {
+    use super::Training;
+
+    #[test]
+    fn training_is_off_unless_asked_for() {
+        let off = Training::default();
+        assert!(!off.any(), "the original game");
+        assert!(!(0..3).any(|i| off.full(i)));
+        assert!(!off.endless_lives() && !off.no_harm());
+    }
+
+    #[test]
+    fn each_switch_is_its_own() {
+        let lives = Training([false, false, false, true, false]);
+        assert!(lives.endless_lives() && !lives.no_harm() && !lives.full(0));
+        let laser = Training([false, false, true, false, false]);
+        assert!(
+            laser.full(2) && !laser.full(0) && !laser.full(3),
+            "no fourth bar"
+        );
+        assert_eq!(
+            lives.union(laser),
+            Training([false, false, true, true, false])
+        );
     }
 }

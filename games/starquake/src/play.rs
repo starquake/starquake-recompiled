@@ -98,7 +98,7 @@ impl Game {
         if self.status.bars[0] == 0 {
             return FrameEvent::Died(death::OUT_OF_ENERGY);
         }
-        if self.force_field_contact() {
+        if self.force_field_contact() && !self.training.no_harm() {
             return FrameEvent::Died(death::FORCE_FIELD);
         }
         match self.update_enemies() {
