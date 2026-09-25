@@ -959,8 +959,10 @@ fn check_lift(env: &Env) -> bool {
     g.enter_room();
     g.entities[0].0[X] = 180;
     g.entities[0].0[Y] = 39;
-    let mut input = starquake::controls::Input::default();
-    input.kempston = 0x01;
+    let input = starquake::controls::Input {
+        kempston: 0x01,
+        ..Default::default()
+    };
     for _ in 0..150 {
         g.play_frame(&input);
     }
@@ -968,7 +970,10 @@ fn check_lift(env: &Env) -> bool {
     if g.room != 244 || at != (200, 111) {
         failures.push((
             "room 244, walking right from (180, 39)".into(),
-            vec![format!("BLOB at {at:?} in room {}, the original at (200, 111)", g.room)],
+            vec![format!(
+                "BLOB at {at:?} in room {}, the original at (200, 111)",
+                g.room
+            )],
         ));
     }
     report("lift boarded walking right (#117)", &failures, 1)
@@ -2323,7 +2328,7 @@ fn main() {
     let rom = std::fs::read(dir.join("48.rom")).expect("read 48.rom");
     let tape = zx_core::tape::load_tap(&tape_bytes).expect("parse starquake.tap");
     let mut start = Zx::new(
-        &zx_core::Snapshot::from_tape(&tape, at::ENTRY_PC, at::ENTRY_SP),
+        &zx_core::MachineState::from_tape(&tape, at::ENTRY_PC, at::ENTRY_SP),
         Some(&rom),
     );
     // The program's own start-up runs on the real ROM, up to its menu, and

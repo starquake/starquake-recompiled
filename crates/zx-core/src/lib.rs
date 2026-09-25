@@ -8,10 +8,10 @@ pub mod decode;
 pub mod png;
 pub mod screen;
 pub mod sha1;
-pub mod snapshot;
+pub mod state;
 pub mod tape;
 pub mod timing;
 
 pub use decode::*;
-pub use snapshot::Snapshot;
+pub use state::MachineState;
 pub use tape::Tape;

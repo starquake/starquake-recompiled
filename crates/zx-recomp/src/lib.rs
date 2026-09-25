@@ -22,7 +22,7 @@ pub mod tracer;
 use std::fmt::Write as _;
 use std::path::Path;
 
-use zx_core::Snapshot;
+use zx_core::MachineState;
 use zx_core::sha1::sha1_hex;
 
 pub use config::Config;
@@ -30,7 +30,7 @@ pub use config::Config;
 /// The user-supplied files a build works from.
 pub struct Inputs {
     /// The machine as the tape's program starts.
-    pub start: Snapshot,
+    pub start: MachineState,
     pub tape_sha1: String,
     pub rom: Option<Vec<u8>>,
     pub rom_sha1: Option<String>,
@@ -71,7 +71,7 @@ impl Inputs {
         check_hash("tape", &tape_sha1, cfg.game.tape_sha1.as_deref())?;
         let tape = zx_core::tape::load_tap(&tape_bytes)
             .map_err(|e| format!("{}: {e}", tape_path.display()))?;
-        let start = Snapshot::from_tape(&tape, cfg.game.entry_pc, cfg.game.entry_sp);
+        let start = MachineState::from_tape(&tape, cfg.game.entry_pc, cfg.game.entry_sp);
 
         let (rom, rom_sha1) = match &cfg.game.rom {
             Some(name) => {

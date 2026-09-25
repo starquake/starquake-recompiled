@@ -4,7 +4,7 @@
 //! Recompiled code manipulates this struct directly (`z.a = z.read(z.hl());`),
 //! so everything the generated code touches is public and kept flat.
 
-use zx_core::{BlockOp, Cond, Reg8, Reg16, Snapshot};
+use zx_core::{BlockOp, Cond, MachineState, Reg8, Reg16};
 
 pub const CF: u8 = 0x01;
 pub const NF: u8 = 0x02;
@@ -102,9 +102,9 @@ pub struct Zx {
 }
 
 impl Zx {
-    pub fn new(snap: &Snapshot, rom: Option<&[u8]>) -> Zx {
+    pub fn new(state: &MachineState, rom: Option<&[u8]>) -> Zx {
         let mut mem = Box::new([0u8; 0x10000]);
-        mem[0x4000..].copy_from_slice(&snap.ram);
+        mem[0x4000..].copy_from_slice(&state.ram);
         if let Some(rom) = rom {
             // A user-supplied file: a short or wrong one should not be an
             // index panic. Whatever is there is used, and the rest stays zero.
@@ -112,37 +112,37 @@ impl Zx {
             mem[..n].copy_from_slice(&rom[..n]);
         }
         Zx {
-            a: snap.a,
-            f: snap.f,
-            b: snap.b,
-            c: snap.c,
-            d: snap.d,
-            e: snap.e,
-            h: snap.h,
-            l: snap.l,
-            a_: snap.a_,
-            f_: snap.f_,
-            b_: snap.b_,
-            c_: snap.c_,
-            d_: snap.d_,
-            e_: snap.e_,
-            h_: snap.h_,
-            l_: snap.l_,
-            ix: snap.ix,
-            iy: snap.iy,
-            sp: snap.sp,
-            pc: snap.pc,
-            i: snap.i,
-            r: snap.r,
-            iff1: snap.iff1,
-            iff2: snap.iff2,
-            im: snap.im,
+            a: state.a,
+            f: state.f,
+            b: state.b,
+            c: state.c,
+            d: state.d,
+            e: state.e,
+            h: state.h,
+            l: state.l,
+            a_: state.a_,
+            f_: state.f_,
+            b_: state.b_,
+            c_: state.c_,
+            d_: state.d_,
+            e_: state.e_,
+            h_: state.h_,
+            l_: state.l_,
+            ix: state.ix,
+            iy: state.iy,
+            sp: state.sp,
+            pc: state.pc,
+            i: state.i,
+            r: state.r,
+            iff1: state.iff1,
+            iff2: state.iff2,
+            im: state.im,
             halted: false,
             ei_delay: false,
             t: 0,
             mem,
             rom_loaded: rom.is_some(),
-            border: snap.border,
+            border: state.border,
             ear: false,
 
             keys: [0xFF; 8],

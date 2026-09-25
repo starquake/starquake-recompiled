@@ -15,7 +15,7 @@
 
 use std::path::PathBuf;
 
-use zx_core::Snapshot;
+use zx_core::MachineState;
 use zx_runtime::{Zx, bus, interp};
 
 /// Everything the corpus states about the processor at one moment.
@@ -173,7 +173,7 @@ fn parse_expected(text: &str) -> Vec<Case> {
 }
 
 fn blank_machine() -> Zx {
-    let snap = Snapshot {
+    let state = MachineState {
         a: 0,
         f: 0,
         b: 0,
@@ -202,7 +202,7 @@ fn blank_machine() -> Zx {
         border: 0,
         ram: vec![0; 0xC000],
     };
-    let mut z = Zx::new(&snap, None);
+    let mut z = Zx::new(&state, None);
     z.port_in_hook = Some(port_in);
     z
 }

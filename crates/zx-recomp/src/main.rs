@@ -49,10 +49,7 @@ fn run() -> Result<(), String> {
     let cfg = Config::parse(&text)?;
     let assets = assets.unwrap_or_else(|| PathBuf::from("assets"));
     let inputs = Inputs::load(&cfg, &assets)?;
-    println!(
-        "tape {} (sha1 {})",
-        cfg.game.tape, inputs.tape_sha1
-    );
+    println!("tape {} (sha1 {})", cfg.game.tape, inputs.tape_sha1);
 
     let start = std::time::Instant::now();
     let mut frame_buf = vec![0u32; screen::WIDTH * screen::HEIGHT];
