@@ -847,6 +847,95 @@ fn check_game_over(env: &Env, states: &[Zx]) -> bool {
     report("game over screen (6730)", &failures, cases)
 }
 
+/// A gamepad pressed through a game's end with a top score, between key
+/// presses of A: it may end the tunes, but it types none of the initials
+/// (#123), so they come out as the keyboard's AAA.
+struct PadAndKeys {
+    frame: u32,
+}
+
+impl starquake::host::Host for PadAndKeys {
+    fn frame(&mut self, _game: &Game) -> (starquake::controls::Input, u32) {
+        self.frame += 1;
+        let mut input = starquake::controls::Input::default();
+        match self.frame % 4 {
+            0 => {
+                input.pad.bits = 0x1F;
+                input.pad.start = true;
+            }
+            2 => input.press_key((0xFD, 0)),
+            _ => {}
+        }
+        (input, 1)
+    }
+}
+
+fn check_pad_types_nothing(env: &Env, states: &[Zx]) -> bool {
+    let mut failures = Vec::new();
+    let mut z = states[0].clone();
+    z.mem[at::SCORE..at::SCORE + 6].fill(9);
+    let mut g = env.game(&z);
+    g.game_over(&mut PadAndKeys { frame: 0 });
+    if g.high_scores[..3] != *b"AAA" {
+        failures.push((
+            "initials".into(),
+            vec![format!(
+                "top entry {:?}",
+                String::from_utf8_lossy(&g.high_scores[..10])
+            )],
+        ));
+    }
+    report("gamepad types no initials (#123)", &failures, 1)
+}
+
+/// Pauses a game with its pause key, then asks it to end as the window's
+/// "End this game" does while paused (#125): A S D F G with a move. Stops the
+/// run if the game is still going long after.
+struct EndWhilePaused {
+    frame: u32,
+    pause: (u8, u8),
+    paused_seen: bool,
+}
+
+impl starquake::host::Host for EndWhilePaused {
+    fn frame(&mut self, game: &Game) -> (starquake::controls::Input, u32) {
+        self.frame += 1;
+        self.paused_seen |= game.paused;
+        assert!(self.frame < 2_000, "the game did not end");
+        let mut input = starquake::controls::Input::default();
+        match self.frame {
+            10..=12 => input.press_key(self.pause),
+            40.. if game.paused => {
+                input.keys[1] &= !0x1F;
+                input.pad.bits = 0x01;
+            }
+            _ => {}
+        }
+        (input, 1)
+    }
+}
+
+fn check_end_while_paused(env: &Env, states: &[Zx]) -> bool {
+    let mut failures = Vec::new();
+    let mut g = env.game(&states[0]);
+    let mut host = EndWhilePaused {
+        frame: 0,
+        pause: g.controls.pause,
+        paused_seen: false,
+    };
+    g.play(&mut host);
+    if !host.paused_seen {
+        failures.push(("pause".into(), vec!["the game never paused".into()]));
+    }
+    if host.frame > 60 {
+        failures.push((
+            "end".into(),
+            vec![format!("ended only at frame {}", host.frame)],
+        ));
+    }
+    report("ending a paused game (#125)", &failures, 1)
+}
+
 /// The core room: walking in carrying pieces that fit holes in the core.
 /// The original is run from the room entry to where it leaves for room 198.
 fn check_core_room(env: &Env) -> bool {
@@ -1089,8 +1178,8 @@ fn input_of(machine: &Zx) -> starquake::controls::Input {
     starquake::controls::Input {
         keys: machine.keys,
         kempston: machine.kempston,
-        // The original has no gamepad: up and down mean both.
-        pad: starquake::controls::PadMeaning::default(),
+        // The original has no gamepad.
+        pad: starquake::controls::PadInput::default(),
     }
 }
 
@@ -1344,12 +1433,13 @@ fn check_gamepad_methods(env: &Env) -> bool {
         for bits in 0..0x20u8 {
             cases += 1;
             let mut input = starquake::controls::Input::default();
-            game.controls.press(&mut input, bits);
+            input.pad.bits = bits;
             let got = game.controls.read(&input);
-            if got != bits {
+            let typed = starquake::controls::key_code(&game.assets.ram, &input);
+            if got != bits || typed != 0 {
                 failures.push((
                     format!("method {method}, bits {bits:#04x}"),
-                    vec![format!("read back {got:#04x}")],
+                    vec![format!("read back {got:#04x}, typed {typed:#04x}")],
                 ));
             }
         }
@@ -2341,6 +2431,12 @@ fn main() {
     ok &= guarded("main loop (A523)", || check_loop(&env, &states));
     ok &= guarded("death sequence (C350)", || check_death(&env, &states));
     ok &= guarded("game over screen (6730)", || check_game_over(&env, &states));
+    ok &= guarded("ending a paused game (#125)", || {
+        check_end_while_paused(&env, &states)
+    });
+    ok &= guarded("gamepad types no initials (#123)", || {
+        check_pad_types_nothing(&env, &states)
+    });
     ok &= guarded("security doors (D5FD)", || check_security_doors(&env));
 
     let tour = guarded_states("room tour states", || room_tour_states(&env, 120));

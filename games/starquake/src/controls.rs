@@ -8,9 +8,9 @@ pub struct Input {
     pub keys: [u8; 8],
     /// Kempston joystick (bit 0 right, 1 left, 2 down, 3 up, 4 fire).
     pub kempston: u8,
-    /// Which of up's and down's meanings a gamepad's press carries (#112).
-    /// Not part of what the original reads: all off, it is the original.
-    pub pad: PadMeaning,
+    /// A gamepad, as its own input rather than as keys (#123). Not part of
+    /// what the original reads: at rest, it is the original.
+    pub pad: PadInput,
 }
 
 impl Default for Input {
@@ -18,8 +18,30 @@ impl Default for Input {
         Input {
             keys: [0xFF; 8],
             kempston: 0,
-            pad: PadMeaning::default(),
+            pad: PadInput::default(),
         }
+    }
+}
+
+/// A gamepad. It moves and fires whatever control method is chosen, pauses
+/// with Start, starts a game from the title screen and ends a "press any
+/// key" wait, but it never types: whatever the game reads as letters and
+/// digits (initials, teleporter codes, the menu) hears the keyboard only.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PadInput {
+    /// Directions and fire, in the joystick's bits (1 right, 2 left, 4 down,
+    /// 8 up, 0x10 fire).
+    pub bits: u8,
+    /// Start: pause in play, and start a game from the title screen.
+    pub start: bool,
+    /// Which of up's and down's meanings its press carries.
+    pub meaning: PadMeaning,
+}
+
+impl PadInput {
+    /// Whether anything on it is pressed: what ends a "press any key" wait.
+    pub fn any(&self) -> bool {
+        self.bits != 0 || self.start
     }
 }
 
@@ -172,36 +194,19 @@ impl Controls {
         self.pause = key_position(ram, pause).expect("known key name");
     }
 
-    /// Makes [`read`](Self::read) see `bits`, whatever the control method.
-    ///
-    /// For a device the method was not written for, such as a gamepad when a
-    /// keyboard method is chosen. The Kempston byte is set in every method,
-    /// and in a keyboard method the keys that make up `bits` are held down
-    /// too. That works because every method uses the Kempston bit layout for
-    /// its key values, and only the keys themselves differ.
-    pub fn press(&self, input: &mut Input, bits: u8) {
-        input.kempston |= bits;
-        if self.kempston {
-            return;
-        }
-        for &(port, bit, value) in &self.keys {
-            if value != 0 && bits & value == value {
-                input.press_key((port, bit));
-            }
-        }
-    }
-
-    /// Holds down the current method's pause key.
-    pub fn press_pause(&self, input: &mut Input) {
-        input.press_key(self.pause);
-    }
-
+    /// The method's pause key, or a gamepad's Start.
     pub fn pause_pressed(&self, input: &Input) -> bool {
-        input.keyboard(self.pause.0) & (1 << self.pause.1) == 0
+        input.keyboard(self.pause.0) & (1 << self.pause.1) == 0 || input.pad.start
     }
 
-    /// Direction bits (1 right, 2 left, 4 down, 8 up) and fire (0x10).
+    /// Direction bits (1 right, 2 left, 4 down, 8 up) and fire (0x10): the
+    /// method's own, and a gamepad's on top whatever the method.
     pub fn read(&self, input: &Input) -> u8 {
+        self.read_method(input) | input.pad.bits
+    }
+
+    /// What the original's input routine reads for the chosen method.
+    fn read_method(&self, input: &Input) -> u8 {
         if self.kempston && input.kempston != 0 {
             return input.kempston;
         }
@@ -218,12 +223,13 @@ impl Controls {
 
 impl crate::game::Game {
     /// Waits until no key is held, or until two or more are: what
-    /// [`key_code`] reports as nothing.
+    /// [`key_code`] reports as nothing; and until a gamepad is let go.
     ///
-    /// Every screen that asks for a keypress does this first, so a key still
-    /// down from the screen before is not read as the answer to this one.
+    /// Every screen that asks for a keypress does this first, so a key or
+    /// button still down from the screen before is not read as the answer to
+    /// this one.
     pub fn wait_keys_released(&mut self, host: &mut dyn crate::host::Host) {
-        while key_code(&self.assets.ram, &self.input) != 0 {
+        while key_code(&self.assets.ram, &self.input) != 0 || self.input.pad.any() {
             self.sync(host);
         }
     }
@@ -275,34 +281,53 @@ mod tests {
     }
 
     #[test]
-    fn a_keyboard_method_reads_back_what_was_pressed() {
+    fn a_pad_moves_and_fires_in_every_kind_of_method() {
+        for c in [
+            keyboard(),
+            Controls {
+                kempston: true,
+                ..keyboard()
+            },
+        ] {
+            for bits in 0..0x20 {
+                let mut input = Input::default();
+                input.pad.bits = bits;
+                assert_eq!(c.read(&input), bits, "bits {bits:#04x}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_pad_types_nothing() {
+        let mut input = Input::default();
+        input.pad.bits = 0x1F;
+        input.pad.start = true;
+        assert!(!any_key(&input), "no key is held");
+        assert!(input.pad.any(), "but the pad is");
+    }
+
+    #[test]
+    fn the_pad_adds_to_the_methods_own_keys() {
         let c = keyboard();
-        for bits in 0..0x20 {
-            let mut input = Input::default();
-            c.press(&mut input, bits);
-            assert_eq!(c.read(&input), bits, "bits {bits:#04x}");
-        }
+        let mut input = Input::default();
+        input.press_key((0xFB, 0));
+        input.pad.bits = 0x01;
+        assert_eq!(
+            c.read(&input),
+            0x03,
+            "left from the keys, right from the pad"
+        );
     }
 
     #[test]
-    fn kempston_reads_back_what_was_pressed() {
-        let c = Controls {
-            kempston: true,
-            ..keyboard()
-        };
-        for bits in 0..0x20 {
-            let mut input = Input::default();
-            c.press(&mut input, bits);
-            assert_eq!(c.read(&input), bits, "bits {bits:#04x}");
-        }
-    }
-
-    #[test]
-    fn pause_is_the_methods_own_key() {
+    fn pause_is_the_methods_own_key_or_start() {
         let c = keyboard();
         let mut input = Input::default();
         assert!(!c.pause_pressed(&input));
-        c.press_pause(&mut input);
+        input.press_key(c.pause);
+        assert!(c.pause_pressed(&input));
+        let mut input = Input::default();
+        input.pad.start = true;
         assert!(c.pause_pressed(&input));
     }
 }

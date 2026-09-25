@@ -91,8 +91,27 @@ struct FrontHost {
     scores_path: Option<std::path::PathBuf>,
 }
 
-/// The Spectrum's 0 key: port 0xEFFE, bit 0.
-const ZERO_KEY: (u8, u8) = (0xEF, 0);
+/// "End this game" (#125): holds A, S, D, F and G, the original's own way
+/// to abandon a game, and says whether the request still stands. BLOB's
+/// control reads them on the play loop's own frames only (`play_work`), so
+/// they are held on those frames and on no others: not during a death, a
+/// door or a teleporter booth, which reads letters for its code. A paused
+/// game waits for a move before it reads them, so while it is paused a move
+/// is given with them: play goes on for the one frame in which BLOB's
+/// control sees the keys and ends the game, before anything moves. The
+/// request lasts until the game has left play, however long that takes.
+fn end_game(scene: Scene, play_work: bool, paused: bool, input: &mut Input) -> bool {
+    if scene != Scene::Play {
+        return false;
+    }
+    if play_work || paused {
+        input.keys[1] &= !0x1F;
+    }
+    if paused {
+        input.pad.bits |= 0x01;
+    }
+    true
+}
 
 impl FrontHost {
     /// Holds the game between frames while the guidance picker is open,
@@ -305,10 +324,9 @@ impl Host for FrontHost {
             // give up the lost time rather than trying to catch it back.
             self.next_frame = now;
         }
-        // A gamepad works in every control method: it presses whatever the
-        // chosen method reads, the Kempston port or the method's own keys.
-        // Start presses the method's pause key, which is not a fixed key
-        // either; on a fresh tape it is Space.
+        // A gamepad is its own input (#123): it moves and fires in every
+        // control method and Start pauses, but it presses no keys, so it
+        // never types into what the game reads as letters.
         let mut pad = self.pad.poll();
         {
             let mut guidance = self.shared.guidance.lock().unwrap();
@@ -330,25 +348,11 @@ impl Host for FrontHost {
         {
             self.abandon = true;
         }
-        // "End this game" holds A, S, D, F and G, the original's own way to
-        // abandon a game. BLOB's control reads them on the play loop's own
-        // frames only (`play_work`), so they are held on those frames and on
-        // no others: not during a death, a door or a teleporter booth, which
-        // reads letters for its code. The request lasts until the game has
-        // left play, however long that takes.
-        if self.abandon {
-            if game.scene != Scene::Play {
-                self.abandon = false;
-            } else if game.play_work {
-                input.keys[1] &= !0x1F;
-            }
-        }
-        // On the title screen, Start or fire on a pad is the 0 key, which
-        // starts a game (#110): alone, since the menu reads one key held at
-        // a time. What is still held as play begins is kept from the game
-        // until it is let go, so it is not a pause or a shot.
+        // On the title screen, Start or fire on a pad starts a game (#110).
+        // What is still held as play begins is kept from the game until it
+        // is let go, so it is not a pause or a shot.
         if game.on_title && (pad.start || pad.bits & 0x10 != 0) {
-            input.press_key(ZERO_KEY);
+            input.pad.start = true;
             self.starting = true;
         } else {
             // The frame after a start, and the first frame of play: what
@@ -368,23 +372,29 @@ impl Host for FrontHost {
             // The pad splits up's and down's meanings (#112): the D-pad's up
             // and down board and fly; the button for up picks up, the button
             // for down builds.
-            input.pad = pad.meaning();
+            input.pad = starquake::controls::PadInput {
+                bits: pad.bits,
+                start: pad.start,
+                meaning: pad.meaning(),
+            };
             // While the game is paused, A or B dismisses the notice as it
             // would any dialog (#89), and does nothing else: its press
             // reaches the game as a move only, so it neither builds nor
             // picks up in the frame play goes on, and it is held back until
             // let go.
             if game.paused && pad.buttons & 0x0C != 0 {
-                input.pad.up_moves_only = true;
-                input.pad.up_picks_only = false;
-                input.pad.down_moves_only = true;
-                input.pad.down_builds_only = false;
+                input.pad.meaning = starquake::controls::PadMeaning {
+                    up_moves_only: true,
+                    up_picks_only: false,
+                    down_moves_only: true,
+                    down_builds_only: false,
+                };
                 self.pad.hold_back_held();
             }
-            game.controls.press(&mut input, pad.bits);
-            if pad.start {
-                game.controls.press_pause(&mut input);
-            }
+        }
+
+        if self.abandon {
+            self.abandon = end_game(game.scene, game.play_work, game.paused, &mut input);
         }
 
         let now = Instant::now();
@@ -551,4 +561,47 @@ pub fn run(path: Option<&Path>) -> Result<(), String> {
     );
     drop(stream);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A S D F G, all held: what BLOB's control ends a game on.
+    fn ending(input: &Input) -> bool {
+        input.keyboard(0xFD) & 0x1F == 0
+    }
+
+    #[test]
+    fn ending_a_game_holds_the_keys_on_frames_of_play_only() {
+        let mut input = Input::default();
+        assert!(end_game(Scene::Play, true, false, &mut input));
+        assert!(ending(&input));
+        assert_eq!(input.pad.bits, 0, "no move while playing");
+
+        let mut input = Input::default();
+        assert!(
+            end_game(Scene::Play, false, false, &mut input),
+            "still asked"
+        );
+        assert!(!ending(&input), "not during a death, a door or a booth");
+    }
+
+    #[test]
+    fn ending_a_paused_game_gives_the_move_that_resumes_it() {
+        let mut input = Input::default();
+        assert!(end_game(Scene::Play, false, true, &mut input));
+        assert!(ending(&input));
+        assert_ne!(
+            input.pad.bits, 0,
+            "a paused game reads nothing until a move"
+        );
+    }
+
+    #[test]
+    fn the_request_ends_when_play_does() {
+        let mut input = Input::default();
+        assert!(!end_game(Scene::GameOver, true, false, &mut input));
+        assert!(!ending(&input));
+    }
 }

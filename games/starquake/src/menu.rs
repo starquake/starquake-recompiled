@@ -156,6 +156,11 @@ impl Game {
                             }
                         }
                     }
+                    // Start on a gamepad starts a game, as 0 does (#110); the
+                    // pad types none of the menu's letters or digits (#123).
+                    if self.input.pad.start {
+                        return Start::Play(self.control_method);
+                    }
                     let key = key_code(&self.assets.ram, &self.input);
                     match key {
                         b'Q' => {
