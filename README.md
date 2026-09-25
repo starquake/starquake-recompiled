@@ -42,7 +42,7 @@ to the ones below it:
 
 | level | | adds |
 |:-:|---|---|
-| 1 | Codes and the core | the teleporter codes seen (#50) and each security door's key code cards once shown (#94), in a rail at the right, and the core's nine slots in the game's own pictures at the top left |
+| 1 | Codes and the core | the codes of the teleports entered (#50) and each security door's key code cards once shown (#94), in a rail at the right, and the core's nine slots in the game's own pictures at the top left |
 | 2 | The map you have walked | a map of the rooms visited, with their openings (#2) |
 | 3 | What you have seen | the items lying in rooms walked through, in the game's own pictures, coloured by what they do (#93) |
 | 4 | What you have not | the same in rooms not reached |
@@ -58,7 +58,7 @@ decides that thing, and named on the game's score.
 ## Status
 
 The whole game is here: the title screen and its menu, the intro, play,
-security doors, teleporter booths and the Cheops pyramid, losing a life,
+security doors, teleport booths and the Cheops pyramid, losing a life,
 delivering pieces to the planet's core, the ending, the game-over screen and
 the high-score table, with the original's sound and music.
 
@@ -81,7 +81,7 @@ covered:
   same effect is lower in the middle of the screen than in the border.
 
 Rewritten but not checked against the original on their own: the intro and
-high-score screens, teleporter booths, the Cheops pyramid, and the ending
+high-score screens, teleport booths, the Cheops pyramid, and the ending
 screen. They are built out of the drawing, printing and scoring code the
 checks above do cover.
 
