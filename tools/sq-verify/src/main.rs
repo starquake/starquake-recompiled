@@ -1022,6 +1022,169 @@ fn check_effect_pictures(env: &Env) -> bool {
     report("pictures under blocking effects (#116)", &failures, 1)
 }
 
+/// The original playing from its menu with held random directions and fire,
+/// a new game started whenever one ends (#120).
+struct Player {
+    z: Zx,
+    rng: Rng,
+    tops: u64,
+    start: u64,
+}
+
+impl Player {
+    fn new(env: &Env, seed: u64) -> Player {
+        Player {
+            z: Player::started(env),
+            rng: Rng(seed),
+            tops: 0,
+            start: 0,
+        }
+    }
+
+    /// A game started from the menu with the Kempston joystick, as
+    /// `gameplay_states` starts one, at the first top of its main loop.
+    fn started(env: &Env) -> Zx {
+        let mut z = env.machine();
+        let mut misses = zx_runtime::Misses::default();
+        let key = |name| zx_runtime::keys::Key::by_name(name).unwrap();
+        for f in 0..120 {
+            z.release_all_keys();
+            if (20..23).contains(&f) {
+                z.set_key(key("1"), true);
+            }
+            if (70..73).contains(&f) {
+                z.set_key(key("0"), true);
+            }
+            z.run_frame(zx_runtime::no_code, &mut misses);
+        }
+        // Past the intro's tune, nine seconds, into play.
+        assert!(z.run_until(0xA523, 1_000), "a game did not start");
+        z
+    }
+
+    /// A new held input every ten tops of the main loop, set before the
+    /// frame that reads it, so a copy taken now is what that frame starts
+    /// from.
+    fn choose_input(&mut self) {
+        if self.tops.is_multiple_of(10) {
+            self.z.release_all_keys();
+            self.z.kempston = 0;
+            for _ in 0..self.rng.byte() % 3 {
+                self.z.kempston |= [0x01, 0x02, 0x04, 0x08, 0x10][usize::from(self.rng.byte() % 5)];
+            }
+        }
+        self.tops += 1;
+    }
+
+    /// Every 300 tops of the main loop, BLOB is taken to a random room
+    /// through the game's own room entry (`A426`), as the room tour takes
+    /// him, and his lives are topped up, so a run sees the planet rather
+    /// than the rooms around the start. The call stops at the top of the
+    /// main loop again, so the stack is put back as that top had it.
+    fn travel(&mut self) {
+        if !self.tops.is_multiple_of(300) {
+            return;
+        }
+        let room = loop {
+            let room = u16::from(self.rng.byte()) << 1 | u16::from(self.rng.byte() & 1);
+            if room != 199 {
+                break room;
+            }
+        };
+        let z = &mut self.z;
+        let sp = z.sp;
+        z.write16(at::ROOM as u16, room);
+        z.mem[at::ENTRY_REASON] = 0;
+        z.mem[at::LIVES] = 4;
+        if z.call_until(0xA426, Some(0xA523), 20_000_000) {
+            z.sp = sp;
+            z.int_pending = false;
+            z.halted = false;
+        }
+    }
+
+    /// On to the next top of the main loop. Returns false when the game
+    /// ended on the way, and a new one has been started in its place.
+    fn advance(&mut self, env: &Env) -> bool {
+        if self.z.run_until(0xA523, 400) {
+            return true;
+        }
+        self.start += self.z.frame;
+        self.z = Player::started(env);
+        false
+    }
+
+    fn frames(&self) -> u64 {
+        self.start + self.z.frame
+    }
+}
+
+/// A long run of real play (#120): at every top of the original's main
+/// loop, the rewrite runs one frame from the original's state and the two
+/// are compared, as `check_loop` compares its sampled states. Deaths,
+/// pauses and screens take many frames and are not compared here.
+fn long_run(
+    env: &Env,
+    seed: u64,
+    frames: u64,
+    rooms: &mut std::collections::BTreeSet<u16>,
+) -> (usize, Vec<(String, Vec<String>)>) {
+    use starquake::play::FrameEvent;
+    let mut player = Player::new(env, seed);
+    let mut failures = Vec::new();
+    let mut compared = 0;
+    let parts = [
+        "display", "entities", "status", "printer", "rng", "objects", "restore", "entry",
+        "scratch", "pickups", "misc", "spawner",
+    ];
+    while player.frames() < frames {
+        player.travel();
+        player.choose_input();
+        let before = player.z.clone();
+        if !player.advance(env) {
+            continue;
+        }
+        let after = &player.z;
+        if after.frame - before.frame > 2 {
+            continue;
+        }
+        let mut g = env.game(&before);
+        rooms.insert(g.room);
+        let event = g.play_frame(&input_of(&before));
+        if !matches!(event, FrameEvent::Continue) {
+            continue;
+        }
+        compared += 1;
+        let d = diff(&env.game(after), &g, &parts);
+        if !d.is_empty() {
+            failures.push((
+                format!(
+                    "seed {seed:#x}, frame {} (room {})",
+                    player.frames(),
+                    g.room
+                ),
+                d,
+            ));
+        }
+    }
+    (compared, failures)
+}
+
+/// Long runs of play, three seeds of `frames` frames each (#120): the gate
+/// runs a few minutes of play a seed, `sq-verify long` as long as asked.
+fn check_long_runs(env: &Env, frames: u64) -> bool {
+    let mut failures = Vec::new();
+    let mut compared = 0;
+    let mut rooms = std::collections::BTreeSet::new();
+    for seed in [0x5EED_0001, 0x5EED_0002, 0x5EED_0003] {
+        let (n, f) = long_run(env, seed, frames, &mut rooms);
+        compared += n;
+        failures.extend(f);
+    }
+    println!("  {frames} frames a seed, {} different rooms", rooms.len());
+    report("long runs of play (#120)", &failures, compared)
+}
+
 /// The core room: walking in carrying pieces that fit holes in the core.
 /// The original is run from the room entry to where it leaves for room 198.
 fn check_core_room(env: &Env) -> bool {
@@ -2413,6 +2576,17 @@ fn main() {
         return;
     }
 
+    // `sq-verify long [frames]`: the long runs alone, as long as asked.
+    if args.first().map(String::as_str) == Some("long") {
+        let frames = args.get(1).and_then(|f| f.parse().ok()).unwrap_or(50_000);
+        let t = std::time::Instant::now();
+        let ok = check_long_runs(&env, frames);
+        println!(
+            "  {frames} frames a seed in {:.1}s",
+            t.elapsed().as_secs_f64()
+        );
+        std::process::exit(i32::from(!ok));
+    }
     if args.first().map(String::as_str) == Some("menu") {
         menu_rate(&env);
         return;
@@ -2478,6 +2652,7 @@ fn main() {
     ok &= guarded("death sequence (C350)", || check_death(&env, &states));
     ok &= guarded("game over screen (6730)", || check_game_over(&env, &states));
     ok &= guarded("lift boarded walking right (#117)", || check_lift(&env));
+    ok &= guarded("long runs of play (#120)", || check_long_runs(&env, 20_000));
     ok &= guarded("pictures under blocking effects (#116)", || {
         check_effect_pictures(&env)
     });
