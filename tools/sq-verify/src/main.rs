@@ -888,6 +888,54 @@ fn check_pad_types_nothing(env: &Env, states: &[Zx]) -> bool {
     report("gamepad types no initials (#123)", &failures, 1)
 }
 
+/// Pauses a game with its pause key, then asks it to end as the window's
+/// "End this game" does while paused (#125): A S D F G with a move. Stops the
+/// run if the game is still going long after.
+struct EndWhilePaused {
+    frame: u32,
+    pause: (u8, u8),
+    paused_seen: bool,
+}
+
+impl starquake::host::Host for EndWhilePaused {
+    fn frame(&mut self, game: &Game) -> (starquake::controls::Input, u32) {
+        self.frame += 1;
+        self.paused_seen |= game.paused;
+        assert!(self.frame < 2_000, "the game did not end");
+        let mut input = starquake::controls::Input::default();
+        match self.frame {
+            10..=12 => input.press_key(self.pause),
+            40.. if game.paused => {
+                input.keys[1] &= !0x1F;
+                input.pad.bits = 0x01;
+            }
+            _ => {}
+        }
+        (input, 1)
+    }
+}
+
+fn check_end_while_paused(env: &Env, states: &[Zx]) -> bool {
+    let mut failures = Vec::new();
+    let mut g = env.game(&states[0]);
+    let mut host = EndWhilePaused {
+        frame: 0,
+        pause: g.controls.pause,
+        paused_seen: false,
+    };
+    g.play(&mut host);
+    if !host.paused_seen {
+        failures.push(("pause".into(), vec!["the game never paused".into()]));
+    }
+    if host.frame > 60 {
+        failures.push((
+            "end".into(),
+            vec![format!("ended only at frame {}", host.frame)],
+        ));
+    }
+    report("ending a paused game (#125)", &failures, 1)
+}
+
 /// The core room: walking in carrying pieces that fit holes in the core.
 /// The original is run from the room entry to where it leaves for room 198.
 fn check_core_room(env: &Env) -> bool {
@@ -2383,6 +2431,9 @@ fn main() {
     ok &= guarded("main loop (A523)", || check_loop(&env, &states));
     ok &= guarded("death sequence (C350)", || check_death(&env, &states));
     ok &= guarded("game over screen (6730)", || check_game_over(&env, &states));
+    ok &= guarded("ending a paused game (#125)", || {
+        check_end_while_paused(&env, &states)
+    });
     ok &= guarded("gamepad types no initials (#123)", || {
         check_pad_types_nothing(&env, &states)
     });
