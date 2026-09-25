@@ -90,6 +90,7 @@ impl Game {
     pub fn sync(&mut self, host: &mut dyn Host) {
         let (input, frames) = host.frame(self);
         self.effects.clear();
+        self.effect_pictures.clear();
         self.music.clear();
         self.tone = None;
         self.play_work = false;

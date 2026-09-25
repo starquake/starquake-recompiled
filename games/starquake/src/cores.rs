@@ -72,7 +72,7 @@ impl Game {
     }
 
     /// The piece flies out of the panel and into its hole in the core.
-    fn deliver(&mut self, host: &mut dyn Host, slot: usize, index: usize) -> bool {
+    fn deliver(&mut self, slot: usize, index: usize) -> bool {
         self.status.pending[1] = 1;
         self.add_and_print_score();
 
@@ -106,9 +106,6 @@ impl Game {
                 self.xor_attributes(v);
                 self.request_effect(0x11);
             }
-            // The original flashes while its interrupts keep running; a
-            // frame here is what makes the flash visible.
-            self.sync(host);
         }
         self.cores == CORES_TO_FINISH
     }
@@ -142,7 +139,7 @@ impl Game {
                     if self.core_slots[index].wrapping_sub(0x80) != self.status.inventory[slot].0 {
                         continue;
                     }
-                    if self.deliver(host, slot, index) {
+                    if self.deliver(slot, index) {
                         self.ending(host);
                         return true;
                     }

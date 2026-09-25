@@ -98,6 +98,19 @@ struct FrontHost {
     routes: Option<(RouteKey, Routes)>,
 }
 
+/// Which of a frame's effect pictures shows at the end of Spectrum frame
+/// `step` within it (#116): the effect playing then, or `None` for the
+/// frame's own picture once the last has finished. A frame that no effect
+/// stretches shows its own picture, as it always has.
+fn picture_at(spans: &[(u32, u32)], step: u32) -> Option<usize> {
+    let t = (step + 1) * starquake::sound::FRAME_T;
+    let last = spans.last()?;
+    if t > last.1 {
+        return None;
+    }
+    Some(spans.iter().rposition(|s| s.0 < t).unwrap_or(0))
+}
+
 /// "End this game" (#125): holds A, S, D, F and G, the original's own way
 /// to abandon a game, and says whether the request still stands. BLOB's
 /// control reads them on the play loop's own frames only (`play_work`), so
@@ -455,15 +468,6 @@ impl Host for FrontHost {
         self.beeper
             .play(&sound.edges, frames * starquake::sound::FRAME_T);
 
-        {
-            let mut screen = self.shared.screen.lock().unwrap();
-            let n = screen.0.len();
-            screen.0.copy_from_slice(&game.display.mem[..n]);
-            screen.1 = game.display.border;
-            screen.2 = self.frame;
-        }
-        self.frame += frames as u64;
-
         let t_work = Instant::now();
         // Pace by the clock, at the Spectrum's own frame rate. Waiting on the
         // sound card's queue to drain instead would tie the frame to when the
@@ -487,15 +491,35 @@ impl Host for FrontHost {
         }
         // Whether or not there is a card to play them on.
         self.beeper.clear_samples();
-        self.next_frame += period;
-        let now = Instant::now();
-        if self.next_frame > now {
-            std::thread::sleep(self.next_frame - now);
-        } else {
-            // Fallen behind (a long sound effect, or the machine is busy):
-            // give up the lost time rather than trying to catch it back.
-            self.next_frame = now;
+
+        // A frame that blocking effects stretched over several is shown a
+        // Spectrum frame at a time (#116): while an effect plays, the
+        // picture it was asked for over, as the original's screen stood
+        // still while its beeper played; after the last, the frame's own.
+        let start = self.next_frame;
+        for step in 0..frames {
+            {
+                let picture = picture_at(&sound.effect_spans, step)
+                    .and_then(|k| game.effect_pictures.get(k))
+                    .unwrap_or(&game.display);
+                let mut screen = self.shared.screen.lock().unwrap();
+                let n = screen.0.len();
+                screen.0.copy_from_slice(&picture.mem[..n]);
+                screen.1 = picture.border;
+                screen.2 = self.frame + u64::from(step);
+            }
+            self.next_frame = start + period * (step + 1) / frames;
+            let now = Instant::now();
+            if self.next_frame > now {
+                std::thread::sleep(self.next_frame - now);
+            } else if step + 1 == frames {
+                // Fallen behind (a long sound effect, or the machine is
+                // busy): give up the lost time rather than trying to catch
+                // it back.
+                self.next_frame = now;
+            }
         }
+        self.frame += u64::from(frames);
         // A gamepad is its own input (#123): it moves and fires in every
         // control method and Start pauses, but it presses no keys, so it
         // never types into what the game reads as letters.
@@ -773,6 +797,20 @@ mod tests {
             input.pad.bits, 0,
             "a paused game reads nothing until a move"
         );
+    }
+
+    #[test]
+    fn a_frame_no_effect_stretches_shows_its_own_picture() {
+        assert_eq!(picture_at(&[], 0), None);
+        assert_eq!(picture_at(&[(31_000, 40_000)], 0), None, "as in play");
+    }
+
+    #[test]
+    fn a_stretched_frame_shows_each_effect_while_it_plays() {
+        let spans = [(0, 100_000), (100_000, 200_000)];
+        assert_eq!(picture_at(&spans, 0), Some(0));
+        assert_eq!(picture_at(&spans, 1), Some(1));
+        assert_eq!(picture_at(&spans, 2), None, "the last is over");
     }
 
     #[test]

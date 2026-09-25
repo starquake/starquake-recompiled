@@ -979,6 +979,49 @@ fn check_lift(env: &Env) -> bool {
     report("lift boarded walking right (#117)", &failures, 1)
 }
 
+/// Notes, frame by frame, how many different pictures a frame's blocking
+/// effects were asked for over (#116).
+struct Pictures {
+    most: usize,
+}
+
+impl starquake::host::Host for Pictures {
+    fn frame(&mut self, game: &Game) -> (starquake::controls::Input, u32) {
+        let mut distinct: Vec<&[u8]> = Vec::new();
+        for p in &game.effect_pictures {
+            if !distinct.contains(&&p.mem[..]) {
+                distinct.push(&p.mem[..]);
+            }
+        }
+        self.most = self.most.max(distinct.len());
+        (
+            starquake::controls::Input::default(),
+            game.frame_sound().frames,
+        )
+    }
+}
+
+/// A security door's screen flashes its code items while its beeps play:
+/// the frame those effects stretch carries a picture for each (#116), so a
+/// window can show the flashing rather than only where it ended.
+fn check_effect_pictures(env: &Env) -> bool {
+    let mut failures = Vec::new();
+    let mut g = env.game(&new_game_machine(env));
+    g.room = 176;
+    let mut host = Pictures { most: 0 };
+    g.run_modal(starquake::blob::Modal::SecurityDoor, &mut host);
+    if host.most < 10 {
+        failures.push((
+            "security door, room 176".into(),
+            vec![format!(
+                "at most {} different pictures in a frame's effects",
+                host.most
+            )],
+        ));
+    }
+    report("pictures under blocking effects (#116)", &failures, 1)
+}
+
 /// The core room: walking in carrying pieces that fit holes in the core.
 /// The original is run from the room entry to where it leaves for room 198.
 fn check_core_room(env: &Env) -> bool {
@@ -2435,6 +2478,9 @@ fn main() {
     ok &= guarded("death sequence (C350)", || check_death(&env, &states));
     ok &= guarded("game over screen (6730)", || check_game_over(&env, &states));
     ok &= guarded("lift boarded walking right (#117)", || check_lift(&env));
+    ok &= guarded("pictures under blocking effects (#116)", || {
+        check_effect_pictures(&env)
+    });
     ok &= guarded("ending a paused game (#125)", || {
         check_end_while_paused(&env, &states)
     });
