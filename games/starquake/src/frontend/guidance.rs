@@ -38,6 +38,19 @@ pub struct Heroes {
     pub this_game: Option<usize>,
 }
 
+/// An item lying out on the planet (#93): the room, what it does, whether
+/// the core wants it, its graphic from the game, and whether it has been
+/// seen lying in a room walked through, which is level 3's half of the
+/// map's items; the rest are level 4's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Found {
+    pub room: u16,
+    pub kind: starquake::pickups::Kind,
+    pub piece: bool,
+    pub graphic: [u8; 32],
+    pub seen: bool,
+}
+
 /// One of the core's nine slots, for the square at the panel's top left
 /// (#91): the piece it takes, in the game's own graphic, whether it is still
 /// wanted, and whether that piece is being carried.
@@ -124,6 +137,8 @@ pub struct Guidance {
     /// The core's nine slots in the game being played or just ended; empty
     /// on the title screen.
     core: Vec<Hole>,
+    /// The items lying out on the planet, in the game being played.
+    items: Vec<Found>,
     /// Bumped on every change, so a watcher can tell something changed.
     version: u64,
 }
@@ -185,6 +200,18 @@ impl Guidance {
     pub fn set_heroes(&mut self, heroes: Option<Heroes>) {
         if self.heroes != heroes {
             self.heroes = heroes;
+            self.version += 1;
+        }
+    }
+
+    /// The items lying out on the planet, or none before a game.
+    pub fn items(&self) -> &[Found] {
+        &self.items
+    }
+
+    pub fn set_items(&mut self, items: Vec<Found>) {
+        if self.items != items {
+            self.items = items;
             self.version += 1;
         }
     }
@@ -315,12 +342,14 @@ impl Guidance {
             || self.room.is_some()
             || self.pieces != empty
             || !self.core.is_empty()
+            || !self.items.is_empty()
         {
             self.teleporters.clear();
             self.visited.clear();
             self.room = None;
             self.pieces = empty;
             self.core.clear();
+            self.items.clear();
             self.version += 1;
         }
     }

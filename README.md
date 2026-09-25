@@ -44,7 +44,7 @@ to the ones below it:
 |:-:|---|---|
 | 1 | Codes and the core | the teleporter codes seen (#50), in a rail at the right, and the core's nine slots in the game's own pictures at the top left |
 | 2 | The map you have walked | a map of the rooms visited, with their openings (#2) |
-| 3 | What you have seen | the core pieces still needed, in rooms walked through (#3) |
+| 3 | What you have seen | the items lying in rooms walked through, in the game's own pictures, coloured by what they do (#93) |
 | 4 | What you have not | the same in rooms not reached |
 | 5 | Routes | routes to a piece and to the core (#52) |
 | 6 | Everything | every code and the whole planet (#95) |

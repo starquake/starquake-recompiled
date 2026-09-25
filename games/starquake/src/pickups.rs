@@ -33,6 +33,47 @@ impl Item {
     }
 }
 
+/// What an item does, by its graphic (#93), which is how the guidance map
+/// colours it: the codes a security door and a Cheops pyramid ask for take
+/// numbered key code cards, a "?" card and the access card
+/// (`Game::code_check`); the key blanks a teleport pad
+/// (`Game::blank_teleport_pad`); the packs act the moment they are picked
+/// up; and a pyramid takes anything else in exchange for a core piece.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Kind {
+    /// A numbered key code card, `0`, `1`, `2`, `4` or `8`, answering one
+    /// slot of a code.
+    Chip(u8),
+    /// The "?" card, answering any one slot of a code.
+    AnyChip,
+    /// The access card, answering every slot of every code.
+    DoorCard,
+    /// The key that blanks a teleport pad when carried onto it.
+    PadKey,
+    /// A pack: it gives a life or fills a bar as it is picked up.
+    Pack,
+    /// Anything else, a core piece included: what a pyramid takes.
+    Trade,
+}
+
+/// What the item with this `graphic` does. A core piece is [`Kind::Trade`]
+/// too, since a pyramid takes it the same way; what the core wants is the
+/// game's own choice each game.
+pub fn kind(graphic: u8) -> Kind {
+    match graphic {
+        9 => Kind::Chip(b'0'),
+        10 => Kind::Chip(b'1'),
+        11 => Kind::Chip(b'2'),
+        12 => Kind::Chip(b'4'),
+        13 => Kind::Chip(b'8'),
+        0x0E => Kind::AnyChip,
+        0x0F => Kind::DoorCard,
+        0x10 => Kind::PadKey,
+        17..=25 => Kind::Pack,
+        _ => Kind::Trade,
+    }
+}
+
 /// The random bonus pickup in the current room.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Bonus {

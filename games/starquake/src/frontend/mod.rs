@@ -223,6 +223,34 @@ fn core_holes(game: &Game) -> Vec<guidance::Hole> {
         .collect()
 }
 
+/// The items lying out on the planet (#93). A row of 1 to 5 is carried,
+/// and the core's own room is not a place an item lies; the packs act as
+/// they are picked up, so they are nothing to go and fetch. Everything else
+/// is out there whether or not its room has been walked through: the game
+/// knows where each one is from the start, which is what level 4 tells and
+/// level 3 does not. An item not yet put in its room has row 0.
+fn found(game: &Game) -> Vec<guidance::Found> {
+    use starquake::pickups::{Kind, kind};
+    game.items
+        .iter()
+        .filter(|item| {
+            item.room() != starquake::cores::CORE_ROOM
+                && !(1..=5).contains(&item.row())
+                && kind(item.graphic()) != Kind::Pack
+        })
+        .map(|item| guidance::Found {
+            room: item.room(),
+            kind: kind(item.graphic()),
+            piece: game
+                .core_slots
+                .iter()
+                .any(|&slot| slot & 0x80 != 0 && slot & 0x7F == item.graphic()),
+            graphic: game.assets.graphic32(item.graphic()),
+            seen: item.row() != 0 && !game.unvisited_rooms.contains(item.room()),
+        })
+        .collect()
+}
+
 impl Host for FrontHost {
     fn heroes(&mut self, table: &[u8], new: Option<usize>) {
         let mut guidance = self.shared.guidance.lock().unwrap();
@@ -290,6 +318,7 @@ impl Host for FrontHost {
                     guidance.set_unvisited(&game.unvisited_rooms);
                     guidance.set_pieces(&game.missing_piece_rooms());
                     guidance.set_core(&core_holes(game));
+                    guidance.set_items(found(game));
                 }
                 Scene::GameOver => guidance.set_room(None),
                 // The game-over screens are done: the title screen starts
