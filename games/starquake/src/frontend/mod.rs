@@ -82,6 +82,9 @@ struct FrontHost {
     abandon: bool,
     /// Whether a pad is starting a game from the title screen (#110).
     starting: bool,
+    /// The scene the last frame's input was built in, to tell the first
+    /// frame of play (#114).
+    scene_seen: Scene,
 }
 
 /// The Spectrum's 0 key: port 0xEFFE, bit 0.
@@ -321,8 +324,19 @@ impl Host for FrontHost {
             input.press_key(ZERO_KEY);
             self.starting = true;
         } else {
-            if std::mem::take(&mut self.starting) {
+            // The frame after a start, and the first frame of play: what
+            // the pad holds is dropped now, and held back from the next
+            // poll until it is let go (#114). Whatever took the game past the
+            // title and its intro (Start, A, B or fire) does not also pause
+            // it, build a platform, pick up or fire as play begins.
+            let entering_play = game.scene == Scene::Play && self.scene_seen != Scene::Play;
+            self.scene_seen = game.scene;
+            if std::mem::take(&mut self.starting) || entering_play {
                 self.pad.hold_back_held();
+                pad = gamepad::Pad {
+                    layout: pad.layout,
+                    ..gamepad::Pad::default()
+                };
             }
             // The pad splits up's and down's meanings (#112): the D-pad's up
             // and down board and fly; the button for up picks up, the button
@@ -404,6 +418,7 @@ fn play_game(
         scene: Scene::Loading,
         abandon: false,
         starting: false,
+        scene_seen: Scene::Loading,
     };
     // The frame counter runs throughout, which is what seeds each new game.
     game.run(&mut host);
