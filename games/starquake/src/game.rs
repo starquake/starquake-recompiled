@@ -107,6 +107,10 @@ pub struct Game {
     /// Which of up's and down's meanings the frame's gamepad press carries
     /// (#112). Not part of the original's state.
     pub pad: crate::controls::PadMeaning,
+    /// Whether play is held by the pause key, waiting for a move or fire to
+    /// go on (#89). Not part of the original's state: nothing in the game
+    /// reads it; the window shows a notice while it is set.
+    pub paused: bool,
     /// What the frame's work has done so far, which is how long it took the
     /// original (see [`crate::sound::Work`]).
     pub work: crate::sound::Work,
@@ -258,6 +262,7 @@ impl Game {
             teleporters_seen: Vec::new(),
             play_work: false,
             pad: crate::controls::PadMeaning::default(),
+            paused: false,
             work: crate::sound::Work::default(),
             work_at_effect: None,
             music: Vec::new(),

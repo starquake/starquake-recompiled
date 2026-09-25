@@ -191,6 +191,7 @@ impl Host for FrontHost {
         }
 
         self.frame_start = Some(Instant::now());
+        self.shared.guidance.lock().unwrap().set_paused(game.paused);
         if game.scene != self.scene {
             let mut guidance = self.shared.guidance.lock().unwrap();
             if game.scene == Scene::Play {
@@ -311,6 +312,17 @@ impl Host for FrontHost {
         // and down board and fly; the button for up picks up, the button
         // for down builds.
         input.pad = pad.meaning();
+        // While the game is paused, A or B dismisses the notice as it would
+        // any dialog (#89), and does nothing else: its press reaches the
+        // game as a move only, so it neither builds nor picks up in the
+        // frame play goes on, and it is held back until let go.
+        if game.paused && pad.buttons & 0x0C != 0 {
+            input.pad.up_moves_only = true;
+            input.pad.up_picks_only = false;
+            input.pad.down_moves_only = true;
+            input.pad.down_builds_only = false;
+            self.pad.hold_back_held();
+        }
         game.controls.press(&mut input, pad.bits);
         if pad.start {
             game.controls.press_pause(&mut input);
