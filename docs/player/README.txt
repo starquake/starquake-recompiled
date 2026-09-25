@@ -85,6 +85,12 @@ At the title screen, 1 to 5 choose how to play, 6 defines your own
 keys, 0 starts the game and Q quits. Any key stops the tune. On a
 gamepad, Start or the fire button starts the game.
 
+A teleport's booth asks for a code on the keyboard. On a gamepad,
+press any button there and five slots appear: up and down choose a
+letter, left and right move between the slots, A enters the code and
+B clears it. From guidance level 1, X fills in each code you have
+seen in turn.
+
 The high-score table, the CORE OF HEROES, is kept between runs in
 high-scores.txt, in the folder the tape is kept in. Beside it the panel
 shows how much guidance each entry's game had. A game played with

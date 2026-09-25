@@ -135,6 +135,8 @@ pub struct Guidance {
     teleporters: Vec<SeenTeleporter>,
     /// Every room's openings, for the map (#2). Empty until they are found.
     openings: Vec<Openings>,
+    /// A teleport code being put together with a pad in a booth (#80).
+    code_entry: Option<super::booth::Entry>,
     /// The rooms visited in the game being played, or just ended; empty on
     /// the title screen.
     visited: Vec<bool>,
@@ -399,6 +401,18 @@ impl Guidance {
     /// Whether the openings have been found yet.
     pub fn has_openings(&self) -> bool {
         !self.openings.is_empty()
+    }
+
+    /// The code being put together with a pad in a booth, if any.
+    pub fn code_entry(&self) -> Option<super::booth::Entry> {
+        self.code_entry
+    }
+
+    pub fn set_code_entry(&mut self, entry: Option<super::booth::Entry>) {
+        if self.code_entry != entry {
+            self.code_entry = entry;
+            self.version += 1;
+        }
     }
 
     /// Takes every room's openings, found once.
