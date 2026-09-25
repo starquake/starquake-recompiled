@@ -268,6 +268,30 @@ fn door_codes(game: &Game) -> Vec<guidance::DoorCode> {
         .collect()
 }
 
+/// Every security door on the planet for level 6 (#95): those seen first,
+/// in the order seen, so their numbers stay, then the rest by room, each
+/// with the code the game gives it this game.
+fn every_door(
+    game: &Game,
+    openings: &[starquake::map::Openings],
+    seen: &[guidance::DoorCode],
+) -> Vec<guidance::DoorCode> {
+    let slots = game.status.inventory.map(|(g, _)| g);
+    let rest = (0..openings.len() as u16)
+        .filter(|&room| openings[usize::from(room)].door.is_some())
+        .filter(|&room| !seen.iter().any(|d| d.room == room))
+        .map(|room| {
+            let cards = game.door_code(room);
+            let answered = starquake::screens::answered(&cards, slots);
+            guidance::DoorCode {
+                room,
+                graphics: cards.map(|c| game.assets.graphic32(c)),
+                answered: std::array::from_fn(|i| answered[i]),
+            }
+        });
+    seen.iter().copied().chain(rest).collect()
+}
+
 impl Host for FrontHost {
     fn heroes(&mut self, table: &[u8], new: Option<usize>) {
         let mut guidance = self.shared.guidance.lock().unwrap();
@@ -336,7 +360,10 @@ impl Host for FrontHost {
                     guidance.set_pieces(&game.missing_piece_rooms());
                     guidance.set_core(&core_holes(game));
                     guidance.set_items(found(game));
-                    guidance.set_doors(door_codes(game));
+                    let seen = door_codes(game);
+                    let every = every_door(game, guidance.openings(), &seen);
+                    guidance.set_doors(seen);
+                    guidance.set_every(game.all_teleporters(), every);
                 }
                 Scene::GameOver => guidance.set_room(None),
                 // The game-over screens are done: the title screen starts

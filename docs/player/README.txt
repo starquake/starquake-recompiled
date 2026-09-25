@@ -142,8 +142,12 @@ the menu asks before keeping such a change. So far:
            outlined. The game places every item as a game starts, so
            it knows where they all are.
 
-Levels 5 (routes) and 6 (every code and the whole planet), and
-training mode, are still to come.
+  Level 6  Everything: every teleporter's and every door's code,
+           whether you have been shown it or not, and the whole
+           planet's map, the rooms you have never entered drawn
+           dimmer.
+
+Level 5 (routes) and training mode are still to come.
 
 
 LEGAL

@@ -325,6 +325,26 @@ impl Game {
         self.leave_screen()
     }
 
+    /// Every teleporter on the planet, its room and code, from the
+    /// original's table: fifteen entries of five letters and a room (#95).
+    ///
+    /// # Panics
+    ///
+    /// If the loaded game data is too short to hold what the original keeps
+    /// there, which means the file was not Starquake.
+    pub fn all_teleporters(&self) -> Vec<crate::game::SeenTeleporter> {
+        let ram = &self.assets.ram;
+        (0..15)
+            .map(|j| {
+                let e = at::TELEPORTERS + j * 7;
+                crate::game::SeenTeleporter {
+                    code: ram[e..e + 5].try_into().unwrap(),
+                    room: ram[e + 5] as u16 | (ram[e + 6] as u16) << 8,
+                }
+            })
+            .collect()
+    }
+
     /// The name of the teleporter in `room`, from the original's table.
     fn teleporter_name(&self, room: u16) -> [u8; 5] {
         let ram = &self.assets.ram;
