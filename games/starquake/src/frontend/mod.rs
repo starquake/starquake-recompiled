@@ -1,6 +1,7 @@
 //! Window, input and sound.
 
 mod audio;
+mod codes;
 mod gamepad;
 mod guidance;
 pub mod headless;
@@ -90,6 +91,9 @@ struct FrontHost {
     /// The high-score table kept between runs (#90), and where.
     keeper: scores::Keeper,
     scores_path: Option<std::path::PathBuf>,
+    /// The teleport codes typed correctly in any game (#115), and where.
+    codes: codes::Kept,
+    codes_path: Option<std::path::PathBuf>,
     /// The planet as a graph for level 5's routes (#52), read on the first
     /// frame that needs it.
     graph: Option<starquake::map::Graph>,
@@ -392,6 +396,15 @@ impl Host for FrontHost {
         }));
     }
 
+    fn teleported(&mut self, room: u16, code: [u8; 5]) {
+        if self.codes.add(room, code)
+            && let Some(path) = &self.codes_path
+            && let Err(e) = codes::save(path, &self.codes)
+        {
+            eprintln!("the teleport code was not kept: {e}");
+        }
+    }
+
     fn heroes_shown(&mut self) -> Option<Vec<u8>> {
         self.keeper.shown()
     }
@@ -441,7 +454,7 @@ impl Host for FrontHost {
             let mut guidance = self.shared.guidance.lock().unwrap();
             match game.scene {
                 Scene::Play => {
-                    guidance.set_teleporters(&game.teleporters_seen);
+                    guidance.set_teleporters(&self.codes.with_seen(&game.teleporters_seen));
                     guidance.set_room(Some(game.room));
                     guidance.set_unvisited(&game.unvisited_rooms);
                     guidance.set_pieces(&game.missing_piece_rooms());
@@ -644,6 +657,9 @@ fn play_game(
         .and_then(|p| std::fs::read_to_string(p).ok());
     let keeper = scores::Keeper::new(file.as_deref(), &game.high_scores);
     game.high_scores.clone_from(&keeper.kept.table);
+    // The teleport codes used in earlier games and runs (#115).
+    let codes_path = codes::path();
+    let codes = codes::load(codes_path.as_deref());
     let rate = audio.as_ref().map_or(44100, audio::Output::rate);
     let mut host = FrontHost {
         shared,
@@ -664,6 +680,8 @@ fn play_game(
         scene_seen: Scene::Loading,
         keeper,
         scores_path,
+        codes,
+        codes_path,
         graph: None,
         routes: None,
     };

@@ -394,6 +394,7 @@ impl Game {
             let at = at::TELEPORTERS + j * 7;
             if ram[at..at + 5] == self.typed_code {
                 self.room = ram[at + 5] as u16 | (ram[at + 6] as u16) << 8;
+                host.teleported(self.room, self.typed_code);
                 for _ in 0..20 {
                     self.flash_ink();
                     self.print_text(at::TELEPORTING);
