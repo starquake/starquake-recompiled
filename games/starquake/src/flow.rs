@@ -73,7 +73,7 @@ impl Game {
     }
 
     /// Waits for every key to be released, then plays tune `tune` until it
-    /// ends or a key is pressed.
+    /// ends or a key, or anything on a gamepad, is pressed.
     ///
     /// The original polls the keyboard between speaker toggles; here a key
     /// stops the tune at the next frame instead, which is as often as the
@@ -103,8 +103,9 @@ impl Game {
             // The original's player scans a half-row of the keyboard between
             // speaker toggles and stops on any pressed bit, so two keys held
             // together end the tune just as one does. The release-wait above
-            // keeps `key_code`, which is what the caller at 6600 uses.
-            if crate::controls::any_key(&self.input) {
+            // keeps `key_code`, which is what the caller at 6600 uses. A
+            // gamepad ends it too (#123).
+            if crate::controls::any_key(&self.input) || self.input.pad.any() {
                 break;
             }
             t = end;
@@ -112,9 +113,10 @@ impl Game {
     }
 
     /// Shows the picture the tape painted while the game loaded, until a key
-    /// is pressed. The picture is a block on the tape rather than anything
-    /// the program draws, so this is an addition: on a Spectrum it simply sat
-    /// there for the minutes the rest of the tape took to load.
+    /// or anything on a gamepad is pressed. The picture is a block on the
+    /// tape rather than anything the program draws, so this is an addition:
+    /// on a Spectrum it simply sat there for the minutes the rest of the tape
+    /// took to load.
     pub fn loading_screen(&mut self, host: &mut dyn Host) {
         let Some(screen) = self.assets.loading_screen.clone() else {
             return;
@@ -122,7 +124,11 @@ impl Game {
         let n = screen.len().min(BITMAP_LEN + ATTR_LEN);
         self.display.mem[..n].copy_from_slice(&screen[..n]);
         self.display.border = 0;
-        self.ask_key(host, |k| k != 0);
+        self.wait_keys_released(host);
+        while crate::controls::key_code(&self.assets.ram, &self.input) == 0 && !self.input.pad.any()
+        {
+            self.sync(host);
+        }
     }
 
     /// The report BLOB's flight computer gives on the way down.

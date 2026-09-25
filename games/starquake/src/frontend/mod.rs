@@ -91,9 +91,6 @@ struct FrontHost {
     scores_path: Option<std::path::PathBuf>,
 }
 
-/// The Spectrum's 0 key: port 0xEFFE, bit 0.
-const ZERO_KEY: (u8, u8) = (0xEF, 0);
-
 impl FrontHost {
     /// Holds the game between frames while the guidance picker is open,
     /// taking the gamepad's side of it: up and down choose a row, left and
@@ -305,10 +302,9 @@ impl Host for FrontHost {
             // give up the lost time rather than trying to catch it back.
             self.next_frame = now;
         }
-        // A gamepad works in every control method: it presses whatever the
-        // chosen method reads, the Kempston port or the method's own keys.
-        // Start presses the method's pause key, which is not a fixed key
-        // either; on a fresh tape it is Space.
+        // A gamepad is its own input (#123): it moves and fires in every
+        // control method and Start pauses, but it presses no keys, so it
+        // never types into what the game reads as letters.
         let mut pad = self.pad.poll();
         {
             let mut guidance = self.shared.guidance.lock().unwrap();
@@ -343,12 +339,11 @@ impl Host for FrontHost {
                 input.keys[1] &= !0x1F;
             }
         }
-        // On the title screen, Start or fire on a pad is the 0 key, which
-        // starts a game (#110): alone, since the menu reads one key held at
-        // a time. What is still held as play begins is kept from the game
-        // until it is let go, so it is not a pause or a shot.
+        // On the title screen, Start or fire on a pad starts a game (#110).
+        // What is still held as play begins is kept from the game until it
+        // is let go, so it is not a pause or a shot.
         if game.on_title && (pad.start || pad.bits & 0x10 != 0) {
-            input.press_key(ZERO_KEY);
+            input.pad.start = true;
             self.starting = true;
         } else {
             // The frame after a start, and the first frame of play: what
@@ -368,22 +363,24 @@ impl Host for FrontHost {
             // The pad splits up's and down's meanings (#112): the D-pad's up
             // and down board and fly; the button for up picks up, the button
             // for down builds.
-            input.pad = pad.meaning();
+            input.pad = starquake::controls::PadInput {
+                bits: pad.bits,
+                start: pad.start,
+                meaning: pad.meaning(),
+            };
             // While the game is paused, A or B dismisses the notice as it
             // would any dialog (#89), and does nothing else: its press
             // reaches the game as a move only, so it neither builds nor
             // picks up in the frame play goes on, and it is held back until
             // let go.
             if game.paused && pad.buttons & 0x0C != 0 {
-                input.pad.up_moves_only = true;
-                input.pad.up_picks_only = false;
-                input.pad.down_moves_only = true;
-                input.pad.down_builds_only = false;
+                input.pad.meaning = starquake::controls::PadMeaning {
+                    up_moves_only: true,
+                    up_picks_only: false,
+                    down_moves_only: true,
+                    down_builds_only: false,
+                };
                 self.pad.hold_back_held();
-            }
-            game.controls.press(&mut input, pad.bits);
-            if pad.start {
-                game.controls.press_pause(&mut input);
             }
         }
 

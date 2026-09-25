@@ -750,7 +750,7 @@ impl Game {
 
     /// One frame of BLOB (after the display work).
     pub fn blob_control(&mut self, input: &Input) -> Outcome {
-        self.pad = input.pad;
+        self.pad = input.pad.meaning;
         self.entities[5].0[COLOUR] = 7;
         self.set_blob(b::FIRE, 0);
         if input.keyboard(0xFD) & 0x1F == 0 {
