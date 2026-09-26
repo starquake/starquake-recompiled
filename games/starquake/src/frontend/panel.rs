@@ -980,7 +980,7 @@ impl Panel {
         let actions: Vec<Setting> = guidance
             .rows()
             .into_iter()
-            .filter(|r| matches!(r, Setting::EndGame | Setting::Exit))
+            .filter(|r| matches!(r, Setting::ForgetCodes | Setting::EndGame | Setting::Exit))
             .collect();
         let action_h = |r: Setting| {
             if guidance.armed() == Some(r) {
@@ -1140,6 +1140,10 @@ impl Panel {
         for &row in &actions {
             let rh = action_h(row);
             let (label, again) = match row {
+                Setting::ForgetCodes => (
+                    "Forget the teleport codes",
+                    "Press Enter or A again to forget them",
+                ),
                 Setting::EndGame => ("End this game", "Press Enter or A again to end it"),
                 _ => ("Exit Starquake", "Press Enter or A again to exit"),
             };
@@ -2004,6 +2008,23 @@ mod render_check {
                     g.change(true);
                     g.change(true);
                     g.back();
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                // With teleport codes kept, the row that forgets them, pressed
+                // once, in a game (#115).
+                "picker-forget-codes",
+                {
+                    let mut g = Guidance::default();
+                    g.set_playing(true);
+                    g.set_kept_codes(4);
+                    g.open();
+                    while g.focus() != Setting::ForgetCodes {
+                        g.focus_down();
+                    }
+                    g.enter();
                     g
                 },
                 Scene::Play,

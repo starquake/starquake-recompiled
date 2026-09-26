@@ -1022,6 +1022,63 @@ fn check_effect_pictures(env: &Env) -> bool {
     report("pictures under blocking effects (#116)", &failures, 1)
 }
 
+/// Types a code into a teleport's booth, a key a frame with a frame let go
+/// between, and notes what the game tells the host was typed right.
+struct Typing {
+    keys: Vec<(u8, u8)>,
+    frame: usize,
+    told: Vec<(u16, [u8; 5])>,
+}
+
+impl starquake::host::Host for Typing {
+    fn frame(&mut self, game: &Game) -> (starquake::controls::Input, u32) {
+        self.frame += 1;
+        let mut input = starquake::controls::Input::default();
+        if self.frame.is_multiple_of(2)
+            && let Some(&key) = self.keys.get(self.frame / 2 - 1)
+        {
+            input.press_key(key);
+        }
+        (input, game.frame_sound().frames)
+    }
+
+    fn teleported(&mut self, room: u16, code: [u8; 5]) {
+        self.told.push((room, code));
+    }
+}
+
+/// A code typed right in a booth is handed to the host with the teleport's
+/// room, so a window can keep it between games (#115).
+fn check_teleported(env: &Env) -> bool {
+    let mut failures = Vec::new();
+    let mut g = env.game(&new_game_machine(env));
+    let all = g.all_teleporters();
+    let (from, to) = (all[0], all[1]);
+    let keys = to
+        .code
+        .iter()
+        .map(|&c| starquake::controls::key_position(&g.assets.ram, c).expect("a letter key"))
+        .collect();
+    g.room = from.room;
+    let mut host = Typing {
+        keys,
+        frame: 0,
+        told: Vec::new(),
+    };
+    g.run_modal(starquake::blob::Modal::TeleportBooth, &mut host);
+    if host.told != [(to.room, to.code)] || g.room != to.room {
+        failures.push((
+            format!(
+                "booth in room {}, typing {}",
+                from.room,
+                String::from_utf8_lossy(&to.code)
+            ),
+            vec![format!("told {:?}, now in room {}", host.told, g.room)],
+        ));
+    }
+    report("a code typed right reaches the host (#115)", &failures, 1)
+}
+
 /// The core room: walking in carrying pieces that fit holes in the core.
 /// The original is run from the room entry to where it leaves for room 198.
 fn check_core_room(env: &Env) -> bool {
@@ -2478,6 +2535,9 @@ fn main() {
     ok &= guarded("death sequence (C350)", || check_death(&env, &states));
     ok &= guarded("game over screen (6730)", || check_game_over(&env, &states));
     ok &= guarded("lift boarded walking right (#117)", || check_lift(&env));
+    ok &= guarded("a code typed right reaches the host (#115)", || {
+        check_teleported(&env)
+    });
     ok &= guarded("pictures under blocking effects (#116)", || {
         check_effect_pictures(&env)
     });

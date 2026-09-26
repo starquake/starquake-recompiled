@@ -35,6 +35,12 @@ pub trait Host {
     fn training(&mut self) -> crate::game::Training {
         crate::game::Training::default()
     }
+
+    /// A code typed in a teleport's booth was right (#115): `code`, and
+    /// `room`, where the teleport it names stands and where BLOB is going.
+    /// A host that keeps the codes a player has used saves it here. Nothing
+    /// by default.
+    fn teleported(&mut self, _room: u16, _code: [u8; 5]) {}
 }
 
 /// A host that shows and plays nothing and always reports the same input.
