@@ -1,9 +1,11 @@
-//! Keeping the teleport codes a player has typed correctly, between games
-//! and runs (#115). A code names a teleport, and the fifteen are the same
-//! in every game, so a code once used stays right. The game hands each one
-//! to the host as the booth accepts it ([`starquake::host::Host::teleported`]);
-//! this keeps them in `teleporter-codes.txt` beside the kept tape, and level
-//! 1 lists them from the start of every game with the ones seen in it.
+//! Keeping every teleport code a player has discovered, between games and
+//! runs (#115): each booth walked into, which shows its own code, and each
+//! code typed right in a booth, which the game hands to the host as the
+//! booth accepts it ([`starquake::host::Host::teleported`]). A code names a
+//! teleport, and the fifteen are the same in every game, so a code once
+//! found stays right. This keeps them in `teleporter-codes.txt` beside the
+//! kept tape, and level 1 lists them from the start of every game with the
+//! ones seen in it.
 
 use std::path::{Path, PathBuf};
 
@@ -11,7 +13,7 @@ use starquake::game::SeenTeleporter;
 
 const FILE: &str = "teleporter-codes.txt";
 
-/// The codes kept, in the order they were first used.
+/// The codes kept, in the order they were first found.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Kept {
     pub codes: Vec<SeenTeleporter>,
@@ -43,8 +45,8 @@ impl Kept {
         Kept { codes }
     }
 
-    /// Adds a code typed correctly. Returns whether it is new, which is
-    /// when the file needs writing.
+    /// Adds a code found. Returns whether it is new, which is when the file
+    /// needs writing.
     pub fn add(&mut self, room: u16, code: [u8; 5]) -> bool {
         if self.codes.iter().any(|t| t.room == room) {
             return false;

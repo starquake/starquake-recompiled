@@ -379,6 +379,23 @@ fn every_door(
     seen.iter().copied().chain(rest).collect()
 }
 
+impl FrontHost {
+    /// Keeps every teleport code discovered (#115), a booth walked into or
+    /// a code typed right, writing the file when one is new.
+    fn keep_codes(&mut self, found: &[starquake::game::SeenTeleporter]) {
+        let mut new = false;
+        for t in found {
+            new |= self.codes.add(t.room, t.code);
+        }
+        if new
+            && let Some(path) = &self.codes_path
+            && let Err(e) = codes::save(path, &self.codes)
+        {
+            eprintln!("the teleport codes were not kept: {e}");
+        }
+    }
+}
+
 impl Host for FrontHost {
     fn heroes(&mut self, table: &[u8], new: Option<usize>) {
         let mut guidance = self.shared.guidance.lock().unwrap();
@@ -397,12 +414,7 @@ impl Host for FrontHost {
     }
 
     fn teleported(&mut self, room: u16, code: [u8; 5]) {
-        if self.codes.add(room, code)
-            && let Some(path) = &self.codes_path
-            && let Err(e) = codes::save(path, &self.codes)
-        {
-            eprintln!("the teleport code was not kept: {e}");
-        }
+        self.keep_codes(&[starquake::game::SeenTeleporter { room, code }]);
     }
 
     fn heroes_shown(&mut self) -> Option<Vec<u8>> {
@@ -449,6 +461,10 @@ impl Host for FrontHost {
         if !self.shared.guidance.lock().unwrap().has_openings() {
             let openings = game.all_openings();
             self.shared.guidance.lock().unwrap().set_openings(openings);
+        }
+        // The booths walked into this game, kept for every game after (#115).
+        if game.scene == Scene::Play {
+            self.keep_codes(&game.teleporters_seen);
         }
         {
             let mut guidance = self.shared.guidance.lock().unwrap();

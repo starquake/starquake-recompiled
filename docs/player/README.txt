@@ -90,10 +90,10 @@ high-scores.txt, in the folder the tape is kept in. Beside it the panel
 shows how much guidance each entry's game had. A game played with
 training mode on is shown in the table and then left out of it.
 
-Every teleport code you type correctly is kept too, in
-teleporter-codes.txt in the same folder, and guidance level 1 lists
-it from the start of every game after. Delete the file to forget
-them.
+Every teleport code you discover is kept too, the ones your booths
+show and the ones you type correctly, in teleporter-codes.txt in the
+same folder, and guidance level 1 lists them from the start of every
+game after. Delete the file to forget them.
 
 
 GUIDANCE
@@ -119,8 +119,8 @@ Turning it up, or training mode on, shows on that game's score, so
 the menu asks before keeping such a change. So far:
 
   Level 1  Codes and the core: the codes of the teleports you have
-           entered, or typed right in any game, in a column at the
-           panel's right, and under them
+           found in any game, entered or typed right, in a column at
+           the panel's right, and under them
            each security door's three key code cards once its screen
            has shown them, numbered. A card stays dim until something
            you carry answers it: that card, a "?" card for one
