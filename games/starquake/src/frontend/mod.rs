@@ -94,6 +94,9 @@ struct FrontHost {
     /// The teleport codes typed correctly in any game (#115), and where.
     codes: codes::Kept,
     codes_path: Option<std::path::PathBuf>,
+    /// How many of this game's booths walked into are already kept, so each
+    /// is kept once, and none again after the codes are forgotten.
+    seen_kept: usize,
     /// The planet as a graph for level 5's routes (#52), read on the first
     /// frame that needs it.
     graph: Option<starquake::map::Graph>,
@@ -396,6 +399,22 @@ impl FrontHost {
     }
 }
 
+impl FrontHost {
+    /// Forgets every kept teleport code (#115), the file with them. This
+    /// game's own list is the game's and stays; its booths are not kept
+    /// again, only the ones found from now on.
+    fn forget_codes(&mut self) {
+        self.codes = codes::Kept::default();
+        if let Some(path) = &self.codes_path
+            && let Err(e) = std::fs::remove_file(path)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            eprintln!("the teleport codes were not forgotten: {e}");
+        }
+        self.shared.guidance.lock().unwrap().set_kept_codes(0);
+    }
+}
+
 impl Host for FrontHost {
     fn heroes(&mut self, table: &[u8], new: Option<usize>) {
         let mut guidance = self.shared.guidance.lock().unwrap();
@@ -462,10 +481,22 @@ impl Host for FrontHost {
             let openings = game.all_openings();
             self.shared.guidance.lock().unwrap().set_openings(openings);
         }
-        // The booths walked into this game, kept for every game after (#115).
+        // The booths walked into this game, kept for every game after (#115),
+        // each once: a new game starts the list again.
         if game.scene == Scene::Play {
-            self.keep_codes(&game.teleporters_seen);
+            let seen = &game.teleporters_seen;
+            if seen.len() < self.seen_kept {
+                self.seen_kept = 0;
+            }
+            let new = seen[self.seen_kept..].to_vec();
+            self.seen_kept = seen.len();
+            self.keep_codes(&new);
         }
+        self.shared
+            .guidance
+            .lock()
+            .unwrap()
+            .set_kept_codes(self.codes.codes.len());
         {
             let mut guidance = self.shared.guidance.lock().unwrap();
             match game.scene {
@@ -575,6 +606,15 @@ impl Host for FrontHost {
             .take(guidance::Action::EndGame)
         {
             self.abandon = true;
+        }
+        if self
+            .shared
+            .guidance
+            .lock()
+            .unwrap()
+            .take(guidance::Action::ForgetCodes)
+        {
+            self.forget_codes();
         }
         // On the title screen, Start or fire on a pad starts a game (#110).
         // What is still held as play begins is kept from the game until it
@@ -698,6 +738,7 @@ fn play_game(
         scores_path,
         codes,
         codes_path,
+        seen_kept: 0,
         graph: None,
         routes: None,
     };

@@ -93,7 +93,8 @@ training mode on is shown in the table and then left out of it.
 Every teleport code you discover is kept too, the ones your booths
 show and the ones you type correctly, in teleporter-codes.txt in the
 same folder, and guidance level 1 lists them from the start of every
-game after. Delete the file to forget them.
+game after. To forget them, choose Forget the teleport codes in the
+guidance menu, which shows while some are kept.
 
 
 GUIDANCE
