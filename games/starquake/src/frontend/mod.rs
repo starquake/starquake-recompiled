@@ -98,10 +98,8 @@ struct FrontHost {
     /// How many of this game's booths walked into are already kept, so each
     /// is kept once, and none again after the codes are forgotten.
     seen_kept: usize,
-    /// A code entered with a pad in a booth, still to be typed (#80), and
-    /// whether its first letter is down this frame.
-    typing: std::collections::VecDeque<u8>,
-    typing_down: bool,
+    /// A code entered with a pad in a booth, being typed (#80).
+    typing: starquake::host::CodeTyping,
     /// The planet as a graph for level 5's routes (#52), read on the first
     /// frame that needs it.
     graph: Option<starquake::map::Graph>,
@@ -428,8 +426,6 @@ impl FrontHost {
         let mut guidance = self.shared.guidance.lock().unwrap();
         if !game.booth {
             guidance.set_code_entry(None);
-            self.typing.clear();
-            self.typing_down = false;
             return;
         }
         let pressed = pad.up
@@ -469,8 +465,7 @@ impl FrontHost {
                 if pad.confirm()
                     && let Some(code) = e.enter()
                 {
-                    self.typing.extend(code);
-                    self.typing_down = false;
+                    self.typing.start(code);
                 }
                 Some(e)
             }
@@ -671,19 +666,6 @@ impl Host for FrontHost {
         }
         self.booth_entry(game, &pad);
         let mut input = *self.shared.input.lock().unwrap();
-        // A code entered with a pad (#80), typed on the keys the booth reads:
-        // a letter down one frame and let go the next, as the booth waits for
-        // each key to be let go before it reads the next.
-        if game.booth
-            && let Some(&letter) = self.typing.front()
-        {
-            if self.typing_down {
-                self.typing.pop_front();
-            } else if let Some(key) = starquake::controls::key_position(&game.assets.ram, letter) {
-                input.press_key(key);
-            }
-            self.typing_down = !self.typing_down;
-        }
         if self
             .shared
             .guidance
@@ -746,6 +728,11 @@ impl Host for FrontHost {
                 self.pad.hold_back_held();
             }
         }
+
+        // A code entered with a pad (#80), typed on the keys the booth reads.
+        // While the slots are open the pad works them, not the game.
+        let slots_open = self.shared.guidance.lock().unwrap().code_entry().is_some();
+        self.typing.apply(game, slots_open, &mut input);
 
         if self.abandon {
             self.abandon = end_game(game.scene, game.play_work, game.paused, &mut input);
@@ -825,8 +812,7 @@ fn play_game(
         codes,
         codes_path,
         seen_kept: 0,
-        typing: std::collections::VecDeque::new(),
-        typing_down: false,
+        typing: starquake::host::CodeTyping::default(),
         graph: None,
         routes: None,
     };

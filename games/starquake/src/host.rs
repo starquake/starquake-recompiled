@@ -43,6 +43,49 @@ pub trait Host {
     fn teleported(&mut self, _room: u16, _code: [u8; 5]) {}
 }
 
+/// A teleport code typed on the keys a booth reads, for a host that lets
+/// the player put one together some other way, such as with a pad (#80).
+/// The booth itself runs unchanged: each letter goes down for a frame and
+/// is let go the next, since the booth waits for everything to be let go
+/// before it reads the next letter.
+#[derive(Default)]
+pub struct CodeTyping {
+    letters: std::collections::VecDeque<u8>,
+    down: bool,
+}
+
+impl CodeTyping {
+    /// Types `code`, a letter at a time from the next frame.
+    pub fn start(&mut self, code: [u8; 5]) {
+        self.letters = code.into_iter().collect();
+        self.down = false;
+    }
+
+    /// Finishes the frame's `input`. In a booth, while the host's own entry
+    /// is open (`entry_open`), the pad is the entry's alone and the game sees
+    /// none of it: the booth also waits for the pad to be let go, so a button
+    /// still held after entering the code would swallow the letters typed
+    /// meanwhile. Outside a booth, anything not yet typed is dropped.
+    pub fn apply(&mut self, game: &Game, entry_open: bool, input: &mut Input) {
+        if !game.booth {
+            self.letters.clear();
+            self.down = false;
+            return;
+        }
+        if entry_open {
+            input.pad = crate::controls::PadInput::default();
+        }
+        if let Some(&letter) = self.letters.front() {
+            if self.down {
+                self.letters.pop_front();
+            } else if let Some(key) = crate::controls::key_position(&game.assets.ram, letter) {
+                input.press_key(key);
+            }
+            self.down = !self.down;
+        }
+    }
+}
+
 /// A host that shows and plays nothing and always reports the same input.
 #[derive(Default)]
 pub struct NullHost {
