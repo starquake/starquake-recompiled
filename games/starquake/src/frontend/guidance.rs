@@ -599,16 +599,29 @@ impl Guidance {
 
     /// Enter or A (#132). With the question up, one press applies and goes
     /// back to the game. On the apply row it does that too, asking first when
-    /// the change would show on the score. On a setting it does nothing:
-    /// left and right change it. On an action the first press asks for a
-    /// second, and the second requests the action and closes the picker.
+    /// the change would show on the score. On a setting it steps to the next
+    /// value, as right does, the level going round from the top to 0. On an
+    /// action the first press asks for a second, and the second requests the
+    /// action and closes the picker.
     pub fn enter(&mut self) {
         if self.asking {
             self.close();
             return;
         }
         let action = match self.focus {
-            Setting::Level | Setting::Switch(_) => return,
+            // A setting steps to its next value (#132): the level one up, and
+            // round from the top to 0; a switch on or off.
+            Setting::Level => {
+                self.level = (self.level + 1) % LEVELS.len() as u8;
+                self.version += 1;
+                return;
+            }
+            Setting::Switch(i) => {
+                let on = &mut self.training.0[usize::from(i)];
+                *on = !*on;
+                self.version += 1;
+                return;
+            }
             Setting::Apply => {
                 if self.raises_record() {
                     self.asking = true;
@@ -822,14 +835,22 @@ mod tests {
     }
 
     #[test]
-    fn enter_on_a_setting_does_nothing() {
+    fn enter_on_a_setting_steps_it() {
         let mut g = Guidance::default();
         g.open();
-        g.change(true);
         g.enter();
-        assert!(g.picker_open());
+        assert_eq!(g.level(), 1, "one level up");
+        for _ in 0..LEVELS.len() - 1 {
+            g.enter();
+        }
+        assert_eq!(g.level(), 0, "round from the top");
+        g.focus_down();
+        g.enter();
+        assert!(g.training().0[0], "a switch on");
+        g.enter();
+        assert!(!g.training().0[0], "and off");
+        assert!(g.picker_open(), "nothing applied");
         assert!(!g.asking());
-        assert_eq!(g.level(), 1);
     }
 
     #[test]

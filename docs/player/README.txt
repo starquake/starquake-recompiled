@@ -105,9 +105,9 @@ gamepad, opens the guidance menu and pauses the game:
 
   Up and down          Choose a row.
   Left and right       Change the guidance level or training mode.
-  Enter, or A          Use these settings, which goes back to the
-                       game; or end this game, or exit, after
-                       pressing twice.
+  Enter, or A          Step the level or a switch on; on Use these
+                       settings, go back to the game with them; or
+                       end this game, or exit, after pressing twice.
   Esc, or B or Select  Leave the menu without changing anything.
 
 A and B are the pad's own letters, wherever its maker puts them: A is
