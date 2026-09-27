@@ -1287,7 +1287,7 @@ impl starquake::host::Host for BoothTyping {
 /// A code put together with a pad reaches the booth whole however long the
 /// A that entered it is held, and `Game::booth` is set on every frame the
 /// booth reads its five letters and off once it is done (#80).
-fn check_booth_flag(env: &Env) -> bool {
+fn check_booth_pad_code(env: &Env) -> bool {
     let mut failures = Vec::new();
     let holds = [0, 2, 8];
     for held in holds {
@@ -2798,7 +2798,7 @@ fn main() {
     ok &= guarded("game over screen (6730)", || check_game_over(&env, &states));
     ok &= guarded("lift boarded walking right (#117)", || check_lift(&env));
     ok &= guarded("a booth reads a pad's code whole (#80)", || {
-        check_booth_flag(&env)
+        check_booth_pad_code(&env)
     });
     ok &= guarded("a code typed right reaches the host (#115)", || {
         check_teleported(&env)
