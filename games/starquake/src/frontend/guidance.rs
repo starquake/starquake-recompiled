@@ -116,8 +116,8 @@ pub struct Guidance {
     training: Training,
     record: Record,
     picker: bool,
-    /// The level and training mode when the picker opened, which Undo goes
-    /// back to.
+    /// The level and training mode when the picker opened, which leaving
+    /// without applying puts back (#132).
     opened: (u8, Training),
     /// "Your score will show this" is up: asked when applying would add to
     /// the record (#132).
