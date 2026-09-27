@@ -1179,7 +1179,11 @@ impl Player {
 /// A long run of real play (#120): at every top of the original's main
 /// loop, the rewrite runs one frame from the original's state and the two
 /// are compared, as `check_loop` compares its sampled states. Deaths,
-/// pauses and screens take many frames and are not compared here.
+/// pauses and screens take many frames and are not compared here. Nor is a
+/// frame that leaves the room: the original builds the next room over
+/// several frames and seeds its random numbers from the frame counter after,
+/// which the rewrite cannot match (README, *Status*; #136). A frame that is
+/// merely slow is compared like any other.
 fn long_run(
     env: &Env,
     seed: u64,
@@ -1202,7 +1206,8 @@ fn long_run(
             continue;
         }
         let after = &player.z;
-        if after.frame - before.frame > 2 {
+        let room = |z: &Zx| z.read16(at::ROOM as u16) & 0x1FF;
+        if room(after) != room(&before) {
             continue;
         }
         let mut g = env.game(&before);

@@ -125,10 +125,12 @@ and game state byte for byte.
 The long runs (starquake-recompiled#120) go further: the original plays
 from its menu under random held input, taken to a random room every few
 seconds, and at every frame of play the rewrite runs one frame from the
-original's state and the two are compared. The gate plays three runs of
-20,000 frames; `cargo run --release -p sq-verify -- long 100000` plays
-three of 100,000 (about 190,000 frames compared in some 440 rooms, in a
-minute and a quarter).
+original's state and the two are compared. The frame BLOB leaves a room in
+is the exception, since the new room's random numbers are seeded from the
+frame counter (see *Status*; starquake-recompiled#136). The gate plays three
+runs of 20,000 frames; `cargo run --release -p sq-verify -- long 100000`
+plays three of 100,000 (about 190,000 frames compared in some 440 rooms,
+in under a minute and a half).
 
 One check is different, because what it checks is not in the original: *map
 openings* plays the rewrite on from the same states under random joystick
