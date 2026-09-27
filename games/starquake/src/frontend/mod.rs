@@ -481,6 +481,14 @@ impl Host for FrontHost {
             let openings = game.all_openings();
             self.shared.guidance.lock().unwrap().set_openings(openings);
         }
+        // The game's letters, for the panel's codes and numbers (#126).
+        if self.shared.guidance.lock().unwrap().font().is_none() {
+            self.shared
+                .guidance
+                .lock()
+                .unwrap()
+                .set_font(&game.assets.font);
+        }
         // The booths walked into this game, kept for every game after (#115),
         // each once: a new game starts the list again.
         if game.scene == Scene::Play {
