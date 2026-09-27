@@ -105,8 +105,10 @@ gamepad, opens the guidance menu and pauses the game:
 
   Up and down          Choose a row.
   Left and right       Change the guidance level or training mode.
-  Enter, or A          End this game, or exit, after pressing twice.
-  Esc, or B or Select  Close the menu.
+  Enter, or A          Use these settings, which goes back to the
+                       game; or end this game, or exit, after
+                       pressing twice.
+  Esc, or B or Select  Leave the menu without changing anything.
 
 A and B are the pad's own letters, wherever its maker puts them: A is
 the bottom button on an Xbox pad and the right one on a Switch pad. A
@@ -117,8 +119,8 @@ Guidance has levels from 0, the original game, to 6; each adds to the
 ones below it. Levels 1 to 3 show only what you could have written
 down yourself; 4 and up tell you things you could not have known.
 Turning it up, or training mode on, shows on that game's score, so
-the menu asks before keeping such a change: Enter or A twice keeps it,
-Esc or B undoes it. So far:
+Use these settings asks first. Enter or A there uses them; Esc or B
+goes back to the menu. So far:
 
   Level 1  Codes and the core: the codes of the teleports you have
            found in any game, entered or typed right, in a column at

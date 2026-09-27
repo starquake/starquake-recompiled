@@ -8,7 +8,7 @@ use starquake::game::{Scene, Training};
 use starquake::map::{COLS, ROWS, Step};
 
 use super::gamepad::Layout;
-use super::guidance::{Choice, Found, Guidance, Heroes, Hole, LEVELS, Setting};
+use super::guidance::{Found, Guidance, Heroes, Hole, LEVELS, Setting};
 use super::routes::walked_steps;
 use super::text::{Canvas, Fonts, Rgb, Span, Weight};
 use starquake::pickups::Kind;
@@ -1024,7 +1024,12 @@ impl Panel {
         let actions: Vec<Setting> = guidance
             .rows()
             .into_iter()
-            .filter(|r| matches!(r, Setting::ForgetCodes | Setting::EndGame | Setting::Exit))
+            .filter(|r| {
+                matches!(
+                    r,
+                    Setting::Apply | Setting::ForgetCodes | Setting::EndGame | Setting::Exit
+                )
+            })
             .collect();
         let action_h = |r: Setting| {
             if guidance.armed() == Some(r) {
@@ -1178,12 +1183,15 @@ impl Panel {
             );
         }
 
-        // The actions: pressed once, a row turns red and asks again.
+        // The actions: the row back to the game, which applies what was
+        // changed (#132); the others turn red when pressed once and ask again.
         let mut ay = y + TRAINING_END + 8.0;
         canvas.round_rect(x + 1.0, y + TRAINING_END, w - 2.0, 1.0, 0.0, RULE);
         for &row in &actions {
             let rh = action_h(row);
             let (label, again) = match row {
+                Setting::Apply if guidance.changed() => ("Use these settings", ""),
+                Setting::Apply => ("Back to the game", ""),
                 Setting::ForgetCodes => (
                     "Forget the teleport codes",
                     "Press Enter or A again to forget them",
@@ -1239,21 +1247,21 @@ impl Panel {
                 (&["\u{2191}", "\u{2193}"], "choose"),
                 (&["\u{2190}", "\u{2192}"], "change"),
                 (&["Enter", "/", "(A)"], "OK"),
-                (&["Esc", "/", "(B)"], "close"),
+                (&["Esc", "/", "(B)"], "cancel"),
             ],
         );
 
-        if let Some(choice) = guidance.asking() {
+        if guidance.asking() {
             canvas.shade(x, y, w, h, DIM, 150);
-            self.noted_with_score(canvas, guidance, choice);
+            self.noted_with_score(canvas, guidance);
         }
     }
 
-    /// The question over the picker when leaving it would add to the score
-    /// note: exactly what changed since it opened, what the score will say,
-    /// and one button named for keeping it, which takes two presses as the
-    /// picker's actions do (#122); Esc or B undoes the change.
-    fn noted_with_score(&mut self, canvas: &mut Canvas, guidance: &Guidance, choice: Choice) {
+    /// The question over the picker when applying would add to the score
+    /// note (#132): exactly what changed since it opened and what the score
+    /// will say. One Enter or A applies and goes back to the game; Esc or B
+    /// goes back to the settings, still as they were set.
+    fn noted_with_score(&mut self, canvas: &mut Canvas, guidance: &Guidance) {
         let (was_level, was_training) = guidance.opened();
         let (level, training) = (guidance.level(), guidance.training());
         let record = guidance.record();
@@ -1291,13 +1299,6 @@ impl Panel {
             "This game's score will show {}. That stays, even if you {later} later.",
             shows.join(" and ")
         );
-        let keep = match (level != was_level, training != was_training) {
-            (true, false) => format!("Keep level {level}"),
-            (false, true) => "Keep the switches".to_string(),
-            _ => "Keep both changes".to_string(),
-        };
-        let armed = choice == Choice::Armed;
-        let button_h = if armed { 54.0 } else { 40.0 };
 
         let w = 440.0;
         let x = (WINDOW_W - w) / 2.0;
@@ -1311,14 +1312,7 @@ impl Panel {
             1.5,
             &[span(&explanation, 13.0, Weight::Regular, HINT_KEY)],
         );
-        let h = 58.0
-            + 22.0 * changes.len() as f32
-            + 10.0
-            + explanation_h
-            + 20.0
-            + button_h
-            + 20.0
-            + 44.0;
+        let h = 58.0 + 22.0 * changes.len() as f32 + 10.0 + explanation_h + 20.0 + 44.0;
         let y = (WINDOW_H - h) / 2.0;
         canvas.round_rect(x, y, w, h, 12.0, BUTTON_LINE);
         canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0, 11.0, DIALOG);
@@ -1329,7 +1323,7 @@ impl Panel {
             None,
             1.0,
             &[span(
-                "This will show on your score",
+                "Your score will show this",
                 19.0,
                 Weight::SemiBold,
                 BRIGHT,
@@ -1356,43 +1350,6 @@ impl Panel {
             1.5,
             &[span(&explanation, 13.0, Weight::Regular, HINT_KEY)],
         );
-        let by = ly + explanation_h + 20.0;
-        let (bx, bw) = (x + 24.0, inner);
-        if armed {
-            canvas.round_rect(bx, by, bw, button_h, 10.0, ACCENT);
-            canvas.round_rect(bx + 2.0, by + 2.0, bw - 4.0, button_h - 4.0, 8.0, SELECTED);
-        } else {
-            canvas.round_rect(bx, by, bw, button_h, 8.0, BUTTON_LINE);
-            canvas.round_rect(bx + 1.0, by + 1.0, bw - 2.0, button_h - 2.0, 7.0, DIALOG);
-        }
-        self.fonts.text(
-            Some(canvas),
-            bx + 16.0,
-            by + 11.0,
-            None,
-            1.0,
-            &[span(
-                &keep,
-                15.0,
-                Weight::SemiBold,
-                if armed { TITLE } else { VALUE_DIM },
-            )],
-        );
-        if armed {
-            self.fonts.text(
-                Some(canvas),
-                bx + 16.0,
-                by + 31.0,
-                None,
-                1.0,
-                &[span(
-                    "Press Enter or A again to keep",
-                    12.0,
-                    Weight::Regular,
-                    HINT_KEY,
-                )],
-            );
-        }
         let foot = y + h - 44.0;
         canvas.round_rect(x + 1.0, foot, w - 2.0, 1.0, 0.0, RULE);
         self.hints(
@@ -1400,8 +1357,8 @@ impl Panel {
             x + 24.0,
             foot + 12.0,
             &[
-                (&["Enter", "/", "(A)"], "keep"),
-                (&["Esc", "/", "(B)"], "undo"),
+                (&["Enter", "/", "(A)"], "use them"),
+                (&["Esc", "/", "(B)"], "back"),
             ],
         );
     }
@@ -1934,6 +1891,13 @@ mod render_check {
         assert!(!lit(1, 0) && !lit(8, 0), "and nothing else");
     }
 
+    /// Moves the picker's highlight down to the row that applies (#132).
+    fn to_apply(g: &mut Guidance) {
+        while g.focus() != Setting::Apply {
+            g.focus_down();
+        }
+    }
+
     /// Draws the panel in a few states, over a grey stand-in for the
     /// picture, to PNGs in the folder `SQ_PANEL_PNG` names, for comparing
     /// with the mockups without a window. Does nothing when it is not set.
@@ -2147,7 +2111,8 @@ mod render_check {
                     g.change(true);
                     g.focus_down();
                     g.change(true);
-                    g.back();
+                    to_apply(&mut g);
+                    g.enter();
                     g
                 },
                 Scene::Play,
@@ -2160,7 +2125,8 @@ mod render_check {
                     g.open();
                     g.change(true);
                     g.change(true);
-                    g.back();
+                    to_apply(&mut g);
+                    g.enter();
                     g
                 },
                 Scene::Play,
@@ -2183,16 +2149,14 @@ mod render_check {
                 Scene::Play,
             ),
             (
-                // Pressed once, waiting for the second press (#122).
-                "picker-noted-armed",
+                // Changes made, the row that applies them highlighted (#132).
+                "picker-apply",
                 {
                     let mut g = Guidance::default();
                     g.set_level(1);
                     g.open();
                     g.change(true);
-                    g.change(true);
-                    g.back();
-                    g.enter();
+                    to_apply(&mut g);
                     g
                 },
                 Scene::Play,
