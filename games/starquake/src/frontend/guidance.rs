@@ -90,17 +90,13 @@ pub enum Setting {
     #[default]
     Level,
     Switch(u8),
+    /// Apply the changes made in the picker and go back to the game
+    /// (#132): "Back to the game" while nothing has changed.
+    Apply,
     /// Forget the teleport codes kept between games (#115).
     ForgetCodes,
     EndGame,
     Exit,
-}
-
-/// The answers to "Noted with your score".
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Choice {
-    Use,
-    Undo,
 }
 
 /// What the picker was asked to do, once confirmed.
@@ -120,12 +116,12 @@ pub struct Guidance {
     training: Training,
     record: Record,
     picker: bool,
-    /// The level and training mode when the picker opened, which Undo goes
-    /// back to.
+    /// The level and training mode when the picker opened, which leaving
+    /// without applying puts back (#132).
     opened: (u8, Training),
-    /// "Noted with your score", asked when leaving the picker would add to
-    /// the record, and which answer is highlighted.
-    asking: Option<Choice>,
+    /// "Your score will show this" is up: asked when applying would add to
+    /// the record (#132).
+    asking: bool,
     /// The row the picker has highlighted.
     focus: Setting,
     /// An action pressed once, waiting for the second press.
@@ -368,9 +364,14 @@ impl Guidance {
         self.opened
     }
 
-    /// The question, if it is up, and the highlighted answer.
-    pub fn asking(&self) -> Option<Choice> {
+    /// Whether "Your score will show this" is up (#132).
+    pub fn asking(&self) -> bool {
         self.asking
+    }
+
+    /// Whether anything has changed since the picker opened.
+    pub fn changed(&self) -> bool {
+        (self.level, self.training) != self.opened
     }
 
     /// Whether keeping the settings as they are would add to this game's
@@ -515,6 +516,7 @@ impl Guidance {
     pub fn rows(&self) -> Vec<Setting> {
         let mut rows = vec![Setting::Level];
         rows.extend((0..Training::NAMES.len() as u8).map(Setting::Switch));
+        rows.push(Setting::Apply);
         if self.kept_codes > 0 {
             rows.push(Setting::ForgetCodes);
         }
@@ -563,31 +565,21 @@ impl Guidance {
     pub fn open(&mut self) {
         self.picker = true;
         self.opened = (self.level, self.training);
-        self.asking = None;
+        self.asking = false;
         self.focus = Setting::Level;
         self.armed = None;
         self.version += 1;
     }
 
-    /// Esc, B or Select. With the question up, back to the picker.
-    /// Otherwise leave it.
+    /// Esc, B or Select (#132). With the question up, back to the settings.
+    /// Otherwise the picker closes without applying: the settings go back to
+    /// what they were when it opened.
     pub fn back(&mut self) {
-        if self.asking.is_some() {
-            self.asking = None;
+        if self.asking {
+            self.asking = false;
             self.version += 1;
         } else {
-            self.leave();
-        }
-    }
-
-    /// Leaves the picker, asking first if that would add to the record,
-    /// with Undo highlighted so a reflex press changes nothing.
-    fn leave(&mut self) {
-        if self.raises_record() {
-            self.asking = Some(Choice::Undo);
-            self.armed = None;
-            self.version += 1;
-        } else {
+            (self.level, self.training) = self.opened;
             self.close();
         }
     }
@@ -597,7 +589,7 @@ impl Guidance {
     /// another does not count as having used it.
     pub fn close(&mut self) {
         self.picker = false;
-        self.asking = None;
+        self.asking = false;
         self.armed = None;
         self.record.highest = self.record.highest.max(self.level);
         self.record.switches = self.record.switches.union(self.training);
@@ -605,21 +597,39 @@ impl Guidance {
         self.version += 1;
     }
 
-    /// Enter or A. With the question up, it takes the highlighted answer.
-    /// On a setting it leaves the picker, as Esc does. On an action the
-    /// first press asks for a second, and the second requests the action
-    /// and closes the picker.
+    /// Enter or A (#132). With the question up, one press applies and goes
+    /// back to the game. On the apply row it does that too, asking first when
+    /// the change would show on the score. On a setting it steps to the next
+    /// value, as right does, the level going round from the top to 0. On an
+    /// action the first press asks for a second, and the second requests the
+    /// action and closes the picker.
     pub fn enter(&mut self) {
-        if let Some(choice) = self.asking {
-            if choice == Choice::Undo {
-                (self.level, self.training) = self.opened;
-            }
+        if self.asking {
             self.close();
             return;
         }
         let action = match self.focus {
-            Setting::Level | Setting::Switch(_) => {
-                self.leave();
+            // A setting steps to its next value (#132): the level one up, and
+            // round from the top to 0; a switch on or off.
+            Setting::Level => {
+                self.level = (self.level + 1) % LEVELS.len() as u8;
+                self.version += 1;
+                return;
+            }
+            Setting::Switch(i) => {
+                let on = &mut self.training.0[usize::from(i)];
+                *on = !*on;
+                self.version += 1;
+                return;
+            }
+            Setting::Apply => {
+                if self.raises_record() {
+                    self.asking = true;
+                    self.armed = None;
+                    self.version += 1;
+                } else {
+                    self.close();
+                }
                 return;
             }
             Setting::ForgetCodes => Action::ForgetCodes,
@@ -628,12 +638,10 @@ impl Guidance {
         };
         if self.armed == Some(self.focus) {
             self.requested = Some(action);
-            // An action is not a decision about the settings: anything that
-            // would add to the record without being confirmed is undone, so
-            // an ended game's score note cannot pick it up by accident.
-            if self.raises_record() {
-                (self.level, self.training) = self.opened;
-            }
+            // An action is not a decision about the settings: anything not
+            // applied is undone, so an ended game's score note cannot pick
+            // it up by accident.
+            (self.level, self.training) = self.opened;
             self.close();
         } else {
             self.armed = Some(self.focus);
@@ -652,7 +660,7 @@ impl Guidance {
     }
 
     fn move_focus(&mut self, by: isize) {
-        if self.asking.is_some() {
+        if self.asking {
             return;
         }
         let rows = self.rows();
@@ -676,9 +684,7 @@ impl Guidance {
     /// Left and right in the picker: the highlighted setting down or up a
     /// step, in effect at once. It is recorded when the picker closes.
     pub fn change(&mut self, up: bool) {
-        if let Some(choice) = &mut self.asking {
-            *choice = if up { Choice::Undo } else { Choice::Use };
-            self.version += 1;
+        if self.asking {
             return;
         }
         let max = LEVELS.len() as u8 - 1;
@@ -686,7 +692,9 @@ impl Guidance {
             (Setting::Level, true) => self.level = (self.level + 1).min(max),
             (Setting::Level, false) => self.level = self.level.saturating_sub(1),
             (Setting::Switch(i), on) => self.training.0[usize::from(i)] = on,
-            (Setting::ForgetCodes | Setting::EndGame | Setting::Exit, _) => return,
+            (Setting::Apply | Setting::ForgetCodes | Setting::EndGame | Setting::Exit, _) => {
+                return;
+            }
         }
         self.version += 1;
     }
@@ -798,7 +806,8 @@ mod tests {
         g.set_level(3);
         g.open();
         g.change(false);
-        g.back();
+        down_to(&mut g, Setting::Apply);
+        g.enter();
         assert!(!g.picker_open(), "a lower level: no question");
         assert_eq!(g.level(), 2);
 
@@ -806,54 +815,92 @@ mod tests {
         g.change(true);
         g.change(true);
         g.change(false);
-        g.back();
+        down_to(&mut g, Setting::Apply);
+        g.enter();
         assert!(!g.picker_open(), "back to level 3, already recorded");
     }
 
     #[test]
-    fn raising_asks_with_undo_highlighted() {
+    fn esc_leaves_without_applying() {
         let mut g = Guidance::default();
         g.open();
         g.change(true);
+        g.focus_down();
         g.change(true);
         g.back();
-        assert!(g.picker_open());
-        assert_eq!(g.asking(), Some(Choice::Undo));
-        g.enter();
         assert!(!g.picker_open());
-        assert_eq!(g.level(), 0, "undone");
+        assert_eq!(g.level(), 0, "put back");
+        assert!(!g.training().any(), "put back");
         assert_eq!(g.record(), Record::default());
     }
 
     #[test]
-    fn use_it_keeps_and_records() {
+    fn enter_on_a_setting_steps_it() {
+        let mut g = Guidance::default();
+        g.open();
+        g.enter();
+        assert_eq!(g.level(), 1, "one level up");
+        for _ in 0..LEVELS.len() - 1 {
+            g.enter();
+        }
+        assert_eq!(g.level(), 0, "round from the top");
+        g.focus_down();
+        g.enter();
+        assert!(g.training().0[0], "a switch on");
+        g.enter();
+        assert!(!g.training().0[0], "and off");
+        assert!(g.picker_open(), "nothing applied");
+        assert!(!g.asking());
+    }
+
+    #[test]
+    fn applying_a_raise_asks_once_then_goes_back_to_the_game() {
+        let mut g = Guidance::default();
+        g.open();
+        g.change(true);
+        g.change(true);
+        down_to(&mut g, Setting::Apply);
+        g.enter();
+        assert!(g.picker_open());
+        assert!(g.asking(), "it would show on the score");
+        assert_eq!(g.record(), Record::default(), "nothing yet");
+        g.enter();
+        assert!(!g.picker_open(), "one press there applies");
+        assert_eq!(g.level(), 2);
+        assert_eq!(g.record().highest, 2);
+    }
+
+    #[test]
+    fn esc_in_the_question_goes_back_to_the_settings_as_they_were_set() {
         let mut g = Guidance::default();
         g.open();
         g.focus_down();
         g.change(true);
+        down_to(&mut g, Setting::Apply);
         g.enter();
-        assert_eq!(
-            g.asking(),
-            Some(Choice::Undo),
-            "Enter on a setting asks too"
-        );
-        g.change(false);
-        assert_eq!(g.asking(), Some(Choice::Use));
-        g.enter();
-        assert!(g.training().any());
-        assert!(g.record().training);
+        assert!(g.asking());
+        g.back();
+        assert!(g.picker_open(), "back to the settings");
+        assert!(!g.asking());
+        assert!(g.training().any(), "still set");
+        g.back();
+        assert!(!g.picker_open(), "and again leaves");
+        assert!(!g.training().any(), "put back as it was");
+        assert_eq!(g.record(), Record::default());
     }
 
     #[test]
-    fn back_from_the_question_returns_to_the_picker() {
+    fn the_question_takes_no_arrows() {
         let mut g = Guidance::default();
         g.open();
         g.change(true);
-        g.back();
-        g.back();
-        assert!(g.picker_open());
-        assert_eq!(g.asking(), None);
-        assert_eq!(g.level(), 1, "still changed");
+        down_to(&mut g, Setting::Apply);
+        g.enter();
+        g.change(true);
+        g.focus_up();
+        assert!(g.asking());
+        assert_eq!(g.level(), 1);
+        assert_eq!(g.focus(), Setting::Apply);
     }
 
     #[test]
@@ -958,13 +1005,13 @@ mod tests {
         let switches = (0..5).map(Setting::Switch);
         let rows: Vec<Setting> = std::iter::once(Setting::Level)
             .chain(switches.clone())
-            .chain([Setting::Exit])
+            .chain([Setting::Apply, Setting::Exit])
             .collect();
         assert_eq!(g.rows(), rows);
         g.set_playing(true);
         let rows: Vec<Setting> = std::iter::once(Setting::Level)
             .chain(switches)
-            .chain([Setting::EndGame, Setting::Exit])
+            .chain([Setting::Apply, Setting::EndGame, Setting::Exit])
             .collect();
         assert_eq!(g.rows(), rows);
     }
