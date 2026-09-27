@@ -90,6 +90,8 @@ pub enum Setting {
     #[default]
     Level,
     Switch(u8),
+    /// Forget the teleport codes kept between games (#115).
+    ForgetCodes,
     EndGame,
     Exit,
 }
@@ -104,6 +106,8 @@ pub enum Choice {
 /// What the picker was asked to do, once confirmed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
+    /// Forget the teleport codes kept between games (#115).
+    ForgetCodes,
     /// Abandon the game in progress, as A S D F G does.
     EndGame,
     /// Close the program.
@@ -128,6 +132,9 @@ pub struct Guidance {
     armed: Option<Setting>,
     /// Whether a game is being played, which is when it can be ended.
     playing: bool,
+    /// How many teleport codes are kept between games (#115), for the row
+    /// that forgets them, which shows only when there are some.
+    kept_codes: usize,
     /// An action confirmed and not yet carried out.
     requested: Option<Action>,
     /// The teleporters seen this game: their codes for level 1 (#50), and
@@ -494,11 +501,36 @@ impl Guidance {
     pub fn rows(&self) -> Vec<Setting> {
         let mut rows = vec![Setting::Level];
         rows.extend((0..Training::NAMES.len() as u8).map(Setting::Switch));
+        if self.kept_codes > 0 {
+            rows.push(Setting::ForgetCodes);
+        }
         if self.playing {
             rows.push(Setting::EndGame);
         }
         rows.push(Setting::Exit);
         rows
+    }
+
+    /// How many teleport codes are kept between games. With none, the row
+    /// that forgets them goes, and a highlight or first press on it with it.
+    pub fn set_kept_codes(&mut self, n: usize) {
+        if self.kept_codes == n {
+            return;
+        }
+        self.kept_codes = n;
+        if n == 0 {
+            if self.focus == Setting::ForgetCodes {
+                self.focus = if self.playing {
+                    Setting::EndGame
+                } else {
+                    Setting::Exit
+                };
+            }
+            if self.armed == Some(Setting::ForgetCodes) {
+                self.armed = None;
+            }
+        }
+        self.version += 1;
     }
 
     /// Whether a game is being played, as the game thread sees it.
@@ -576,6 +608,7 @@ impl Guidance {
                 self.leave();
                 return;
             }
+            Setting::ForgetCodes => Action::ForgetCodes,
             Setting::EndGame => Action::EndGame,
             Setting::Exit => Action::Exit,
         };
@@ -639,7 +672,7 @@ impl Guidance {
             (Setting::Level, true) => self.level = (self.level + 1).min(max),
             (Setting::Level, false) => self.level = self.level.saturating_sub(1),
             (Setting::Switch(i), on) => self.training.0[usize::from(i)] = on,
-            (Setting::EndGame | Setting::Exit, _) => return,
+            (Setting::ForgetCodes | Setting::EndGame | Setting::Exit, _) => return,
         }
         self.version += 1;
     }
@@ -807,6 +840,33 @@ mod tests {
         assert!(g.picker_open());
         assert_eq!(g.asking(), None);
         assert_eq!(g.level(), 1, "still changed");
+    }
+
+    #[test]
+    fn forgetting_the_codes_shows_only_with_codes_and_takes_two_presses() {
+        let mut g = Guidance::default();
+        assert!(!g.rows().contains(&Setting::ForgetCodes), "none kept");
+        g.set_kept_codes(3);
+        assert!(g.rows().contains(&Setting::ForgetCodes));
+        g.open();
+        down_to(&mut g, Setting::ForgetCodes);
+        g.enter();
+        assert!(!g.take(Action::ForgetCodes), "one press does nothing yet");
+        g.enter();
+        assert!(g.take(Action::ForgetCodes));
+        assert!(!g.picker_open());
+    }
+
+    #[test]
+    fn the_row_goes_with_the_last_code() {
+        let mut g = Guidance::default();
+        g.set_kept_codes(1);
+        g.open();
+        down_to(&mut g, Setting::ForgetCodes);
+        g.enter();
+        g.set_kept_codes(0);
+        assert_eq!(g.focus(), Setting::Exit);
+        assert_eq!(g.armed(), None);
     }
 
     #[test]
