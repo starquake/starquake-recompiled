@@ -1247,6 +1247,89 @@ fn check_long_runs(env: &Env, frames: u64) -> bool {
     report("long runs of play (#120)", &failures, compared)
 }
 
+/// A code put together with a pad and typed into a booth as the window
+/// types it (#80), with A, which entered it, held for `held` frames as a
+/// hand holds it; and, frame by frame, whether the game said a booth was
+/// reading.
+struct BoothTyping {
+    code: [u8; 5],
+    held: usize,
+    typing: starquake::host::CodeTyping,
+    entered_at: Option<usize>,
+    frame: usize,
+    booth: Vec<bool>,
+}
+
+impl starquake::host::Host for BoothTyping {
+    fn frame(&mut self, game: &Game) -> (starquake::controls::Input, u32) {
+        self.booth.push(game.booth);
+        self.frame += 1;
+        assert!(
+            self.frame < 2_000,
+            "the booth was still waiting for letters"
+        );
+        let mut input = starquake::controls::Input::default();
+        if game.booth && self.entered_at.is_none() {
+            self.entered_at = Some(self.frame);
+            self.typing.start(self.code);
+        }
+        if let Some(at) = self.entered_at
+            && self.frame < at + self.held
+        {
+            // A: the bottom button, which is down to the game (#88).
+            input.pad.bits = 0x04;
+        }
+        self.typing.apply(game, true, &mut input);
+        (input, game.frame_sound().frames)
+    }
+}
+
+/// A code put together with a pad reaches the booth whole however long the
+/// A that entered it is held, and `Game::booth` is set on every frame the
+/// booth reads its five letters and off once it is done (#80).
+fn check_booth_pad_code(env: &Env) -> bool {
+    let mut failures = Vec::new();
+    let holds = [0, 2, 8];
+    for held in holds {
+        let case = format!("A held {held} frames");
+        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut g = env.game(&new_game_machine(env));
+            let all = g.all_teleporters();
+            g.room = all[0].room;
+            let mut host = BoothTyping {
+                code: all[1].code,
+                held,
+                typing: starquake::host::CodeTyping::default(),
+                entered_at: None,
+                frame: 0,
+                booth: Vec::new(),
+            };
+            g.run_modal(starquake::blob::Modal::TeleportBooth, &mut host);
+            (g, host.booth, all[1].room)
+        }));
+        let Ok((g, b, room)) = run else {
+            failures.push((case, vec!["the booth was still waiting for letters".into()]));
+            continue;
+        };
+        match (b.iter().position(|&x| x), b.iter().rposition(|&x| x)) {
+            (Some(first), Some(last)) => {
+                if b[first..=last].iter().any(|&x| !x) || g.booth {
+                    failures.push((case.clone(), vec!["set outside the code's reading".into()]));
+                }
+            }
+            _ => failures.push((case.clone(), vec!["never set".into()])),
+        }
+        if g.room != room {
+            failures.push((case, vec![format!("ended in room {}", g.room)]));
+        }
+    }
+    report(
+        "a booth reads a pad's code whole (#80)",
+        &failures,
+        holds.len(),
+    )
+}
+
 /// The core room: walking in carrying pieces that fit holes in the core.
 /// The original is run from the room entry to where it leaves for room 198.
 fn check_core_room(env: &Env) -> bool {
@@ -2714,6 +2797,9 @@ fn main() {
     ok &= guarded("death sequence (C350)", || check_death(&env, &states));
     ok &= guarded("game over screen (6730)", || check_game_over(&env, &states));
     ok &= guarded("lift boarded walking right (#117)", || check_lift(&env));
+    ok &= guarded("a booth reads a pad's code whole (#80)", || {
+        check_booth_pad_code(&env)
+    });
     ok &= guarded("a code typed right reaches the host (#115)", || {
         check_teleported(&env)
     });

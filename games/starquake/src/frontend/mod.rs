@@ -1,6 +1,7 @@
 //! Window, input and sound.
 
 mod audio;
+mod booth;
 mod codes;
 mod gamepad;
 mod guidance;
@@ -97,6 +98,8 @@ struct FrontHost {
     /// How many of this game's booths walked into are already kept, so each
     /// is kept once, and none again after the codes are forgotten.
     seen_kept: usize,
+    /// A code entered with a pad in a booth, being typed (#80).
+    typing: starquake::host::CodeTyping,
     /// The planet as a graph for level 5's routes (#52), read on the first
     /// frame that needs it.
     graph: Option<starquake::map::Graph>,
@@ -415,6 +418,62 @@ impl FrontHost {
     }
 }
 
+impl FrontHost {
+    /// A booth reading a code (#80): the first pad press there opens the
+    /// slots, and from then on the pad works them. Once the booth is done
+    /// they go, with anything not yet typed.
+    fn booth_entry(&mut self, game: &Game, pad: &gamepad::Pad) {
+        let mut guidance = self.shared.guidance.lock().unwrap();
+        if !game.booth {
+            guidance.set_code_entry(None);
+            return;
+        }
+        let pressed = pad.up
+            || pad.down
+            || pad.left
+            || pad.right
+            || pad.south
+            || pad.east
+            || pad.west
+            || pad.north;
+        let entry = match guidance.code_entry() {
+            // The press that opens the slots does nothing else.
+            None if pressed => Some(booth::Entry::default()),
+            None => None,
+            Some(mut e) => {
+                if pad.up {
+                    e.step(true);
+                }
+                if pad.down {
+                    e.step(false);
+                }
+                if pad.left {
+                    e.move_to(false);
+                }
+                if pad.right {
+                    e.move_to(true);
+                }
+                if pad.cancel() {
+                    e.clear();
+                }
+                // The codes the panel lists are level 1's (#50), every one at
+                // level 6: picking from them is help, so from level 1 only.
+                if pad.west && guidance.level() >= 1 {
+                    let seen: Vec<[u8; 5]> = guidance.codes().0.iter().map(|t| t.code).collect();
+                    e.next_seen(&seen);
+                }
+                if pad.confirm()
+                    && let Some(code) = e.enter()
+                {
+                    self.typing.start(code);
+                }
+                Some(e)
+            }
+        };
+        guidance.set_code_entry(entry);
+    }
+}
+
 impl Host for FrontHost {
     fn heroes(&mut self, table: &[u8], new: Option<usize>) {
         let mut guidance = self.shared.guidance.lock().unwrap();
@@ -605,6 +664,7 @@ impl Host for FrontHost {
         if self.shared.guidance.lock().unwrap().picker_open() {
             pad = self.hold_for_picker();
         }
+        self.booth_entry(game, &pad);
         let mut input = *self.shared.input.lock().unwrap();
         if self
             .shared
@@ -668,6 +728,11 @@ impl Host for FrontHost {
                 self.pad.hold_back_held();
             }
         }
+
+        // A code entered with a pad (#80), typed on the keys the booth reads.
+        // While the slots are open the pad works them, not the game.
+        let slots_open = self.shared.guidance.lock().unwrap().code_entry().is_some();
+        self.typing.apply(game, slots_open, &mut input);
 
         if self.abandon {
             self.abandon = end_game(game.scene, game.play_work, game.paused, &mut input);
@@ -747,6 +812,7 @@ fn play_game(
         codes,
         codes_path,
         seen_kept: 0,
+        typing: starquake::host::CodeTyping::default(),
         graph: None,
         routes: None,
     };

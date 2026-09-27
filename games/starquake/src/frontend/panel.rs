@@ -240,7 +240,86 @@ impl Panel {
             self.picker(canvas, guidance);
         } else if guidance.paused() {
             self.paused(canvas);
+        } else if let Some(entry) = guidance.code_entry() {
+            let can_pick = guidance.level() >= 1 && !guidance.codes().0.is_empty();
+            self.code_entry(canvas, &entry, can_pick);
         }
+    }
+
+    /// Typing a teleport code with a pad (#80): five slots under the booth's
+    /// own code line, the one up and down change outlined, and what each
+    /// button does. X, the codes seen, only from level 1 and when there are
+    /// some; the rail marks the one in the slots.
+    fn code_entry(&mut self, canvas: &mut Canvas, entry: &super::booth::Entry, can_pick: bool) {
+        let (slot_w, slot_h, gap) = (48.0, 52.0, 10.0);
+        let slots_w = 5.0 * slot_w + 4.0 * gap;
+        let (w, h) = (460.0, 164.0);
+        let x = (PICTURE_W - w) / 2.0;
+        // Below the booth's code line, character row 19, so the letters the
+        // booth echoes as it reads them stay in sight: from row 20 down, in
+        // the picture's three-times pixels inside its 32-pixel border.
+        let y = (32.0 + 20.0 * 8.0) * 3.0 + 12.0;
+        canvas.round_rect(x, y, w, h, 12.0, BADGE_LINE);
+        canvas.round_rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0, 11.0, DIALOG);
+        let title = if entry.entered {
+            "Entering the code"
+        } else {
+            "Enter the code"
+        };
+        self.fonts.text(
+            Some(canvas),
+            x + 24.0,
+            y + 18.0,
+            None,
+            1.0,
+            &[span(title, 17.0, Weight::SemiBold, BRIGHT)],
+        );
+        let sx = x + (w - slots_w) / 2.0;
+        let sy = y + 48.0;
+        for (i, slot) in entry.slots.iter().enumerate() {
+            let bx = sx + i as f32 * (slot_w + gap);
+            let here = i == entry.at && !entry.entered;
+            if here {
+                canvas.round_rect(bx, sy, slot_w, slot_h, 8.0, ACCENT);
+                canvas.round_rect(
+                    bx + 2.0,
+                    sy + 2.0,
+                    slot_w - 4.0,
+                    slot_h - 4.0,
+                    6.0,
+                    SELECTED,
+                );
+            } else {
+                canvas.round_rect(bx, sy, slot_w, slot_h, 8.0, BUTTON_LINE);
+                canvas.round_rect(bx + 1.0, sy + 1.0, slot_w - 2.0, slot_h - 2.0, 7.0, DIALOG);
+            }
+            let (text, colour) = match slot {
+                Some(c) => (char::from(*c).to_string(), TITLE),
+                None => ("\u{2013}".to_string(), QUIET),
+            };
+            let spans = [span(&text, 26.0, Weight::SemiBold, colour)];
+            let tw = self.fonts.measure(&spans);
+            self.fonts.text(
+                Some(canvas),
+                bx + (slot_w - tw) / 2.0,
+                sy + 10.0,
+                None,
+                1.0,
+                &spans,
+            );
+        }
+        let foot = y + h - 44.0;
+        canvas.round_rect(x + 1.0, foot, w - 2.0, 1.0, 0.0, RULE);
+        let mut groups: Vec<(&[&str], &str)> = vec![
+            (&["\u{2191}", "\u{2193}"], "letter"),
+            (&["\u{2190}", "\u{2192}"], "place"),
+            (&["(A)"], "enter"),
+            (&["(B)"], "clear"),
+        ];
+        if can_pick {
+            groups.push((&["(X)"], "seen code"));
+        }
+        self.hints(canvas, x + 24.0, foot + 12.0, &groups);
     }
 
     /// The notice while the game is held by its pause key (#89): the picture
@@ -639,6 +718,8 @@ impl Panel {
         guidance: &Guidance,
     ) -> f32 {
         let (seen, doors) = guidance.codes();
+        // The code in a booth's slots, which X steps through (#80).
+        let in_slots = guidance.code_entry().and_then(|e| e.code());
         // Rows as tall as the mockup's while they fit, closer together when
         // there are more than the panel holds: level 6 shows fifteen
         // teleporters and eight doors (#95).
@@ -676,9 +757,11 @@ impl Panel {
             let text = String::from_utf8_lossy(&teleporter.code).into_owned();
             let x = right - chip_w;
             canvas.round_rect(x, y, chip_w, chip_h, 4.0, CODE_FILL);
-            // The teleporter a route jumps to next, outlined in its colour
-            // (#52), the other route's around it when both do.
-            let marks = [(guidance.route(), PIECE), (guidance.core_route(), ROUTE)]
+            // The code in a booth's slots outlined as the slot being
+            // changed is (#80), innermost; then the teleporter a route jumps
+            // to next, in its colour (#52), the other route's around it when
+            // both do.
+            let routes = [(guidance.route(), PIECE), (guidance.core_route(), ROUTE)]
                 .into_iter()
                 .filter(|(route, _)| {
                     route
@@ -686,6 +769,10 @@ impl Panel {
                         .is_some_and(|s| s.room == teleporter.room)
                 })
                 .map(|(_, colour)| colour);
+            let marks = (in_slots == Some(teleporter.code))
+                .then_some(ACCENT)
+                .into_iter()
+                .chain(routes);
             outlines(canvas, x, y, chip_w, chip_h, marks);
             if let Some(font) = guidance.font() {
                 let w = teleporter.code.len() as f32 * 8.0 * letter;
@@ -2157,6 +2244,43 @@ mod render_check {
                     g.open();
                     g.change(true);
                     to_apply(&mut g);
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                // A teleport code with a pad (#80): two letters in, the
+                // third being chosen, X offered since codes have been seen.
+                "booth-code",
+                {
+                    let mut g = Guidance::default();
+                    g.set_level(1);
+                    explore(&mut g, 6);
+                    let mut e = super::super::booth::Entry::default();
+                    e.step(true);
+                    e.move_to(true);
+                    for _ in 0..6 {
+                        e.step(true);
+                    }
+                    e.move_to(true);
+                    g.set_code_entry(Some(e));
+                    g
+                },
+                Scene::Play,
+            ),
+            (
+                // X pressed twice: the second code seen in the slots, and
+                // marked in the rail (#80).
+                "booth-code-seen",
+                {
+                    let mut g = Guidance::default();
+                    g.set_level(1);
+                    explore(&mut g, 6);
+                    let seen: Vec<[u8; 5]> = g.codes().0.iter().map(|t| t.code).collect();
+                    let mut e = super::super::booth::Entry::default();
+                    e.next_seen(&seen);
+                    e.next_seen(&seen);
+                    g.set_code_entry(Some(e));
                     g
                 },
                 Scene::Play,
