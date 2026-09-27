@@ -89,7 +89,7 @@ A teleport's booth asks for a code on the keyboard. On a gamepad,
 press any button there and five slots appear: up and down choose a
 letter, left and right move between the slots, A enters the code and
 B clears it. From guidance level 1, X fills in each code you have
-seen in turn.
+seen in turn, and the panel's list marks the one in the slots.
 
 The high-score table, the CORE OF HEROES, is kept between runs in
 high-scores.txt, in the folder the tape is kept in. Beside it the panel

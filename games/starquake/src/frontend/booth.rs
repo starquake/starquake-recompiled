@@ -67,18 +67,23 @@ impl Entry {
         self.at = 4;
     }
 
-    /// A: the code to type, once every slot has a letter.
-    pub fn enter(&mut self) -> Option<[u8; 5]> {
-        if self.entered {
-            return None;
-        }
-        let code = [
+    /// The code in the slots, once every slot has a letter.
+    pub fn code(&self) -> Option<[u8; 5]> {
+        Some([
             self.slots[0]?,
             self.slots[1]?,
             self.slots[2]?,
             self.slots[3]?,
             self.slots[4]?,
-        ];
+        ])
+    }
+
+    /// A: the code to type, once every slot has a letter.
+    pub fn enter(&mut self) -> Option<[u8; 5]> {
+        if self.entered {
+            return None;
+        }
+        let code = self.code()?;
         self.entered = true;
         Some(code)
     }
@@ -144,6 +149,16 @@ mod tests {
         let mut e = Entry::default();
         e.next_seen(&[]);
         assert_eq!(e, Entry::default(), "nothing seen, nothing filled");
+    }
+
+    #[test]
+    fn the_code_is_there_once_every_slot_is_filled() {
+        let mut e = Entry::default();
+        assert_eq!(e.code(), None);
+        e.next_seen(&[*b"ABCDE"]);
+        assert_eq!(e.code(), Some(*b"ABCDE"), "what the panel marks");
+        e.step(true);
+        assert_eq!(e.code(), Some(*b"ABCDF"), "a letter changed by hand");
     }
 
     #[test]
